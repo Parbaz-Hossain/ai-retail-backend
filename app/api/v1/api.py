@@ -1,21 +1,22 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import (
+from app.api.v1.endpoints import (login, register, roles, users
     # inventory,
     # hr,
     # purchase,
     # logistics,
     # dashboard,
     # reports,
-    ai_chat
+    # ai_chat
 )
 # from app.api.v1.auth import login, users, roles
 
 api_router = APIRouter()
 
 # Authentication routes
-# api_router.include_router(login.router, prefix="/auth", tags=["Authentication"])
-# api_router.include_router(users.router, prefix="/users", tags=["Users"])
-# api_router.include_router(roles.router, prefix="/roles", tags=["Roles"])
+api_router.include_router(login.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(register.router, prefix="/register", tags=["Register"])
+api_router.include_router(users.router, prefix="/users", tags=["Users"])
+api_router.include_router(roles.router, prefix="/roles", tags=["Roles"])
 
 # Main application routes
 # api_router.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
