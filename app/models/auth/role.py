@@ -10,8 +10,17 @@ class Role(BaseModel):
     is_system_role = Column(Boolean, default=False)
 
     # Relationships
-    user_roles = relationship("UserRole", back_populates="role", cascade="all, delete-orphan")
-    role_permissions = relationship("RolePermission", back_populates="role", cascade="all, delete-orphan")
+    user_roles = relationship(
+            "UserRole",
+            back_populates="role",
+            cascade="all, delete-orphan",
+            foreign_keys="UserRole.role_id"
+        )
+    role_permissions = relationship(
+        "RolePermission",
+        back_populates="role",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Role {self.name}>"

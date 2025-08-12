@@ -53,8 +53,8 @@ class UserInDBBase(UserBase):
     is_verified: bool
     is_superuser: bool
     created_at: datetime
-    updated_at: Optional[datetime]
-    last_login: Optional[datetime]
+    updated_at: datetime | None = None
+    last_login: datetime | None = None
 
     class Config:
         from_attributes = True

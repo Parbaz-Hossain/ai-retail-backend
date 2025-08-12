@@ -1,7 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel, EmailStr
 
-from app.schemas.auth.user import User
+from app.schemas.auth.user import User, UserResponse
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -9,7 +9,7 @@ class LoginRequest(BaseModel):
     device_info: Optional[str] = None
 
 class LoginResponse(BaseModel):
-    user: 'User'
+    user: UserResponse
     access_token: str
     refresh_token: str
     token_type: str = "bearer"

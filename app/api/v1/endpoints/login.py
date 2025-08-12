@@ -1,11 +1,13 @@
 import logging
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.schemas.auth.login import LoginRequest, LoginResponse, PasswordResetRequest, ChangePasswordRequest
 from app.schemas.auth.token import Token, RefreshTokenRequest
+from app.schemas.auth.user import UserResponse
 from app.services.auth.auth_service import AuthService
 from app.services.auth.user_service import UserService
 from app.api.dependencies import get_current_user
@@ -49,15 +51,33 @@ async def login(
         )
         
         # Get user with roles
+        await session.refresh(user)
+
         user_service = UserService(session)
         user_roles = await user_service.get_user_roles(user.id)
         
+        user_out = UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        full_name=user.full_name,
+        phone=user.phone,
+        address=user.address,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        last_login=user.last_login,
+        roles=[{"id": r.id, "name": r.name, "description": r.description} for r in user_roles],
+        )
+
         return LoginResponse(
-            user=user,
+            user=user_out,
             access_token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
             token_type=tokens["token_type"],
-            expires_in=tokens["expires_in"]
+            expires_in=tokens["expires_in"],
         )
         
     except HTTPException:
@@ -226,9 +246,9 @@ async def get_current_user_info(
         permissions = await user_service.get_user_permissions(current_user.id)
 
         return {
-            "user": current_user,
-            "roles": roles,
-            "permissions": permissions
+        "user": jsonable_encoder(current_user),
+        "roles": jsonable_encoder(roles),
+        "permissions": jsonable_encoder(permissions),
         }
     
     except Exception as e:

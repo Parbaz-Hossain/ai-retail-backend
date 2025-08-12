@@ -16,7 +16,7 @@ async def register_user(
     request: Request,
     user_create: UserCreate,
     session: AsyncSession = Depends(get_async_session),
-    _: None = Depends(check_login_rate_limit)
+    # _: None = Depends(check_login_rate_limit)
 ):
     """Register new user with email verification"""
     try:
@@ -34,21 +34,23 @@ async def register_user(
         new_user = await user_service.create_user(user_create)
         
         # Send welcome email (async)
-        await email_service.send_welcome_email(
-            to_email=new_user.email,
-            username=new_user.username
-        )
+        # await email_service.send_welcome_email(
+        #     to_email=new_user.email,
+        #     username=new_user.username
+        # )
         
         # Get user with roles
         roles = await user_service.get_user_roles(new_user.id)
         
         logger.info(f"New user registered: {new_user.email}")
         
-        return UserResponse(
-            **new_user.__dict__,
-            roles=[{"id": role.id, "name": role.name, "description": role.description} for role in roles]
-        )
-        
+        user_response = UserResponse.model_validate(new_user, from_attributes=True)
+        user_response.roles = [
+            {"id": role.id, "name": role.name, "description": role.description}
+            for role in roles
+        ]
+        return user_response
+            
     except HTTPException:
         raise
     except Exception as e:

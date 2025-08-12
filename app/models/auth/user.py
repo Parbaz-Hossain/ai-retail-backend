@@ -24,7 +24,20 @@ class User(BaseModel):
     verification_expires = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    user_roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
+    user_roles = relationship(
+        "UserRole",
+        back_populates="user",
+        foreign_keys="UserRole.user_id",
+        cascade="all, delete-orphan",
+        overlaps="assigned_by_user,roles_assigned"
+    )
+    roles_assigned = relationship(
+        "UserRole",
+        foreign_keys="UserRole.assigned_by",
+        back_populates="assigned_by_user",
+        viewonly=True,  # set False if you want to edit from this side
+        overlaps="user_roles,assigned_by_user"
+    )
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):

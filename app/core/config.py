@@ -7,9 +7,9 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    DATABASE_URL: str = "postgresql://postgres:pgadmin123@localhost/ai_retail_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:pgadmin123@localhost/ai_retail_db"
     DATABASE_TEST_URL: str
-    # DATABASE_URL: str = "postgresql://postgres:postgres@localhost/ai_agentic_db" #ESAP SERVER
+    # DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost/ai_agentic_db" #ESAP SERVER
 
     GOOGLE_MAPS_API_KEY: str = os.getenv("GOOGLE_MAPS_API_KEY")
     
@@ -30,12 +30,12 @@ class Settings(BaseSettings):
     ALLOWED_HEADERS: List[str] = ["*"]
     
     # SMTP Email Settings   
-    SMTP_MAIL_SERVER: str = "smtp.gmail.com"
-    SMTP_MAIL_PORT: int = 587
-    SMTP_MAIL_USERNAME: Optional[str] = "parbazasit123@gmail.com"
-    SMTP_MAIL_PASSWORD: Optional[str] = "hexe nhbp tiqz qjeo"
-    SMTP_MAIL_FROM: Optional[str] = "parbazasit123@gmail.com"
-    SMTP_MAIL_FROM_NAME: Optional[str] = "AI Retail Management"
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_PORT: int = 587
+    MAIL_USERNAME: Optional[str] = "parbazasit123@gmail.com"
+    MAIL_PASSWORD: Optional[str] = "hexe nhbp tiqz qjeo"
+    MAIL_FROM: Optional[str] = "parbazasit123@gmail.com"
+    MAIL_FROM_NAME: Optional[str] = "AI Retail Management"
     
     # WhatsApp
     WHATSAPP_API_URL: str

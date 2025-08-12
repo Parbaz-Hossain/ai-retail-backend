@@ -27,11 +27,13 @@ async def create_user(
         
         # Get user with roles
         roles = await user_service.get_user_roles(new_user.id)
-        
-        return UserResponse(
-            **new_user.__dict__,
-            roles=[{"id": role.id, "name": role.name, "description": role.description} for role in roles]
-        )
+            
+        user_response = UserResponse.model_validate(new_user, from_attributes=True)
+        user_response.roles = [
+            {"id": role.id, "name": role.name, "description": role.description}
+            for role in roles
+        ]
+        return user_response
         
     except HTTPException:
         raise

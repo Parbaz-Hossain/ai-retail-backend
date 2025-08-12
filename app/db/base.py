@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, DateTime, Boolean, String
 from sqlalchemy.sql import func
-from app.core.database import Base
+from app.models.base import Base
 
 class BaseModel(Base):
     """Base model with common fields"""

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import engine, async_session_maker
+from app.core.database import engine
 from app.models import *  # Import all models
 # from app.db.seeds.initial_data import create_initial_data
 from app.core.redis import redis_client

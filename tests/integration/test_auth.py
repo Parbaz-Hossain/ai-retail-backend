@@ -2,9 +2,8 @@ import pytest
 import asyncio
 from httpx import AsyncClient
 from fastapi import status
-from app.main import app
 from app.core.database import get_async_session
-from tests.conftest import TestingSessionLocal
+from tests.integration.conftest import TestingSessionLocal
 
 @pytest.mark.asyncio
 class TestAuth:
@@ -20,7 +19,7 @@ class TestAuth:
             "confirm_password": "StrongPass123!"
         }
         
-        response = await client.post("/api/v1/auth/register", json=user_data)
+        response = await client.post("/api/v1/register/register", json=user_data)
         assert response.status_code == status.HTTP_201_CREATED
         
         data = response.json()
@@ -38,7 +37,7 @@ class TestAuth:
             "password": "StrongPass123!",
             "confirm_password": "StrongPass123!"
         }
-        await client.post("/api/v1/auth/register", json=user_data)
+        await client.post("/api/v1/register/register", json=user_data)
         
         # Then login
         login_data = {
