@@ -1,6 +1,6 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator
+from pydantic import AnyHttpUrl, validator, Field
 import os
 
 class Settings(BaseSettings):
@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:pgadmin123@localhost/ai_retail_db"
+    # DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@176.9.16.194:5432/ai_retail_db"
     DATABASE_TEST_URL: str
     # DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost/ai_agentic_db" #ESAP SERVER
 
@@ -25,9 +26,11 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 10080
     
     # CORS
-    ALLOWED_ORIGINS: List[AnyHttpUrl] = []
-    ALLOWED_METHODS: List[str] = ["GET", "POST", "PUT", "DELETE", "PATCH"]
-    ALLOWED_HEADERS: List[str] = ["*"]
+    ALLOWED_ORIGINS: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8083", "http://127.0.0.1:8083"]
+    )
+    ALLOWED_METHODS: list[str] = ["*"]   # includes OPTIONS
+    ALLOWED_HEADERS: list[str] = ["*"]
     
     # SMTP Email Settings   
     MAIL_SERVER: str = "smtp.gmail.com"
