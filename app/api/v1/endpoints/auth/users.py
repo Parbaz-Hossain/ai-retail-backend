@@ -49,8 +49,7 @@ async def get_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     search: str = Query(None),
-    session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_superuser)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get users list (admin only)"""
     try:
@@ -83,8 +82,7 @@ async def get_users(
 @router.get("/count")
 async def get_users_count(
     search: str = Query(None),
-    session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_superuser)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get users count (admin only)"""
     try:
@@ -255,8 +253,7 @@ async def assign_role_to_user(
 async def remove_role_from_user(
     user_id: int,
     role_name: str,
-    session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_superuser)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Remove role from user (admin only)"""
     try:

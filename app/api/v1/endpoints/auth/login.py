@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
+from app.core.request_context import get_request_context
 from app.schemas.auth.login import LoginRequest, LoginResponse, PasswordResetRequest, ChangePasswordRequest
 from app.schemas.auth.token import Token, RefreshTokenRequest
 from app.schemas.auth.user import UserResponse
@@ -26,24 +27,17 @@ async def login(
         auth_service = AuthService(session)
         
         # Get client info
-        # Read from headers (case-insensitive in FastAPI)
-        session_id = request.headers.get("x-session-id")
-        request_id = request.headers.get("x-request-id")
-        endpoint = request.url.path
-        
-        # return {"session_id": session_id, "request_id": request_id}
-        ip_address = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent")
+        req_context = get_request_context(request)
         
         # Authenticate user
         user = await auth_service.authenticate_user(
             email=login_data.email,
             password=login_data.password,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            endpoint = endpoint,
-            request_id = request_id,
-            session_id = session_id
+            ip_address=req_context["ip_address"],
+            user_agent=req_context["user_agent"],
+            endpoint=req_context["endpoint"],
+            request_id=req_context["request_id"],
+            session_id=req_context["session_id"]
         )
         
         if not user:
@@ -56,7 +50,7 @@ async def login(
         tokens = await auth_service.create_tokens(
             user=user,
             device_info=login_data.device_info,
-            ip_address=ip_address
+            ip_address=req_context["ip_address"]
         )
         
         # Get user with roles

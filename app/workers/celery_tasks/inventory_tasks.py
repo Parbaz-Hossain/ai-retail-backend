@@ -2,7 +2,7 @@ from celery import current_task
 import logging
 from app.core.celery_app import celery_app
 from app.services.inventory.stock_service import StockService
-from app.services.email.email_service import EmailService
+from app.services.communication.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 

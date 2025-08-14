@@ -1,14 +1,7 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import (login, register, roles, users
-    # inventory,
-    # hr,
-    # purchase,
-    # logistics,
-    # dashboard,
-    # reports,
-    # ai_chat
-)
-# from app.api.v1.auth import login, users, roles
+from app.api.v1.endpoints.auth import login, register, roles, users
+from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
+from app.api.v1.endpoints.organization import departments, locations
 
 api_router = APIRouter()
 
@@ -19,10 +12,13 @@ api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(roles.router, prefix="/roles", tags=["Roles"])
 
 # Main application routes
-# api_router.include_router(inventory.router, prefix="/inventory", tags=["Inventory"])
-# api_router.include_router(hr.router, prefix="/hr", tags=["Human Resources"])
-# api_router.include_router(purchase.router, prefix="/purchase", tags=["Purchase"])
-# api_router.include_router(logistics.router, prefix="/logistics", tags=["Logistics"])
-# api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
-# api_router.include_router(reports.router, prefix="/reports", tags=["Reports"])
-# api_router.include_router(ai_chat.router, prefix="/ai", tags=["AI Chat"])
+# Organization routes
+api_router.include_router(departments.router, prefix="/organization", tags=["Organization"])
+api_router.include_router(locations.router, prefix="/organization", tags=["Organization"])
+
+# HR routes
+api_router.include_router(employees.router, prefix="/hr", tags=["Human Resource"])
+api_router.include_router(shifts.router, prefix="/hr", tags=["Human Resource"])
+api_router.include_router(attendance.router, prefix="/hr", tags=["Human Resource"])
+api_router.include_router(salary.router, prefix="/hr", tags=["Human Resource"])
+api_router.include_router(holidays.router, prefix="/hr", tags=["Human Resource"])

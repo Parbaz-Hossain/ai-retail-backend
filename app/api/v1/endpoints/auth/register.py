@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.schemas.auth.user import UserCreate, UserResponse
 from app.services.auth.user_service import UserService
-from app.services.email.email_service import EmailService
+from app.services.communication.email_service import EmailService
 from app.utils.rate_limiter import check_login_rate_limit
 from app.utils.validators.auth_validators import require_auth_validation
 
