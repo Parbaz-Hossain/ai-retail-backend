@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-app.add_middleware(LoggingMiddleware)
+# app.add_middleware(LoggingMiddleware)
 # app.add_middleware(AuthMiddleware)
 
 # Mount static files

@@ -8,7 +8,7 @@ from app.services.hr.holiday_service import HolidayService
 from app.schemas.hr.holiday_schema import HolidayCreate, HolidayUpdate, HolidayResponse
 from app.models.auth.user import User
 
-router = APIRouter(prefix="/holidays", tags=["holidays"])
+router = APIRouter()
 
 @router.post("/", response_model=HolidayResponse)
 async def create_holiday(

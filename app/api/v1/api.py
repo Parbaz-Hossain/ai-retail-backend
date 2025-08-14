@@ -13,12 +13,12 @@ api_router.include_router(roles.router, prefix="/roles", tags=["Roles"])
 
 # Main application routes
 # Organization routes
-api_router.include_router(departments.router, prefix="/organization", tags=["Organization"])
-api_router.include_router(locations.router, prefix="/organization", tags=["Organization"])
+api_router.include_router(departments.router, prefix="/organization/department", tags=["Organization"])
+api_router.include_router(locations.router, prefix="/organization/location", tags=["Organization"])
 
 # HR routes
-api_router.include_router(employees.router, prefix="/hr", tags=["Human Resource"])
-api_router.include_router(shifts.router, prefix="/hr", tags=["Human Resource"])
-api_router.include_router(attendance.router, prefix="/hr", tags=["Human Resource"])
-api_router.include_router(salary.router, prefix="/hr", tags=["Human Resource"])
-api_router.include_router(holidays.router, prefix="/hr", tags=["Human Resource"])
+api_router.include_router(employees.router, prefix="/hr/employee", tags=["Human Resource"])
+api_router.include_router(shifts.router, prefix="/hr/shift", tags=["Human Resource"])
+api_router.include_router(attendance.router, prefix="/hr/attendance", tags=["Human Resource"])
+api_router.include_router(salary.router, prefix="/hr/salary", tags=["Human Resource"])
+api_router.include_router(holidays.router, prefix="/hr/holiday", tags=["Human Resource"])

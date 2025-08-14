@@ -12,5 +12,14 @@ class Category(BaseModel):
     is_active = Column(Boolean, default=True)
     
     # Self-referential relationship for parent/child categories
-    parent = relationship("Category", remote_side=[id], backref="subcategories")
+    parent = relationship(
+    "Category",
+    remote_side="Category.id",        # or: remote_side=lambda: [Category.id]
+    back_populates="children"
+    )
+    children = relationship(
+        "Category",
+        back_populates="parent",
+        cascade="all, delete-orphan"
+    )
     items = relationship("Item", back_populates="category")
