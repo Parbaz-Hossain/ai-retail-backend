@@ -38,18 +38,20 @@ async def get_department(
 ):
     """Get department by ID"""
     service = DepartmentService(session)
-    return await service.get_department(department_id)
+    department = await service.get_department(department_id)
+    if department is None:
+        raise HTTPException(status_code=404, detail="Department not found")
+    return department
 
 @router.put("/{department_id}", response_model=DepartmentResponse)
 async def update_department(
     department_id: int,
     department: DepartmentUpdate,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Update department"""
     service = DepartmentService(session)
-    return await service.update_department(department_id, department, current_user.id)
+    return await service.update_department(department_id, department)
 
 @router.delete("/{department_id}")
 async def delete_department(
