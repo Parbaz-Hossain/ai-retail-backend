@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base import BaseModel
 
@@ -11,6 +11,7 @@ class RolePermission(BaseModel):
     # Relationships
     role = relationship("Role", back_populates="role_permissions")
     permission = relationship("Permission", back_populates="role_permissions")
+    is_active = Column(Boolean, default=True)
 
     def __repr__(self):
         return f"<RolePermission role_id={self.role_id} permission_id={self.permission_id}>"

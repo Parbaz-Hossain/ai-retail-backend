@@ -22,6 +22,7 @@ class User(BaseModel):
     password_reset_expires = Column(DateTime(timezone=True), nullable=True)
     verification_token = Column(String(255), nullable=True)
     verification_expires = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, default=True)
 
     # Relationships
     user_roles = relationship(

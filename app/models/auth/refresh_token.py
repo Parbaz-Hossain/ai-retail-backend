@@ -12,6 +12,8 @@ class RefreshToken(BaseModel):
     is_revoked = Column(Boolean, default=False)
     device_info = Column(String(500), nullable=True)
     ip_address = Column(String(45), nullable=True)
+    is_active = Column(Boolean, default=True)
+
 
     # Relationships
     user = relationship("User", back_populates="refresh_tokens")

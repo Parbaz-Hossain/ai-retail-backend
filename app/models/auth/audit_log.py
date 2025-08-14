@@ -13,6 +13,9 @@ class AuditLog(BaseModel):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(Text, nullable=True)
     details = Column(JSON, nullable=True)
+    endpoint = Column(String(200))  # API endpoint called
+    request_id = Column(String(100))  # Unique request identifier
+    session_id = Column(String(100))
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

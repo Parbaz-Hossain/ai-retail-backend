@@ -23,7 +23,10 @@ class AuthService:
         email: str, 
         password: str,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        request_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ) -> Optional[User]:
         """Authenticate user with email and password"""
         try:
@@ -65,7 +68,10 @@ class AuthService:
                 action="login",
                 resource="auth",
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
+                endpoint = endpoint,
+                request_id = request_id,
+                session_id = session_id
             )
             
             return user
@@ -266,7 +272,10 @@ class AuthService:
         email: str,
         reason: str,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        request_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         """Log failed login attempt"""
         await self._log_audit(
@@ -274,7 +283,10 @@ class AuthService:
             resource="auth",
             details={"email": email, "reason": reason},
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
+            endpoint = endpoint,
+            request_id = request_id,
+            session_id = session_id
         )
     
     async def _log_audit(
@@ -285,7 +297,10 @@ class AuthService:
         resource_id: Optional[int] = None,
         details: Optional[Dict] = None,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        request_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ):
         """Log audit event"""
         try:
@@ -296,7 +311,10 @@ class AuthService:
                 resource_id=resource_id,
                 details=details,
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
+                endpoint = endpoint,
+                request_id = request_id,
+                session_id = session_id
             )
             self.session.add(audit_log)
             await self.session.commit()

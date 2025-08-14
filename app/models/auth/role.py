@@ -8,6 +8,7 @@ class Role(BaseModel):
     name = Column(String(100), unique=True, index=True, nullable=False)
     description = Column(Text, nullable=True)
     is_system_role = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
 
     # Relationships
     user_roles = relationship(

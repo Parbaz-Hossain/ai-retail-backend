@@ -10,6 +10,7 @@ class UserRole(BaseModel):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=False)
     assigned_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_active = Column(Boolean, default=True)
 
     # Relationships
     user = relationship(
