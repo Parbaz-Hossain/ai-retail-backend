@@ -31,16 +31,6 @@ async def login(
         request_id = request.headers.get("x-request-id")
         endpoint = request.url.path
         
-        # For testing, print/log them
-        print(f"Session ID from header: {session_id}")
-        print(f"Request ID from header: {request_id}")
-        
-        # Optional: if not found, generate defaults
-        if not session_id:
-            session_id = "no-session-id-provided"
-        if not request_id:
-            request_id = "no-request-id-provided"
-
         # return {"session_id": session_id, "request_id": request_id}
         ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent")

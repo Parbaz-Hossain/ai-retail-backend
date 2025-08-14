@@ -6,7 +6,6 @@ from app.db.base import BaseModel
 class Employee(BaseModel):
     __tablename__ = 'employees'
     
-    id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(String(20), unique=True, nullable=False, index=True)
     user_id = Column(Integer, nullable=False)  # Reference to User from auth system
     first_name = Column(String(50), nullable=False)
@@ -28,8 +27,6 @@ class Employee(BaseModel):
     emergency_phone = Column(String(20))
     address = Column(Text)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     department = relationship("Department", back_populates="employees")

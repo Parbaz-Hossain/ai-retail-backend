@@ -9,6 +9,7 @@ class Department(BaseModel):
     
     name = Column(String(100), nullable=False, unique=True)
     description = Column(Text)
+    is_active = Column(Boolean, default=True)
     
     # Relationships
     employees = relationship("Employee", back_populates="department")

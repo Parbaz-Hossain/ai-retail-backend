@@ -7,7 +7,6 @@ from app.models.shared.enums import SalaryPaymentStatus
 class Salary(BaseModel):
     __tablename__ = 'salaries'
     
-    id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     salary_month = Column(Date, nullable=False)  # First day of the month
     basic_salary = Column(Numeric(10, 2), nullable=False)
@@ -31,8 +30,6 @@ class Salary(BaseModel):
     payment_reference = Column(String(100))
     generated_by = Column(Integer)  # User ID who generated
     approved_by = Column(Integer)  # User ID who approved
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     employee = relationship("Employee", back_populates="salaries")
