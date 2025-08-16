@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, EmailStr
+from pydantic import BaseModel, ConfigDict, validator, EmailStr
 from typing import Optional
 from datetime import datetime
 
@@ -9,9 +9,11 @@ class LocationBase(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     postal_code: Optional[str] = None
-    country: str = "Bangladesh"
+    country: str = "Saudi Arabia"
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class LocationCreate(LocationBase):
     @validator('location_type')
@@ -40,9 +42,9 @@ class LocationUpdate(BaseModel):
 
 class LocationResponse(LocationBase):
     id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
+    is_active: bool = None
+    created_at: datetime = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

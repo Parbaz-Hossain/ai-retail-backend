@@ -7,10 +7,10 @@ from app.core.config import settings
 from app.core.database import engine
 from app.core.logging_config import setup_logging
 from app.api.v1.api import api_router
-from app.middleware.logging import LoggingMiddleware
+# from app.middleware.logging import LoggingMiddleware
 # from app.middleware.auth import AuthMiddleware
-from app.db.init_db import init_db
-from app.ai.agent_manager import AIAgentManager
+# from app.db.init_db import init_db
+# from app.ai.agent_manager import AIAgentManager
 
 
 # Create FastAPI app

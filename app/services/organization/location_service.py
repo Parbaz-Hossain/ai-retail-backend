@@ -1,45 +1,109 @@
-from typing import List, Optional
+import logging
+from typing import Optional, List
+from datetime import datetime
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, or_
+from sqlalchemy import select, func, or_
+
 from app.models.organization.location import Location
 from app.models.hr.employee import Employee
-from app.schemas.organization.location_schema import LocationCreate, LocationUpdate, LocationResponse
-from app.core.exceptions import NotFoundError, ValidationError
-from app.core.logging import logger
+from app.schemas.organization.location_schema import LocationCreate, LocationUpdate
+
+logger = logging.getLogger(__name__)
+
 
 class LocationService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    async def create_location(self, location_data: LocationCreate, current_user_id: int) -> Location:
-        """Create a new location (branch or warehouse)"""
+    # ---------- Getters ----------
+    async def get_location(self, location_id: int) -> Optional[Location]:
         try:
-            location = Location(**location_data.dict())
-            
-            self.db.add(location)
-            self.db.commit()
-            self.db.refresh(location)
-            
+            result = await self.session.execute(
+                select(Location).where(
+                    Location.id == location_id,
+                    Location.is_active == True
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting location {location_id}: {e}")
+            return None
+
+    # ---------- Create / Update / Delete ----------
+    async def create_location(self, data: LocationCreate, current_user_id: int) -> Location:
+        try:
+            location = Location(**data.dict())
+            self.session.add(location)
+            await self.session.flush()
+            await self.session.commit()
+            await self.session.refresh(location)
             logger.info(f"Location created: {location.name} ({location.location_type}) by user {current_user_id}")
             return location
-            
         except Exception as e:
-            self.db.rollback()
-            logger.error(f"Error creating location: {str(e)}")
+            await self.session.rollback()
+            logger.error(f"Error creating location: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error creating location")
+
+    async def update_location(self, location_id: int, data: LocationUpdate, current_user_id: int) -> Location:
+        try:
+            location = await self.get_location(location_id)
+            if not location:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Location not found")
+
+            for field, value in data.dict(exclude_unset=True).items():
+                setattr(location, field, value)
+
+            # if you track timestamps
+            if hasattr(location, "updated_at"):
+                location.updated_at = datetime.utcnow()
+
+            await self.session.commit()
+            await self.session.refresh(location)
+            logger.info(f"Location updated: {location.name} by user {current_user_id}")
+            return location
+        except HTTPException:
             raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error updating location {location_id}: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error updating location")
 
-    async def get_location(self, location_id: int) -> Location:
-        """Get location by ID"""
-        location = self.db.query(Location).filter(
-            Location.id == location_id,
-            Location.is_active == True
-        ).first()
-        
-        if not location:
-            raise NotFoundError(f"Location with ID {location_id} not found")
-        
-        return location
+    async def delete_location(self, location_id: int, current_user_id: int) -> bool:
+        try:
+            location = await self.get_location(location_id)
+            if not location:
+                return False
 
+            # block delete if active employees exist
+            count_result = await self.session.execute(
+                select(func.count()).select_from(Employee).where(
+                    Employee.location_id == location_id,
+                    Employee.is_active == True
+                )
+            )
+            if int(count_result.scalar() or 0) > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot delete location. It has active employees"
+                )
+
+            location.is_active = False
+            location.is_deleted = True
+            if hasattr(location, "updated_at"):
+                location.updated_at = datetime.utcnow()
+
+            await self.session.commit()
+            logger.info(f"Location deleted (soft): {location.name} by user {current_user_id}")
+            return True
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error deleting location {location_id}: {e}")
+            return False
+
+    # ---------- Listing & Counting ----------
     async def get_locations(
         self,
         skip: int = 0,
@@ -49,77 +113,82 @@ class LocationService:
         is_active: Optional[bool] = None,
         search: Optional[str] = None
     ) -> List[Location]:
-        """Get all locations with filtering"""
-        query = self.db.query(Location)
-        
-        if is_active is not None:
-            query = query.filter(Location.is_active == is_active)
-        
-        if location_type:
-            query = query.filter(Location.location_type == location_type)
-        
-        if city:
-            query = query.filter(Location.city.ilike(f"%{city}%"))
-        
-        if search:
-            query = query.filter(
-                or_(
-                    Location.name.ilike(f"%{search}%"),
-                    Location.address.ilike(f"%{search}%"),
-                    Location.city.ilike(f"%{search}%")
+        try:
+            query = select(Location)
+            if is_active is not None:
+                query = query.where(Location.is_active == is_active)
+            if location_type:
+                query = query.where(Location.location_type == location_type)
+            if city:
+                query = query.where(Location.city.ilike(f"%{city}%"))
+            if search:
+                like = f"%{search}%"
+                query = query.where(
+                    or_(
+                        Location.name.ilike(like),
+                        Location.address.ilike(like),
+                        Location.city.ilike(like)
+                    )
+                )
+            result = await self.session.execute(query.offset(skip).limit(limit))
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting locations: {e}")
+            return []
+
+    async def count_locations(
+        self,
+        location_type: Optional[str] = None,
+        city: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None
+    ) -> int:
+        try:
+            query = select(func.count(Location.id))
+            if is_active is not None:
+                query = query.where(Location.is_active == is_active)
+            if location_type:
+                query = query.where(Location.location_type == location_type)
+            if city:
+                query = query.where(Location.city.ilike(f"%{city}%"))
+            if search:
+                like = f"%{search}%"
+                query = query.where(
+                    or_(
+                        Location.name.ilike(like),
+                        Location.address.ilike(like),
+                        Location.city.ilike(like)
+                    )
+                )
+            result = await self.session.execute(query)
+            return int(result.scalar() or 0)
+        except Exception as e:
+            logger.error(f"Error counting locations: {e}")
+            return 0
+
+    # ---------- Quick helpers ----------
+    async def get_branches(self) -> List[Location]:
+        try:
+            result = await self.session.execute(
+                select(Location).where(
+                    Location.location_type == "BRANCH",
+                    Location.is_active == True
                 )
             )
-        
-        return query.offset(skip).limit(limit).all()
-
-    async def update_location(
-        self,
-        location_id: int,
-        location_data: LocationUpdate,
-        current_user_id: int
-    ) -> Location:
-        """Update location"""
-        location = await self.get_location(location_id)
-        
-        update_data = location_data.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(location, field, value)
-
-        self.db.commit()
-        self.db.refresh(location)
-        
-        logger.info(f"Location updated: {location.name} by user {current_user_id}")
-        return location
-
-    async def delete_location(self, location_id: int, current_user_id: int) -> bool:
-        """Soft delete location"""
-        location = await self.get_location(location_id)
-        
-        # Check if location has active employees
-        active_employees = self.db.query(Employee).filter(
-            Employee.location_id == location_id,
-            Employee.is_active == True
-        ).count()
-        
-        if active_employees > 0:
-            raise ValidationError(f"Cannot delete location. It has {active_employees} active employees")
-
-        location.is_active = False
-        self.db.commit()
-        
-        logger.info(f"Location deleted: {location.name} by user {current_user_id}")
-        return True
-
-    async def get_branches(self) -> List[Location]:
-        """Get all active branches"""
-        return self.db.query(Location).filter(
-            Location.location_type == "BRANCH",
-            Location.is_active == True
-        ).all()
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting branches: {e}")
+            return []
 
     async def get_warehouses(self) -> List[Location]:
-        """Get all active warehouses"""
-        return self.db.query(Location).filter(
-            Location.location_type == "WAREHOUSE",
-            Location.is_active == True
-        ).all()
+        try:
+            result = await self.session.execute(
+                select(Location).where(
+                    Location.location_type == "WAREHOUSE",
+                    Location.is_active == True
+                )
+            )
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting warehouses: {e}")
+            return []

@@ -14,12 +14,11 @@ router = APIRouter()
 @router.post("/mark", response_model=AttendanceResponse)
 async def mark_attendance(
     attendance: AttendanceCreate,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Mark employee attendance (check-in/check-out)"""
     service = AttendanceService(session)
-    return await service.mark_attendance(attendance, current_user.id)
+    return await service.mark_attendance(attendance)
 
 @router.get("/", response_model=List[AttendanceResponse])
 async def get_attendance(

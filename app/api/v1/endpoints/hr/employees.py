@@ -50,16 +50,10 @@ async def get_employee(
 ):
     """Get employee by ID"""
     service = EmployeeService(session)
-    return await service.get_employee(employee_id)
-
-@router.get("/by-employee-id/{employee_id}", response_model=EmployeeResponse)
-async def get_employee_by_employee_id(
-    employee_id: str,
-    session: AsyncSession = Depends(get_async_session)
-):
-    """Get employee by employee ID"""
-    service = EmployeeService(session)
-    return await service.get_employee_by_employee_id(employee_id)
+    employee = await service.get_employee(employee_id)
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return employee
 
 @router.put("/{employee_id}", response_model=EmployeeResponse)
 async def update_employee(

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, EmailStr
+from pydantic import BaseModel, ConfigDict, validator, EmailStr
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
@@ -23,6 +23,7 @@ class EmployeeBase(BaseModel):
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
     address: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class EmployeeCreate(EmployeeBase):
     @validator('first_name', 'last_name')
@@ -60,19 +61,15 @@ class EmployeeUpdate(BaseModel):
 class DepartmentInfo(BaseModel):
     id: int
     name: str
-    
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LocationInfo(BaseModel):
     id: int
     name: str
     location_type: str
     city: Optional[str]
+    model_config = ConfigDict(from_attributes=True)
     
-    class Config:
-        from_attributes = True
-
 class EmployeeResponse(EmployeeBase):
     id: int
     employee_id: str
@@ -81,6 +78,5 @@ class EmployeeResponse(EmployeeBase):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+

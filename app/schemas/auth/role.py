@@ -17,10 +17,10 @@ class RoleUpdate(BaseModel):
 
 class RoleInDBBase(RoleBase):
     id: int
-    is_active: bool
-    is_system_role: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
+    is_active: bool = None
+    is_system_role: bool = None
+    created_at: datetime = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

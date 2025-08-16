@@ -28,8 +28,7 @@ async def get_locations(
     city: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get all locations with filtering"""
     service = LocationService(session)
@@ -37,8 +36,7 @@ async def get_locations(
 
 @router.get("/branches", response_model=List[LocationResponse])
 async def get_branches(
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get all active branches"""
     service = LocationService(session)
@@ -46,8 +44,7 @@ async def get_branches(
 
 @router.get("/warehouses", response_model=List[LocationResponse])
 async def get_warehouses(
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get all active warehouses"""
     service = LocationService(session)
@@ -56,12 +53,14 @@ async def get_warehouses(
 @router.get("/{location_id}", response_model=LocationResponse)
 async def get_location(
     location_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    session: AsyncSession = Depends(get_async_session)
 ):
     """Get location by ID"""
     service = LocationService(session)
-    return await service.get_location(location_id)
+    location = await service.get_location(location_id)
+    if location is None:
+        raise HTTPException(status_code=404, detail="Location not found")
+    return location
 
 @router.put("/{location_id}", response_model=LocationResponse)
 async def update_location(
