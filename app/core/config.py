@@ -1,16 +1,24 @@
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator, Field
+from pydantic import validator, Field
 import os
 
 class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:pgadmin123@localhost/ai_retail_db"
-    # DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@176.9.16.194:5432/ai_retail_db"
-    DATABASE_TEST_URL: str
+    # DATABASE_URL: str = "postgresql+asyncpg://postgres:pgadmin123@localhost/ai_retail_db_test"
+    DATABASE_TEST_URL: str = "postgresql+asyncpg://postgres:pgadmin123@localhost/ai_retail_test_db"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@176.9.16.194:5432/ai_retail_db"
     # DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost/ai_agentic_db" #ESAP SERVER
+    
+    @validator("DATABASE_URL")
+    def validate_database_url(cls, v):
+        """Ensure database URL is safe for current environment"""
+        env = os.getenv("ENVIRONMENT", "development").lower()
+        if env == "production" and "localhost" in v:
+            raise ValueError("🚨 Production environment cannot use localhost database!")
+        return v
 
     GOOGLE_MAPS_API_KEY: str = os.getenv("GOOGLE_MAPS_API_KEY")
     

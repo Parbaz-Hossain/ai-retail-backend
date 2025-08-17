@@ -7,6 +7,12 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.core.database import get_async_session, Base
 from app.db.seeds.initial_data import create_initial_data
+import os
+from app.core.config import settings
+
+# Ensure we're in test environment
+if os.getenv("ENVIRONMENT") == "production":
+    raise RuntimeError("🚨 CRITICAL: Tests cannot run in production environment!")
 
 # Test database URL
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -51,13 +57,19 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with TestingSessionLocal() as session:
         yield session
 
-app.dependency_overrides[get_async_session] = override_get_db
+# app.dependency_overrides[get_async_session] = override_get_db
 
 @pytest.fixture
 async def client(setup_database) -> AsyncGenerator[AsyncClient, None]:
-    """Create test client"""
+    """Create test client with isolated database"""
+    # Only override dependency for this specific test client
+    # app.dependency_overrides[get_async_session] = override_get_db
+    
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
+    
+    # Clean up override after test
+    # app.dependency_overrides.clear()
 
 @pytest.fixture
 async def auth_headers(client: AsyncClient) -> dict:

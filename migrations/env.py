@@ -28,10 +28,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set the SQLAlchemy URL from settings
-# config.set_main_option(
-#     "sqlalchemy.url",
-#     settings.database_url.replace("+asyncpg", "")
-# )
+if not config.get_main_option("sqlalchemy.url"):
+    database_url = settings.DATABASE_URL.replace("+asyncpg", "")
+    config.set_main_option("sqlalchemy.url", database_url)
 
 
 target_metadata = Base.metadata
@@ -51,6 +50,32 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    # Safety check for production environment
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    
+    if environment == "production":
+        print("🚨 PRODUCTION ENVIRONMENT DETECTED")
+        if "downgrade" in sys.argv:
+            raise RuntimeError("🚫 Downgrades are blocked in production!")
+        try:
+            revision = context.get_revision_argument()
+            print("Migration target:", revision)
+        except Exception:
+            pass
+        
+        # Prevent accidental downgrades in production
+        if context.is_offline_mode():
+            raise RuntimeError("Offline migrations not allowed in production!")
+            
+        # Get current and target revisions
+        # current_rev = context.get_current_revision()
+        # target_rev = context.get_revision_argument()
+        
+        # if target_rev and current_rev and target_rev < current_rev:
+        #     raise RuntimeError(
+        #         f"🚨 DOWNGRADE PREVENTED: Cannot downgrade from {current_rev} to {target_rev} in production!"
+        #     )
+    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
