@@ -1,10 +1,10 @@
 from pydantic import BaseModel, validator
 from typing import Optional
-from datetime import date, datetime
+from datetime import date as DateType, datetime
 
 class HolidayBase(BaseModel):
     name: str
-    date: date
+    date: DateType
     description: Optional[str] = None
     is_recurring: bool = False
 
@@ -17,7 +17,7 @@ class HolidayCreate(HolidayBase):
 
 class HolidayUpdate(BaseModel):
     name: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[DateType] = None
     description: Optional[str] = None
     is_recurring: Optional[bool] = None
     is_active: Optional[bool] = None
