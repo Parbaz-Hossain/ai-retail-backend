@@ -1,7 +1,7 @@
 import os
 import sys
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
+from sqlalchemy import engine_from_config, make_url
 from sqlalchemy import pool
 from alembic import context
 
@@ -30,7 +30,7 @@ if config.config_file_name is not None:
 # Set the SQLAlchemy URL from settings
 if not config.get_main_option("sqlalchemy.url"):
     database_url = settings.DATABASE_URL.replace("+asyncpg", "")
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", str(make_url(database_url)))
 
 
 target_metadata = Base.metadata

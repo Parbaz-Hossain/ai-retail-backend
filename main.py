@@ -2,44 +2,19 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
 from app.core.config import settings
-from app.core.database import engine
-from app.core.logging_config import setup_logging
 from app.api.v1.api import api_router
-import os
-import logging
 # from app.middleware.logging import LoggingMiddleware
 # from app.middleware.auth import AuthMiddleware
 # from app.db.init_db import init_db
 # from app.ai.agent_manager import AIAgentManager
 
-# Setup logging first
-setup_logging()
-logger = logging.getLogger(__name__)
-
-# Environment safety check
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
-logger.info(f"🚀 Starting application in {ENVIRONMENT.upper()} mode")
-
-if ENVIRONMENT == "production":
-    logger.warning("🔒 Production mode - Enhanced safety measures active")
-
 # Create FastAPI app
-# Create FastAPI app with environment-specific configuration
 app_config = {
     "title": "AI Agentic Retail Management System",
     "description": "A fully automated retail management system powered by AI agents",
     "version": "1.0.0",
 }
-
-# Disable docs in production for security
-# if ENVIRONMENT == "production":
-#     app_config.update({
-#         "docs_url": None,
-#         "redoc_url": None,
-#         "openapi_url": None
-#     })
 
 app = FastAPI(**app_config)
 
@@ -84,26 +59,6 @@ async def health_check():
             "celery": "running"
         }
     }
-
-@app.on_event("startup")
-async def startup_event():
-    """Application startup with safety checks"""
-    from app.utils.database_safety import DatabaseSafety
-    
-    env = DatabaseSafety.check_environment()
-    logger.info(f"🚀 Application starting in {env.upper()} mode")
-    
-    if env == "production":
-        logger.warning("🔒 Production mode active - All safety measures enabled")
-        # Additional production safety checks can be added here
-    
-    # Verify database safety
-    DatabaseSafety.prevent_destructive_operations()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown"""
-    logger.info("🛑 Application shutting down...")
 
 if __name__ == "__main__":
     import uvicorn
