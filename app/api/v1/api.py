@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
+from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.organization import departments, locations
 
 api_router = APIRouter()
@@ -22,3 +23,14 @@ api_router.include_router(shifts.router, prefix="/hr/shift", tags=["Human Resour
 api_router.include_router(attendance.router, prefix="/hr/attendance", tags=["Human Resource"])
 api_router.include_router(salary.router, prefix="/hr/salary", tags=["Human Resource"])
 api_router.include_router(holidays.router, prefix="/hr/holiday", tags=["Human Resource"])
+
+# Inventory routes
+api_router.include_router(analytics.router, prefix="/inventory/analytics", tags=["Inventory"])
+api_router.include_router(categories.router, prefix="/inventory/category", tags=["Inventory"])
+api_router.include_router(inventory_counts.router, prefix="/inventory/inventory-count", tags=["Inventory"])
+api_router.include_router(items.router, prefix="/inventory/item", tags=["Inventory"])
+api_router.include_router(reorder_requests.router, prefix="/inventory/reorder-request", tags=["Inventory"])
+api_router.include_router(stock_levels.router, prefix="/inventory/stock-level", tags=["Inventory"])
+api_router.include_router(stock_movements.router, prefix="/inventory/stock-movement", tags=["Inventory"])
+api_router.include_router(stock_types.router, prefix="/inventory/stock-type", tags=["Inventory"])
+api_router.include_router(transfers.router, prefix="/inventory/transfer", tags=["Inventory"])

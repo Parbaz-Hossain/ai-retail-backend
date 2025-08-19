@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int
 
     # === CORS ===
-    ALLOWED_ORIGINS: List[AnyHttpUrl] = []
+    ALLOWED_ORIGINS: List[str] = ["http://localhost:8083","http://127.0.0.1:8083","http://localhost:8081","http://127.0.0.1:8081"]
     ALLOWED_METHODS: List[str] = ["*"]
     ALLOWED_HEADERS: List[str] = ["*"]
 
@@ -81,15 +81,6 @@ class Settings(BaseSettings):
     SALARY_GENERATION_FROM_DAY: int = 25
     LATE_GRACE_MINUTES: int = 15
     OVERTIME_RATE_MULTIPLIER: float = 1.5
-
-    @validator("ALLOWED_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
-
 
     class Config:
         env_file = ".env"
