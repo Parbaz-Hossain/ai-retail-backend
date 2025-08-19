@@ -8,7 +8,7 @@ from app.schemas.inventory.stock_type import StockType, StockTypeCreate, StockTy
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/stock-types", tags=["inventory-stock-types"])
+router = APIRouter()
 
 @router.post("/", response_model=StockType, status_code=status.HTTP_201_CREATED)
 async def create_stock_type(

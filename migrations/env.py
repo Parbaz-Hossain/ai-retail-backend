@@ -32,6 +32,8 @@ if not config.get_main_option("sqlalchemy.url"):
     database_url = settings.DATABASE_URL.replace("+asyncpg", "")
     config.set_main_option("sqlalchemy.url", str(make_url(database_url)))
 
+print("🔍 Alembic is using DB URL:", config.get_main_option("sqlalchemy.url"))
+
 
 target_metadata = Base.metadata
 

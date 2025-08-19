@@ -3,9 +3,21 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from app.models.shared.enums import UnitType
-from app.schemas.inventory.category import Category
-from app.schemas.inventory.stock_level import StockLevel
-from app.schemas.inventory.stock_type import StockType
+
+# --- Lightweight refs to avoid circular imports ---
+class CategoryRef(BaseModel):
+    id: int
+    name: str
+
+class StockTypeRef(BaseModel):
+    id: int
+    name: str
+
+class StockLevelRef(BaseModel):
+    id: int
+    location_id: int
+    current_stock: Decimal
+# ---------------------------------------------------
 
 class ItemBase(BaseModel):
     item_code: str
@@ -64,6 +76,9 @@ class ItemInDB(ItemBase):
         from_attributes = True
 
 class Item(ItemInDB):
-    category: Optional['Category'] = None
-    stock_type: Optional['StockType'] = None
-    stock_levels: List['StockLevel'] = []
+    # Use local Ref models to avoid importing other modules
+    category: Optional[CategoryRef] = None
+    stock_type: Optional[StockTypeRef] = None
+    stock_levels: Optional[List[StockLevelRef]] = None
+
+Item.model_rebuild() 

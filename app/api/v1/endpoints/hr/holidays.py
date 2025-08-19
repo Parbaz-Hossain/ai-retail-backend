@@ -31,6 +31,18 @@ async def get_holidays(
     service = HolidayService(session)
     return await service.get_holidays(year, month, is_active)
 
+@router.get("/{holiday_id}", response_model=HolidayResponse)
+async def get_holiday(
+    holiday_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Get a specific holiday by ID"""
+    service = HolidayService(session)
+    holiday = await service.get_holiday(holiday_id)
+    if not holiday:
+        raise HTTPException(status_code=404, detail="Holiday not found")
+    return holiday
+
 @router.put("/{holiday_id}", response_model=HolidayResponse)
 async def update_holiday(
     holiday_id: int,

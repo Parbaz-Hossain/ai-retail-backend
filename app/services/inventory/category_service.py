@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_, or_
+
+from app.models.inventory.item import Item
 from app.models.inventory.category import Category
 from app.schemas.inventory.category import CategoryCreate, CategoryUpdate
 from app.core.exceptions import NotFoundError, ValidationError
@@ -26,14 +28,21 @@ class CategoryService:
             raise ValidationError("Category name already exists")
 
         category = Category(
-            **category_data.dict(),
-            created_by=current_user_id,
-            updated_by=current_user_id
+            **category_data.model_dump()
         )
         
         self.db.add(category)
         await self.db.commit()
         await self.db.refresh(category)
+        result = await self.db.execute(
+            select(Category)
+            .options(
+                selectinload(Category.children),
+                selectinload(Category.parent),
+            )
+            .where(Category.id == category.id)
+        )
+        category = result.scalar_one()
         return category
 
     async def get_category_by_id(self, category_id: int) -> Optional[Category]:
@@ -99,7 +108,6 @@ class CategoryService:
         for field, value in category_data.dict(exclude_unset=True).items():
             setattr(category, field, value)
         
-        category.updated_by = current_user_id
         await self.db.commit()
         await self.db.refresh(category)
         return category
@@ -109,8 +117,6 @@ class CategoryService:
         if not category:
             raise NotFoundError("Category not found")
 
-        # Check if category has items
-        from app.models.inventory.item import Item
         items_result = await self.db.execute(
             select(Item).where(Item.category_id == category_id).limit(1)
         )
@@ -119,6 +125,6 @@ class CategoryService:
 
         # Soft delete
         category.is_active = False
-        category.updated_by = current_user_id
+        category.is_deleted = True
         await self.db.commit()
         return True

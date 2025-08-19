@@ -3,8 +3,16 @@ from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 
-from app.schemas.inventory.item import Item
-from app.schemas.organization.location_schema import LocationResponse
+# --- Lightweight refs to avoid circular imports ---
+class ItemRef(BaseModel):
+    id: int
+    item_code: str
+    name: str
+
+class LocationRef(BaseModel):
+    id: int
+    name: str
+# ---------------------------------------------------
 
 class StockLevelBase(BaseModel):
     item_id: int
@@ -41,11 +49,13 @@ class StockLevelInDB(StockLevelBase):
         from_attributes = True
 
 class StockLevel(StockLevelInDB):
-    item: Optional['Item'] = None
-    location: Optional['LocationResponse'] = None
-
+    item: Optional[ItemRef] = None
+    location: Optional[LocationRef] = None
 
 class LowStockItem(BaseModel):
-    item: Item
+    item: ItemRef
     stock_level: StockLevel
     shortage: Decimal
+
+StockLevel.model_rebuild()
+LowStockItem.model_rebuild()

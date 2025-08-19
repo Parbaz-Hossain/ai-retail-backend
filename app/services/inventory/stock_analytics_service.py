@@ -178,7 +178,7 @@ class StockAnalyticsService:
             return "SLOW"
 
     async def get_stock_valuation(
-        self, 
+        self,
         location_id: Optional[int] = None,
         valuation_date: date = None
     ) -> Dict[str, Any]:
@@ -186,56 +186,62 @@ class StockAnalyticsService:
         if not valuation_date:
             valuation_date = date.today()
 
-        # Get current stock levels with item costs
-        valuation_query = select(
-            Item.id,
-            Item.name,
-            Item.item_code,
-            Item.unit_cost,
-            StockLevel.current_stock,
-            (StockLevel.current_stock * Item.unit_cost).label('total_value'),
-            Location.name.label('location_name')
-        ).join(StockLevel).join(Location).where(
-            and_(
-                Item.is_active == True,
-                StockLevel.current_stock > 0,
-                Item.unit_cost.isnot(None)
+        # Build explicit query
+        valuation_query = (
+            select(
+                Item.id,
+                Item.name,
+                Item.item_code,
+                Item.unit_cost,
+                StockLevel.current_stock,
+                (StockLevel.current_stock * Item.unit_cost).label("total_value"),
+                Location.name.label("location_name"),
+            )
+            .select_from(Item)
+            .join(StockLevel, StockLevel.item_id == Item.id)
+            .join(Location, Location.id == StockLevel.location_id)
+            .where(
+                and_(
+                    Item.is_active.is_(True),
+                    StockLevel.current_stock > 0,
+                    Item.unit_cost.isnot(None),
+                )
             )
         )
-        
+
         if location_id:
             valuation_query = valuation_query.where(StockLevel.location_id == location_id)
 
         result = await self.db.execute(valuation_query)
-        
+
         valuation_data = []
-        total_value = 0
-        
+        total_value = 0.0
+
         for row in result.all():
             item_value = float(row.current_stock * (row.unit_cost or 0))
             total_value += item_value
-            
+
             valuation_data.append({
-                'item_id': row.id,
-                'item_name': row.name,
-                'item_code': row.item_code,
-                'unit_cost': float(row.unit_cost or 0),
-                'current_stock': float(row.current_stock),
-                'total_value': item_value,
-                'location_name': row.location_name if not location_id else None
+                "item_id": row.id,
+                "item_name": row.name,
+                "item_code": row.item_code,
+                "unit_cost": float(row.unit_cost or 0),
+                "current_stock": float(row.current_stock),
+                "total_value": item_value,
+                "location_name": row.location_name if not location_id else None,
             })
 
         # Sort by total value descending
-        valuation_data.sort(key=lambda x: x['total_value'], reverse=True)
+        valuation_data.sort(key=lambda x: x["total_value"], reverse=True)
 
         return {
-            'valuation_date': valuation_date.isoformat(),
-            'total_stock_value': total_value,
-            'item_count': len(valuation_data),
-            'items': valuation_data,
-            'top_10_by_value': valuation_data[:10]
+            "valuation_date": valuation_date.isoformat(),
+            "total_stock_value": total_value,
+            "item_count": len(valuation_data),
+            "items": valuation_data,
+            "top_10_by_value": valuation_data[:10],
         }
-
+    
     async def get_stock_aging_analysis(self, location_id: Optional[int] = None) -> Dict[str, Any]:
         """Analyze stock aging based on last movement dates"""
         # This is a simplified version - in a real system, you'd track batch dates

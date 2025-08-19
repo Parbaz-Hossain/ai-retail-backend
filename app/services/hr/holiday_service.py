@@ -57,13 +57,26 @@ class HolidayService:
 
         result = await self.db.execute(stmt.order_by(Holiday.date))
         return result.scalars().all()
+    
+    async def get_holiday(self, holiday_id: int) -> Optional[Holiday]:
+        try:
+            result = await self.db.execute(
+                select(Holiday).where(
+                    Holiday.id == holiday_id,
+                    Holiday.is_active == True
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting location {holiday_id}: {e}")
+            return None
 
     async def update_holiday(self, holiday_id: int, holiday_data: HolidayUpdate, current_user_id: int) -> Holiday:
         """Update a holiday record"""
         result = await self.db.execute(
             select(Holiday).where(
                 Holiday.id == holiday_id,
-                Holiday.is_active == True
+                Holiday.is_deleted == False
             )
         )
         holiday = result.scalars().first()
@@ -85,12 +98,10 @@ class HolidayService:
         """Soft delete a holiday"""
         result = await self.db.execute(
             select(Holiday).where(
-                Holiday.id == holiday_id,
-                Holiday.is_active == True
+                Holiday.id == holiday_id
             )
         )
         holiday = result.scalars().first()
-
         if not holiday:
             raise NotFoundError(f"Holiday with ID {holiday_id} not found")
 

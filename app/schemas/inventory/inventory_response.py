@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List
+from typing import Any, Dict, List
 
 class StockSummaryResponse(BaseModel):
     location_id: int
@@ -16,9 +16,9 @@ class MovementSummaryResponse(BaseModel):
 
 # Bulk operation schemas
 class BulkStockAdjustment(BaseModel):
-    adjustments: List[Dict[str, any]]  # [{item_id, location_id, quantity_change, reason}]
+    adjustments: List[Dict[str, Any]]  # [{item_id, location_id, quantity_change, reason}]
 
 class BulkTransferRequest(BaseModel):
     from_location_id: int
     to_location_id: int
-    items: List[Dict[str, any]]  # [{item_id, quantity}]
+    items: List[Dict[str, Any]]  # [{item_id, quantity}]

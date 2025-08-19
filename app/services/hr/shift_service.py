@@ -61,6 +61,19 @@ class ShiftService:
         except Exception as e:
             logger.error(f"Error getting shift types: {e}")
             return []
+        
+    async def get_shift_type(self, shift_type_id: int) -> Optional[ShiftType]:
+        try:
+            result = await self.session.execute(
+                select(ShiftType).where(
+                    ShiftType.id == shift_type_id,
+                    ShiftType.is_active == True
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting location {shift_type_id}: {e}")
+            return None
 
     async def update_shift_type(self, shift_type_id: int, data: ShiftTypeUpdate, current_user_id: int) -> ShiftType:
         try:
@@ -144,7 +157,7 @@ class ShiftService:
             logger.error(f"Error assigning shift: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error assigning shift")
 
-    # ---------- Queries ----------
+    # ---------- Queries ----------        
     async def get_employee_current_shift(self, employee_id: int) -> Optional[UserShift]:
         try:
             today = date.today()

@@ -32,6 +32,18 @@ async def get_shift_types(
     service = ShiftService(session)
     return await service.get_shift_types(is_active)
 
+@router.get("/types/{shift_type_id}", response_model=ShiftTypeResponse)
+async def get_shift_type(
+    shift_type_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Get a specific shift type by ID"""
+    service = ShiftService(session)
+    shift_type = await service.get_shift_type(shift_type_id)
+    if not shift_type:
+        raise HTTPException(status_code=404, detail="Shift type not found")
+    return shift_type
+
 @router.put("/types/{shift_type_id}", response_model=ShiftTypeResponse)
 async def update_shift_type(
     shift_type_id: int,

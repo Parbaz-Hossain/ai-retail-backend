@@ -10,7 +10,7 @@ from app.models.shared.enums import TransferStatus
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/transfers", tags=["inventory-transfers"])
+router = APIRouter()
 
 @router.post("/", response_model=Transfer, status_code=status.HTTP_201_CREATED)
 async def create_transfer(

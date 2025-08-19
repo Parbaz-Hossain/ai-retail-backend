@@ -18,11 +18,12 @@ class CategoryUpdate(BaseModel):
 
 class CategoryInDB(CategoryBase):
     id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None   
+    updated_at: Optional[datetime] = None 
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
 
     class Config:
         from_attributes = True
