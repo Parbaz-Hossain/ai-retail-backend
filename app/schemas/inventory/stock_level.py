@@ -40,10 +40,8 @@ class StockLevelUpdate(BaseModel):
 class StockLevelInDB(StockLevelBase):
     id: int
     available_stock: Decimal
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

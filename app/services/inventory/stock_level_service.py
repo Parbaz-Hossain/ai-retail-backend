@@ -36,15 +36,18 @@ class StockLevelService:
 
         stock_level = StockLevel(
             **stock_level_data.dict(),
-            available_stock=stock_level_data.current_stock - (stock_level_data.reserved_stock or 0),
-            created_by=current_user_id,
-            updated_by=current_user_id
+            available_stock=stock_level_data.current_stock - (stock_level_data.reserved_stock or 0)
         )
         
         self.db.add(stock_level)
         await self.db.commit()
         await self.db.refresh(stock_level)
-        return stock_level
+        result = await self.db.execute(
+            select(StockLevel)
+            .options(selectinload(StockLevel.item), selectinload(StockLevel.location))
+            .where(StockLevel.id == stock_level.id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_stock_level_by_id(self, stock_level_id: int) -> Optional[StockLevel]:
         result = await self.db.execute(
@@ -101,7 +104,6 @@ class StockLevelService:
         
         # Recalculate available stock
         stock_level.available_stock = stock_level.current_stock - (stock_level.reserved_stock or 0)
-        stock_level.updated_by = current_user_id
         
         await self.db.commit()
         await self.db.refresh(stock_level)
@@ -125,9 +127,7 @@ class StockLevelService:
                 location_id=location_id,
                 current_stock=max(0, quantity_change),
                 reserved_stock=0,
-                available_stock=max(0, quantity_change),
-                created_by=current_user_id,
-                updated_by=current_user_id
+                available_stock=max(0, quantity_change)
             )
             self.db.add(stock_level)
         else:
@@ -135,7 +135,6 @@ class StockLevelService:
             stock_level.current_stock += quantity_change
             stock_level.current_stock = max(0, stock_level.current_stock)  # Prevent negative stock
             stock_level.available_stock = stock_level.current_stock - (stock_level.reserved_stock or 0)
-            stock_level.updated_by = current_user_id
 
         await self.db.commit()
         await self.db.refresh(stock_level)
@@ -159,7 +158,6 @@ class StockLevelService:
 
         stock_level.reserved_stock = (stock_level.reserved_stock or 0) + quantity
         stock_level.available_stock = stock_level.current_stock - stock_level.reserved_stock
-        stock_level.updated_by = current_user_id
 
         await self.db.commit()
         await self.db.refresh(stock_level)
@@ -180,7 +178,6 @@ class StockLevelService:
 
         stock_level.reserved_stock = max(0, (stock_level.reserved_stock or 0) - quantity)
         stock_level.available_stock = stock_level.current_stock - stock_level.reserved_stock
-        stock_level.updated_by = current_user_id
 
         await self.db.commit()
         await self.db.refresh(stock_level)

@@ -41,9 +41,7 @@ class ReorderRequestService:
             priority=request_data.priority or "NORMAL",
             total_estimated_cost=total_estimated_cost,
             requested_by=current_user_id,
-            notes=request_data.notes,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            notes=request_data.notes
         )
         
         self.db.add(reorder_request)
@@ -55,7 +53,20 @@ class ReorderRequestService:
 
         await self.db.commit()
         await self.db.refresh(reorder_request)
-        return reorder_request
+        result = await self.db.execute(
+            select(ReorderRequest)
+            .options(
+                selectinload(ReorderRequest.location),
+                selectinload(ReorderRequest.items)
+                    .selectinload(ReorderRequestItem.item)
+                    .options(
+                        selectinload(Item.category),
+                        selectinload(Item.stock_levels),
+                    )
+            )
+            .where(ReorderRequest.id == reorder_request.id)
+        )
+        return result.scalars().unique().one()
 
     async def _generate_request_number(self) -> str:
         """Generate unique request number"""
@@ -98,9 +109,7 @@ class ReorderRequestService:
             requested_quantity=item_data.requested_quantity,
             estimated_unit_cost=item_data.estimated_unit_cost,
             estimated_total_cost=item_data.requested_quantity * (item_data.estimated_unit_cost or 0),
-            reason=item_data.reason,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            reason=item_data.reason
         )
         
         self.db.add(reorder_item)
@@ -109,8 +118,13 @@ class ReorderRequestService:
         result = await self.db.execute(
             select(ReorderRequest)
             .options(
-                selectinload(ReorderRequest.location),
-                selectinload(ReorderRequest.items).selectinload(ReorderRequestItem.item)
+                 selectinload(ReorderRequest.location),
+                 selectinload(ReorderRequest.items)
+                    .selectinload(ReorderRequestItem.item)
+                    .options(
+                        selectinload(Item.category),
+                        selectinload(Item.stock_levels),
+                    )
             )
             .where(ReorderRequest.id == request_id)
         )
@@ -125,9 +139,14 @@ class ReorderRequestService:
         priority: Optional[str] = None
     ) -> List[ReorderRequest]:
         query = select(ReorderRequest).options(
-            selectinload(ReorderRequest.location),
-            selectinload(ReorderRequest.items)
-        ).order_by(desc(ReorderRequest.request_date))
+                selectinload(ReorderRequest.location),
+                selectinload(ReorderRequest.items)
+                    .selectinload(ReorderRequestItem.item)
+                    .options(
+                        selectinload(Item.category),
+                        selectinload(Item.stock_levels),
+                    )
+            ).order_by(desc(ReorderRequest.request_date))
         
         conditions = []
         if location_id:

@@ -44,15 +44,22 @@ class ItemService:
 
         item = Item(
             **item_data.dict(exclude={'qr_code'}),
-            qr_code=qr_code,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            qr_code=qr_code
         )
         
         self.db.add(item)
         await self.db.commit()
         await self.db.refresh(item)
-        return item
+        result = await self.db.execute(
+            select(Item)
+            .options(
+                selectinload(Item.category),
+                selectinload(Item.stock_type),
+                selectinload(Item.stock_levels),
+            )
+            .where(Item.id == item.id)
+        )
+        return result.scalars().unique().one()
 
     async def get_item_by_id(self, item_id: int) -> Optional[Item]:
         result = await self.db.execute(
@@ -69,7 +76,7 @@ class ItemService:
     async def get_item_by_code(self, item_code: str) -> Optional[Item]:
         result = await self.db.execute(
             select(Item)
-            .options(selectinload(Item.category), selectinload(Item.stock_type))
+            .options(selectinload(Item.category), selectinload(Item.stock_type), selectinload(Item.stock_levels))
             .where(and_(Item.item_code == item_code, Item.is_active == True))
         )
         return result.scalar_one_or_none()
@@ -153,7 +160,7 @@ class ItemService:
 
         # Soft delete
         item.is_active = False
-        item.updated_by = current_user_id
+        item.is_deleted = True
         await self.db.commit()
         return True
 
@@ -162,6 +169,8 @@ class ItemService:
         result = await self.db.execute(
             select(Item)
             .options(selectinload(Item.stock_levels))
+            .options(selectinload(Item.stock_type))
+            .options(selectinload(Item.category))
             .where(and_(Item.category_id == category_id, Item.is_active == True))
         )
         return result.scalars().all()

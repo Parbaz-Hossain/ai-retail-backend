@@ -65,12 +65,10 @@ class ItemUpdate(BaseModel):
 
 class ItemInDB(ItemBase):
     id: int
-    qr_code: str
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    qr_code: Optional[str] = None
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

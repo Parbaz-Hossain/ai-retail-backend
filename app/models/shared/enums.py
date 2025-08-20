@@ -11,6 +11,11 @@ class UnitType(str, Enum):
     M3 = "M3"
     L = "L"
     LM = "LM"
+    BAG = "BAG"
+    BOX = "BOX"
+    CARTON = "CARTON"
+    BTL = "BTL"
+    DOZEN = "DOZEN"
 
 class StockMovementType(str, Enum):
     INBOUND = "INBOUND"

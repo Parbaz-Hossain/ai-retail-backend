@@ -1,10 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
 
-from app.schemas.inventory.item import Item
-from app.schemas.organization.location_schema import LocationResponse
+class ItemRef(BaseModel):
+    id: int
+    name: str
+    sku: Optional[str] = None
+    unit: Optional[str] = None
+    class Config:
+        from_attributes = True
 
 class InventoryCountItemBase(BaseModel):
     item_id: int
@@ -23,16 +28,14 @@ class InventoryCountItemInDB(InventoryCountItemBase):
     inventory_count_id: int
     variance_quantity: Decimal
     variance_value: Optional[Decimal] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
-
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
+# ✅ items are InventoryCountItem, each with a shallow ItemRef
 class InventoryCountItem(InventoryCountItemInDB):
-    item: Optional['Item'] = None
+    item: Optional[ItemRef] = None
 
 class InventoryCountBase(BaseModel):
     location_id: int
@@ -41,7 +44,7 @@ class InventoryCountBase(BaseModel):
     notes: Optional[str] = None
 
 class InventoryCountCreate(InventoryCountBase):
-    items: List[InventoryCountItemCreate] = []
+    items: List[InventoryCountItemCreate] = Field(default_factory=list)  # ✅
 
 class InventoryCountUpdate(BaseModel):
     count_date: Optional[date] = None
@@ -55,14 +58,20 @@ class InventoryCountInDB(InventoryCountBase):
     status: str
     conducted_by: Optional[int] = None
     verified_by: Optional[int] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
 
+class LocationRef(BaseModel):
+    id: int
+    name: str
+    location_type: str
+    city: Optional[str] = None
+    country: Optional[str] = None
     class Config:
         from_attributes = True
 
 class InventoryCount(InventoryCountInDB):
-    location: Optional['LocationResponse'] = None
-    items: List[InventoryCountItem] = []
+    location: Optional[LocationRef] = None
+    items: List[InventoryCountItem] = Field(default_factory=list)  # ✅

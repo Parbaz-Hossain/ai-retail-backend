@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -27,10 +27,8 @@ class ReorderRequestItemInDB(ReorderRequestItemBase):
     current_stock: Decimal
     approved_quantity: Optional[Decimal] = None
     estimated_total_cost: Optional[Decimal] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -68,15 +66,13 @@ class ReorderRequestInDB(ReorderRequestBase):
     requested_by: int
     approved_by: Optional[int] = None
     approved_date: Optional[datetime] = None
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 class ReorderRequest(ReorderRequestInDB):
     location: Optional['LocationResponse'] = None
-    items: List[ReorderRequestItem] = []
+    items: List[ReorderRequestItem] = Field(default_factory=list)

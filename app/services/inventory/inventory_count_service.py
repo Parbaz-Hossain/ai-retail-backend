@@ -31,9 +31,7 @@ class InventoryCountService:
             count_date=count_data.count_date,
             count_type=count_data.count_type,
             conducted_by=current_user_id,
-            notes=count_data.notes,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            notes=count_data.notes
         )
         
         self.db.add(inventory_count)
@@ -45,7 +43,15 @@ class InventoryCountService:
 
         await self.db.commit()
         await self.db.refresh(inventory_count)
-        return inventory_count
+        result = await self.db.execute(
+            select(InventoryCount)
+            .options(
+                selectinload(InventoryCount.location),
+                selectinload(InventoryCount.items).selectinload(InventoryCountItem.item),
+            )
+            .where(InventoryCount.id == inventory_count.id)
+        )
+        return result.scalars().unique().one()
 
     async def _generate_count_number(self) -> str:
         """Generate unique count number"""
@@ -83,9 +89,7 @@ class InventoryCountService:
             variance_value=variance_value,
             batch_number=item_data.batch_number,
             expiry_date=item_data.expiry_date,
-            remarks=item_data.remarks,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            remarks=item_data.remarks
         )
         
         self.db.add(count_item)
