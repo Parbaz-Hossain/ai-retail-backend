@@ -9,6 +9,7 @@ from app.models.inventory.transfer_item import TransferItem
 from app.models.inventory.item import Item
 from app.models.inventory.stock_level import StockLevel
 from app.models.organization.location import Location
+from app.schemas.inventory.stock_movement import StockMovementCreate
 from app.schemas.inventory.transfer import TransferCreate, TransferItemCreate
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import TransferStatus, StockMovementType
@@ -42,8 +43,7 @@ class TransferService:
             expected_date=transfer_data.expected_date,
             requested_by=current_user_id,
             notes=transfer_data.notes,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            created_by=current_user_id
         )
         
         self.db.add(transfer)
@@ -55,7 +55,20 @@ class TransferService:
 
         await self.db.commit()
         await self.db.refresh(transfer)
-        return transfer
+        result = await self.db.execute(
+            select(Transfer)
+            .options(
+                selectinload(Transfer.from_location),
+                selectinload(Transfer.to_location),
+                selectinload(Transfer.items).selectinload(TransferItem.item).options(
+                    selectinload(Item.category),      
+                    selectinload(Item.stock_levels),   
+                )
+            )
+            .where(Transfer.id == transfer.id)
+        )
+        return result.scalar_one_or_none()
+
 
     async def _generate_transfer_number(self) -> str:
         """Generate unique transfer number"""
@@ -97,8 +110,7 @@ class TransferService:
             unit_cost=item_data.unit_cost,
             batch_number=item_data.batch_number,
             expiry_date=item_data.expiry_date,
-            created_by=current_user_id,
-            updated_by=current_user_id
+            created_by=current_user_id
         )
         
         self.db.add(transfer_item)
@@ -109,7 +121,10 @@ class TransferService:
             .options(
                 selectinload(Transfer.from_location),
                 selectinload(Transfer.to_location),
-                selectinload(Transfer.items).selectinload(TransferItem.item)
+                selectinload(Transfer.items).selectinload(TransferItem.item).options(
+                    selectinload(Item.category),      
+                    selectinload(Item.stock_levels),   
+                )
             )
             .where(Transfer.id == transfer_id)
         )
@@ -123,11 +138,19 @@ class TransferService:
         to_location_id: Optional[int] = None,
         status: Optional[TransferStatus] = None
     ) -> List[Transfer]:
-        query = select(Transfer).options(
-            selectinload(Transfer.from_location),
-            selectinload(Transfer.to_location),
-            selectinload(Transfer.items)
-        ).order_by(desc(Transfer.transfer_date))
+        query = (
+        select(Transfer)
+            .options(
+                selectinload(Transfer.from_location),
+                selectinload(Transfer.to_location),
+                selectinload(Transfer.items).selectinload(TransferItem.item).options(
+                    selectinload(Item.category),       # preload category
+                    selectinload(Item.stock_levels),   # preload stock_levels
+                )
+            )
+            .order_by(desc(Transfer.transfer_date))
+        )
+
         
         conditions = []
         if from_location_id:
@@ -194,7 +217,7 @@ class TransferService:
 
                 # Create outbound movement from source location
                 await movement_service.create_stock_movement(
-                    movement_data={
+                    movement_data=StockMovementCreate(**{
                         'item_id': item.item_id,
                         'location_id': transfer.from_location_id,
                         'movement_type': StockMovementType.TRANSFER,
@@ -205,11 +228,10 @@ class TransferService:
                         'batch_number': item.batch_number,
                         'expiry_date': item.expiry_date,
                         'remarks': f"Transfer to {transfer.to_location.name}"
-                    },
+                    }),
                     current_user_id=current_user_id,
                     auto_update_stock=True
                 )
-
         transfer.sent_by = current_user_id
         transfer.sent_date = datetime.utcnow()
         transfer.updated_by = current_user_id
@@ -238,7 +260,7 @@ class TransferService:
 
                 # Create inbound movement to destination location
                 await movement_service.create_stock_movement(
-                    movement_data={
+                    movement_data=StockMovementCreate(**{
                         'item_id': item.item_id,
                         'location_id': transfer.to_location_id,
                         'movement_type': StockMovementType.INBOUND,
@@ -249,7 +271,7 @@ class TransferService:
                         'batch_number': item.batch_number,
                         'expiry_date': item.expiry_date,
                         'remarks': f"Transfer from {transfer.from_location.name}"
-                    },
+                    }),
                     current_user_id=current_user_id,
                     auto_update_stock=True
                 )

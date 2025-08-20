@@ -30,16 +30,24 @@ class StockMovementCreate(StockMovementBase):
 class StockMovementInDB(StockMovementBase):
     id: int
     total_cost: Optional[Decimal]
-    performed_by: int
-    movement_date: datetime
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    performed_by: Optional[int] = None
+    movement_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class ItemRef(BaseModel):
+    id: int
+    name: str
+    sku: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 class StockMovement(StockMovementInDB):
-    item: Optional['Item'] = None
+    item: Optional[ItemRef] = None
     location: Optional['LocationResponse'] = None

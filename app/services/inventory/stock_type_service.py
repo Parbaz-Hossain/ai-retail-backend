@@ -20,8 +20,7 @@ class StockTypeService:
 
         stock_type = StockType(
             **stock_type_data.dict(),
-            created_by=current_user_id,
-            updated_by=current_user_id
+            created_by=current_user_id
         )
         
         self.db.add(stock_type)
@@ -51,7 +50,10 @@ class StockTypeService:
         return result.scalars().all()
 
     async def update_stock_type(self, stock_type_id: int, stock_type_data: StockTypeUpdate, current_user_id: int) -> StockType:
-        stock_type = await self.get_stock_type_by_id(stock_type_id)
+        result =  await self.db.execute(
+            select(StockType).where(and_(StockType.id == stock_type_id, StockType.is_deleted == False))
+        )
+        stock_type = result.scalar_one_or_none()
         if not stock_type:
             raise NotFoundError("Stock type not found")
 
@@ -89,6 +91,7 @@ class StockTypeService:
 
         # Soft delete
         stock_type.is_active = False
+        stock_type.is_deleted = True
         stock_type.updated_by = current_user_id
         await self.db.commit()
         return True

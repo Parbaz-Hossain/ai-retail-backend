@@ -47,8 +47,7 @@ class StockMovementService:
             total_cost=total_cost,
             performed_by=current_user_id,
             movement_date=datetime.utcnow(),
-            created_by=current_user_id,
-            updated_by=current_user_id
+            created_by=current_user_id
         )
         
         self.db.add(stock_movement)
@@ -59,7 +58,14 @@ class StockMovementService:
 
         await self.db.commit()
         await self.db.refresh(stock_movement)
-        return stock_movement
+        result = await self.db.execute(
+            select(StockMovement)
+            .options(selectinload(StockMovement.item)
+                     .options(selectinload(Item.category), selectinload(Item.stock_levels)),
+                     selectinload(StockMovement.location))
+            .where(StockMovement.id == stock_movement.id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_stock_movements(
         self,
@@ -73,9 +79,15 @@ class StockMovementService:
     ) -> List[StockMovement]:
         """Get all stock movements with optional filters"""
         
-        query = select(StockMovement).options(
-            selectinload(StockMovement.item),
-            selectinload(StockMovement.location)
+        query = (
+            select(StockMovement)
+            .options(
+                selectinload(StockMovement.item).options(
+                    selectinload(Item.category),       # preload category
+                    selectinload(Item.stock_levels),   # preload stock levels
+                ),
+                selectinload(StockMovement.location),  # preload location
+            )
         )
         
         # Apply filters
@@ -233,7 +245,7 @@ class StockMovementService:
         
         return MovementSummaryResponse(
             total_movements=total_movements,
-            movements_by_type=movements_by_type,
+            summary_by_type=movements_by_type,
             recent_movements=recent_movements,
             top_items=top_items,
             total_value=float(total_value),

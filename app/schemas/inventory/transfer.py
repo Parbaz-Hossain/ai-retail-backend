@@ -27,10 +27,10 @@ class TransferItemInDB(TransferItemBase):
     transfer_id: int
     sent_quantity: Optional[Decimal] = None
     received_quantity: Optional[Decimal] = None
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -76,11 +76,11 @@ class TransferInDB(TransferBase):
     approved_date: Optional[datetime] = None
     sent_date: Optional[datetime] = None
     received_date: Optional[datetime] = None
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: int
-    updated_by: int
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
 
     class Config:
         from_attributes = True

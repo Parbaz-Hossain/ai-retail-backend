@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 class StockSummaryResponse(BaseModel):
     location_id: int
@@ -11,8 +11,8 @@ class StockSummaryResponse(BaseModel):
 
 class MovementSummaryResponse(BaseModel):
     summary_by_type: Dict[str, Dict[str, float]]
-    total_movements: int
-    total_value: float
+    total_movements: Optional[int] = None
+    total_value: Optional[float] = None
 
 # Bulk operation schemas
 class BulkStockAdjustment(BaseModel):
