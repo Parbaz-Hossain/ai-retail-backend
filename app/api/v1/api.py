@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
+from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.organization import departments, locations
 from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
 
@@ -40,3 +41,8 @@ api_router.include_router(transfers.router, prefix="/inventory/transfer", tags=[
 api_router.include_router(goods_receipts.router, prefix="/purchase/goods-receipt", tags=["Purchase"])
 api_router.include_router(purchase_orders.router, prefix="/purchase/purchase-order", tags=["Purchase"])
 api_router.include_router(suppliers.router, prefix="/purchase/suplier", tags=["Purchase"])
+
+# Logistics routes
+api_router.include_router(drivers.router, prefix="/logistics/driver", tags=["Logistics"])
+api_router.include_router(shipments.router, prefix="/logistics/shipment", tags=["Logistics"])
+api_router.include_router(vehicles.router, prefix="/logistics/vehicle", tags=["Logistics"])

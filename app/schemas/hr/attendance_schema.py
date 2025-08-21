@@ -33,17 +33,17 @@ class EmployeeInfo(BaseModel):
 class AttendanceResponse(AttendanceBase):
     id: int
     employee: EmployeeInfo
-    total_hours: Optional[Decimal]
-    overtime_hours: Optional[Decimal]
-    late_minutes: int
-    early_leave_minutes: int
+    total_hours: Optional[Decimal] = None
+    overtime_hours: Optional[Decimal] = None
+    late_minutes: Optional[int] = None
+    early_leave_minutes: Optional[int] = None
     status: AttendanceStatus
-    bio_check_in: bool
-    bio_check_out: bool
-    remarks: Optional[str]
-    is_holiday: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
+    bio_check_in: Optional[bool] = None
+    bio_check_out: Optional[bool] = None
+    remarks: Optional[str] = None
+    is_holiday: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

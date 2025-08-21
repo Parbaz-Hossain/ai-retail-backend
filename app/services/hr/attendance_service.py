@@ -12,17 +12,24 @@ from app.models.hr.user_shift import UserShift
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.holiday import Holiday
 from app.models.shared.enums import AttendanceStatus
-from app.schemas.hr.attendance_schema import AttendanceCreate
+from app.schemas.hr.attendance_schema import AttendanceCreate, AttendanceResponse
 
 logger = logging.getLogger(__name__)
 
+def ensure_utc(dt: datetime | None) -> datetime | None:
+        """Ensure datetime is timezone-aware (UTC)."""
+        if dt is None:
+            return None
+        if dt.tzinfo is None:  # naive → assume UTC
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
 
 class AttendanceService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # ---------- Mark Attendance ----------
-    async def mark_attendance(self, data: AttendanceCreate) -> Attendance:
+    # ---------- Mark Attendance ---------
+    async def mark_attendance(self, data) -> AttendanceResponse:
         try:
             # Validate employee
             emp_res = await self.session.execute(
@@ -33,7 +40,7 @@ class AttendanceService:
                 raise HTTPException(status_code=400, detail="Employee not found")
 
             # Validate shift
-            today = date.today()
+            today = data.attendance_date
             shift_res = await self.session.execute(
                 select(UserShift)
                 .options(selectinload(UserShift.shift_type))
@@ -42,15 +49,20 @@ class AttendanceService:
                     UserShift.employee_id == data.employee_id,
                     UserShift.is_active == True,
                     UserShift.effective_date <= today,
-                    or_(
-                        UserShift.end_date.is_(None),
-                        UserShift.end_date >= today
-                    )
+                    ((UserShift.end_date.is_(None)) | (UserShift.end_date >= today))
                 )
             )
             user_shift = shift_res.scalar_one_or_none()
             if not user_shift:
                 raise HTTPException(status_code=400, detail="No active shift for employee")
+
+            # Normalize times
+            check_in_time = ensure_utc(data.check_in_time)
+            check_out_time = ensure_utc(data.check_out_time)
+
+            # Shift start & end (UTC)
+            shift_start = datetime.combine(data.attendance_date, user_shift.shift_type.start_time).replace(tzinfo=timezone.utc)
+            shift_end = datetime.combine(data.attendance_date, user_shift.shift_type.end_time).replace(tzinfo=timezone.utc)
 
             # Check holiday
             holiday_res = await self.session.execute(
@@ -60,67 +72,64 @@ class AttendanceService:
 
             # Check existing attendance
             existing_res = await self.session.execute(
-                select(Attendance).where(
+                select(Attendance).options(selectinload(Attendance.employee)).where(
                     Attendance.employee_id == data.employee_id,
                     Attendance.attendance_date == data.attendance_date
                 )
             )
             existing = existing_res.scalar_one_or_none()
 
+            # ========== CHECK-OUT ==========
             if existing:
-                if data.check_out_time and not existing.check_out_time:
-                    existing.check_out_time = data.check_out_time
+                if check_out_time and not existing.check_out_time:
+                    existing.check_out_time = check_out_time
                     existing.bio_check_out = data.bio_check_out or False
 
                     if existing.check_in_time:
-                        duration = data.check_out_time - existing.check_in_time
+                        duration = check_out_time - ensure_utc(existing.check_in_time)
                         existing.total_hours = round(duration.total_seconds() / 3600, 2)
 
-                        shift_end = datetime.combine(data.attendance_date, user_shift.shift_type.end_time)
-                        if data.check_out_time < shift_end:
-                            early = shift_end - data.check_out_time
+                        if check_out_time < shift_end:
+                            early = shift_end - check_out_time
                             existing.early_leave_minutes = int(early.total_seconds() / 60)
 
                     existing.status = AttendanceStatus.CHECKED_OUT
                     await self.session.commit()
-                    await self.session.refresh(existing)
-                    logger.info(f"Checked out: {employee.employee_id}")
-                    return existing
+                    await self.session.refresh(existing, attribute_names=["employee", "created_at", "updated_at"])
+                    logger.info(f"Checked out: {employee.id}")
+                    return AttendanceResponse.model_validate(existing, from_attributes=True)  # ✅ fix here
                 else:
                     raise HTTPException(status_code=400, detail="Already checked in or invalid check-out")
 
-            # Create new check-in
+            # ========== CHECK-IN ==========
             attendance = Attendance(
                 employee_id=data.employee_id,
                 attendance_date=data.attendance_date,
-                check_in_time=data.check_in_time,
+                check_in_time=check_in_time,
                 bio_check_in=data.bio_check_in or False,
                 is_holiday=is_holiday,
                 status=AttendanceStatus.CHECKED_IN
             )
 
-            if data.check_in_time:
-                shift_start = datetime.combine(data.attendance_date, user_shift.shift_type.start_time)
-                shift_start = shift_start.replace(tzinfo=timezone.utc)
+            if check_in_time:
                 grace = timedelta(minutes=user_shift.shift_type.late_grace_minutes or 0)
-                if data.check_in_time > (shift_start + grace):
-                    diff = data.check_in_time - shift_start
+                if check_in_time > (shift_start + grace):
+                    diff = check_in_time - shift_start
                     attendance.late_minutes = int(diff.total_seconds() / 60)
                     attendance.status = AttendanceStatus.LATE
 
             self.session.add(attendance)
             await self.session.commit()
-            await self.session.refresh(attendance, attribute_names=["employee"])
-
-            logger.info(f"Checked in: {employee.employee_id}")
-            return attendance
+            await self.session.refresh(attendance, attribute_names=["employee", "created_at", "updated_at"])
+            logger.info(f"Checked in: {employee.id}")
+            return AttendanceResponse.model_validate(attendance, from_attributes=True)  # ✅ schema not ORM
 
         except HTTPException:
             raise
         except Exception as e:
             await self.session.rollback()
             logger.error(f"Error marking attendance: {e}")
-            raise HTTPException(status_code=500, detail="Error marking attendance")
+        raise HTTPException(status_code=500, detail="Error marking attendance")
 
     # ---------- Attendance Retrieval ----------
     async def get_attendance(
