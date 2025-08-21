@@ -35,6 +35,7 @@ class SupplierService:
 
             # Create new supplier
             supplier = Supplier(**supplier_data.model_dump())
+            supplier.created_by = user_id
             self.session.add(supplier)
             await self.session.commit()
             await self.session.refresh(supplier)
@@ -106,7 +107,7 @@ class SupplierService:
             suppliers = result.scalars().all()
 
             return {
-                "items": suppliers,
+                "data": suppliers,
                 "total": total,
                 "skip": skip,
                 "limit": limit
@@ -152,6 +153,7 @@ class SupplierService:
                     )
 
             # Update supplier
+            supplier.updated_by = user_id
             for field, value in supplier_data.model_dump(exclude_unset=True).items():
                 setattr(supplier, field, value)
 
@@ -203,6 +205,7 @@ class SupplierService:
                     detail="Cannot delete supplier with active purchase orders"
                 )
 
+            supplier.is_active = False
             supplier.is_deleted = True
             await self.session.commit()
 
@@ -275,7 +278,8 @@ class SupplierService:
                 unit_cost=unit_cost,
                 minimum_order_quantity=minimum_order_quantity,
                 lead_time_days=lead_time_days,
-                is_preferred=is_preferred
+                is_preferred=is_preferred,
+                created_by=user_id
             )
 
             self.session.add(item_supplier)
