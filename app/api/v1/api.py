@@ -3,6 +3,7 @@ from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.organization import departments, locations
+from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
 
 api_router = APIRouter()
 
@@ -34,3 +35,8 @@ api_router.include_router(stock_levels.router, prefix="/inventory/stock-level", 
 api_router.include_router(stock_movements.router, prefix="/inventory/stock-movement", tags=["Inventory"])
 api_router.include_router(stock_types.router, prefix="/inventory/stock-type", tags=["Inventory"])
 api_router.include_router(transfers.router, prefix="/inventory/transfer", tags=["Inventory"])
+
+# Purchase routes
+api_router.include_router(goods_receipts.router, prefix="/purchase/goods-receipt", tags=["Purchase"])
+api_router.include_router(purchase_orders.router, prefix="/purchase/purchase-order", tags=["Purchase"])
+api_router.include_router(suppliers.router, prefix="/purchase/suplier", tags=["Purchase"])
