@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.api.dependencies import get_current_user
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.purchase.purchase_order_service import PurchaseOrderService
 from app.models.shared.enums import PurchaseOrderStatus
 from app.schemas.purchase.purchase_order_schema import (PurchaseOrderCreate, PurchaseOrderUpdate, PurchaseOrderResponse)
@@ -32,7 +33,7 @@ async def create_purchase_order(
             detail="Failed to create purchase order"
         )
 
-@router.get("/", response_model=List[PurchaseOrderResponse])
+@router.get("/", response_model=PaginatedResponse[PurchaseOrderResponse])
 async def get_purchase_orders(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

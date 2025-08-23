@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.logistics.driver import Driver
 from app.models.hr.employee import Employee
 from app.models.logistics.shipment import Shipment
+from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.driver_schema import DriverCreate, DriverUpdate, DriverResponse
 
 logger = logging.getLogger(__name__)
@@ -60,10 +61,17 @@ class DriverService:
             driver.created_by = user_id
             self.session.add(driver)
             await self.session.commit()
-            await self.session.refresh(driver)
-
+            result = await self.session.execute(
+                select(Driver)
+                 .options(
+                    selectinload(Driver.employee).selectinload(Employee.department),
+                    selectinload(Driver.employee).selectinload(Employee.location),
+                )
+                .where(Driver.id == driver.id)
+            )
+            driver = result.scalar_one()
             logger.info(f"Driver created successfully with ID: {driver.id}")
-            return driver
+            return DriverResponse.model_validate(driver, from_attributes=True)
 
         except HTTPException:
             raise
@@ -80,7 +88,10 @@ class DriverService:
         try:
             result = await self.session.execute(
                 select(Driver)
-                .options(selectinload(Driver.employee))
+                 .options(
+                    selectinload(Driver.employee).selectinload(Employee.department),
+                    selectinload(Driver.employee).selectinload(Employee.location),
+                )
                 .where(Driver.id == driver_id, Driver.is_deleted == False)
             )
             return result.scalar_one_or_none()
@@ -90,52 +101,67 @@ class DriverService:
             return None
 
     async def get_drivers(
-        self,
-        skip: int = 0,
-        limit: int = 100,
-        search: Optional[str] = None,
-        is_available: Optional[bool] = None,
-        is_active: Optional[bool] = None
-    ) -> Dict[str, Any]:
+            self,
+            skip: int = 0,
+            limit: int = 100,
+            search: Optional[str] = None,
+            is_available: Optional[bool] = None,
+            is_active: Optional[bool] = None
+        ) -> PaginatedResponse[DriverResponse]:
         """Get list of drivers with filters"""
         try:
-            query = select(Driver).options(selectinload(Driver.employee))
-            
-            # Apply filters
             conditions = [Driver.is_deleted == False]
-            
+
             if search:
                 conditions.append(
                     or_(
-                        Driver.license_number.icontains(search),
-                        Driver.phone.icontains(search)
+                        Driver.license_number.ilike(f"%{search}%"),
+                        Driver.phone.ilike(f"%{search}%")
                     )
                 )
-            
+
             if is_available is not None:
                 conditions.append(Driver.is_available == is_available)
-                
+
             if is_active is not None:
                 conditions.append(Driver.is_active == is_active)
-            
-            query = query.where(and_(*conditions))
-            query = query.offset(skip).limit(limit).order_by(Driver.created_at.desc())
 
-            # Get total count
-            total = await self.session.scalar(select(func.count()).select_from(Driver).where(and_(*conditions)))            
+            # Count total first
+            total = await self.session.scalar(
+                select(func.count()).select_from(Driver).where(and_(*conditions))
+            )
+
+            # Build query with eager loads
+            query = (
+                select(Driver)
+                .options(
+                    selectinload(Driver.employee).selectinload(Employee.department),
+                    selectinload(Driver.employee).selectinload(Employee.location),
+                )
+                .where(and_(*conditions))
+                .offset(skip)
+                .limit(limit)
+                .order_by(Driver.created_at.desc())
+            )
+
             result = await self.session.execute(query)
             drivers = result.scalars().all()
 
-            return {
-                "data": drivers,
-                "total": total,
-                "skip": skip,
-                "limit": limit
-            }
+            # Convert ORM → Pydantic
+            driver_list = [
+                DriverResponse.model_validate(d, from_attributes=True) for d in drivers
+            ]
+
+            return PaginatedResponse[DriverResponse](
+                data=driver_list,
+                total=total,
+                skip=skip,
+                limit=limit,
+            )
 
         except Exception as e:
             logger.error(f"Error getting drivers: {str(e)}")
-            return []
+            raise
 
     async def update_driver(self, driver_id: int, driver_data: DriverUpdate, user_id: int) -> Optional[Driver]:
         """Update driver"""
@@ -211,6 +237,7 @@ class DriverService:
 
             driver.is_active = False
             driver.is_deleted = True
+            driver.is_available = False
             await self.session.commit()
 
             logger.info(f"Driver {driver_id} deleted successfully")
@@ -228,13 +255,16 @@ class DriverService:
         try:
             result = await self.session.execute(
                 select(Driver)
-                .options(selectinload(Driver.employee))
+                .options(
+                    selectinload(Driver.employee).selectinload(Employee.department),
+                    selectinload(Driver.employee).selectinload(Employee.location),
+                )
                 .where(
                     Driver.is_available == True,
                     Driver.is_active == True,
                     Driver.is_deleted == False
                 )
-                .order_by(Driver.employee.has(Employee.first_name))
+                .order_by(Driver.created_at.desc())
             )
             return result.scalars().all()
 
@@ -279,24 +309,34 @@ class DriverService:
             logger.error(f"Error getting driver shipments: {str(e)}")
             return []
 
-    async def check_license_expiry(self, days_ahead: int = 30) -> List[Driver]:
-        """Get drivers with licenses expiring soon"""
+    async def get_license_expiring_soon(self, days_ahead: int = 30) -> List[Driver]:
+        """Return drivers with license_expiry between today and today+days_ahead (inclusive)."""
         try:
-            expiry_date = date.today() + timedelta(days=days_ahead)
-            
-            result = await self.session.execute(
+            # keep it reasonable and predictable
+            days = max(1, min(int(days_ahead), 365))
+            end_date = date.today() + timedelta(days=days)
+
+            stmt = (
                 select(Driver)
-                .options(selectinload(Driver.employee))
-                .where(
-                    Driver.license_expiry <= expiry_date,
-                    Driver.license_expiry >= date.today(),
-                    Driver.is_active == True,
-                    Driver.is_deleted == False
+                .options(
+                    selectinload(Driver.employee).selectinload(Employee.department),
+                    selectinload(Driver.employee).selectinload(Employee.location),
                 )
-                .order_by(Driver.license_expiry)
+                .where(
+                    Driver.license_expiry.is_not(None),
+                    # if license_expiry is DATE, this is fine; if TIMESTAMP, func.date() makes it safe
+                    func.date(Driver.license_expiry) >= func.current_date(),
+                    func.date(Driver.license_expiry) <= end_date,
+                    Driver.is_active.is_(True),
+                    Driver.is_deleted.is_(False),
+                )
+                .order_by(Driver.license_expiry.asc(), Driver.id.asc())
             )
-            return result.scalars().all()
+
+            result = await self.session.execute(stmt)
+            # unique() guards against duplicates when eager-loading collections
+            return list(result.scalars().unique().all())
 
         except Exception as e:
-            logger.error(f"Error checking license expiry: {str(e)}")
+            logger.error(f"Error checking license expiry: {e}")
             return []

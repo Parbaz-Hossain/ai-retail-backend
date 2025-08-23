@@ -83,7 +83,7 @@ async def get_drivers_license_expiry(
     """Get drivers with licenses expiring soon"""
     try:
         driver_service = DriverService(session)
-        drivers = await driver_service.check_license_expiry(days_ahead)
+        drivers = await driver_service.get_license_expiring_soon(days_ahead)
         return drivers
     except Exception as e:
         logger.error(f"Error checking license expiry: {str(e)}")

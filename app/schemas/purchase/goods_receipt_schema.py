@@ -50,6 +50,7 @@ class GoodsReceiptCreate(GoodsReceiptBase):
 class GoodsReceiptUpdate(BaseModel):
     delivered_by: Optional[str] = None
     notes: Optional[str] = None
+    updated_by: Optional[int] = None
 
 class GoodsReceiptResponse(GoodsReceiptBase):
     id: int

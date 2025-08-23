@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.api.dependencies import get_current_user
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.purchase.goods_receipt_service import GoodsReceiptService
 from app.schemas.purchase.goods_receipt_schema import (GoodsReceiptCreate, GoodsReceiptUpdate, GoodsReceiptResponse)
 
@@ -32,7 +33,7 @@ async def create_goods_receipt(
             detail="Failed to create goods receipt"
         )
 
-@router.get("/", response_model=List[GoodsReceiptResponse])
+@router.get("/", response_model=PaginatedResponse[GoodsReceiptResponse])
 async def get_goods_receipts(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),

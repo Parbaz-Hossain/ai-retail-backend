@@ -13,7 +13,8 @@ from app.models.purchase.supplier import Supplier
 from app.models.inventory.item import Item
 from app.models.shared.enums import PurchaseOrderStatus
 from app.schemas.purchase.purchase_order_schema import (
-    PurchaseOrderCreate, 
+    PurchaseOrderCreate,
+    PurchaseOrderResponse, 
     PurchaseOrderUpdate, 
     PurchaseOrderItemCreate
 )
@@ -98,7 +99,8 @@ class PurchaseOrderService:
                 discount_amount=discount_amount,
                 total_amount=total_amount,
                 notes=po_data.notes,
-                requested_by=user_id
+                requested_by=user_id,
+                created_by = user_id
             )
 
             self.session.add(purchase_order)
@@ -125,18 +127,23 @@ class PurchaseOrderService:
                     quantity=item_data.quantity,
                     unit_cost=item_data.unit_cost,
                     total_cost=total_cost,
-                    received_quantity=Decimal('0')
+                    received_quantity=Decimal('0'),
+                    created_by=user_id
                 )
                 po_items.append(po_item)
 
             self.session.add_all(po_items)
             await self.session.commit()
-            
-            # Refresh to get relationships
-            await self.session.refresh(purchase_order)
 
+            # Reload PO with items eagerly
+            result = await self.session.execute(
+                select(PurchaseOrder)
+                .options(selectinload(PurchaseOrder.items))
+                .where(PurchaseOrder.id == purchase_order.id)
+            )
+            purchase_order = result.scalar_one()
             logger.info(f"Purchase order created: {purchase_order.po_number} by user {user_id}")
-            return purchase_order
+            return PurchaseOrderResponse.model_validate(purchase_order, from_attributes=True)
 
         except HTTPException:
             raise
@@ -184,7 +191,8 @@ class PurchaseOrderService:
         try:
             # Base query
             query = select(PurchaseOrder).options(
-                selectinload(PurchaseOrder.supplier)
+                selectinload(PurchaseOrder.supplier),
+                selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.item)
             ).where(PurchaseOrder.is_deleted == False)
 
             # Apply filters
@@ -218,7 +226,7 @@ class PurchaseOrderService:
             purchase_orders = result.scalars().all()
 
             return {
-                "items": purchase_orders,
+                "data": purchase_orders,
                 "total": total,
                 "skip": skip,
                 "limit": limit
@@ -255,6 +263,7 @@ class PurchaseOrderService:
 
             # Update basic fields
             update_data = po_data.model_dump(exclude_unset=True, exclude={'items'})
+            update_data['updated_by'] = user_id
             for field, value in update_data.items():
                 setattr(po, field, value)
 
@@ -279,7 +288,8 @@ class PurchaseOrderService:
                         quantity=item_data.quantity,
                         unit_cost=item_data.unit_cost,
                         total_cost=total_cost,
-                        received_quantity=Decimal('0')
+                        received_quantity=Decimal('0'),
+                        updated_by=user_id
                     )
                     self.session.add(po_item)
 

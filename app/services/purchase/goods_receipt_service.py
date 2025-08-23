@@ -17,6 +17,7 @@ from app.models.shared.enums import PurchaseOrderStatus, StockMovementType
 from app.schemas.purchase.goods_receipt_schema import (
     GoodsReceiptCreate,
     GoodsReceiptItemCreate,
+    GoodsReceiptResponse,
     GoodsReceiptUpdate
 )
 
@@ -96,7 +97,8 @@ class GoodsReceiptService:
                 receipt_date=receipt_data.receipt_date or date.today(),
                 delivered_by=receipt_data.delivered_by,
                 received_by=user_id,
-                notes=receipt_data.notes
+                notes=receipt_data.notes,
+                created_by=user_id
             )
 
             self.session.add(goods_receipt)
@@ -135,7 +137,8 @@ class GoodsReceiptService:
                     unit_cost=po_item.unit_cost,
                     batch_number=item_data.batch_number,
                     expiry_date=item_data.expiry_date,
-                    location_id=item_data.location_id
+                    location_id=item_data.location_id,
+                    created_by=user_id
                 )
                 receipt_items.append(receipt_item)
 
@@ -160,10 +163,16 @@ class GoodsReceiptService:
             await self._check_po_completion(purchase_order)
 
             await self.session.commit()
-            await self.session.refresh(goods_receipt)
+             # Reload PO with items eagerly
+            result = await self.session.execute(
+                select(GoodsReceipt)
+                .options(selectinload(GoodsReceipt.items))
+                .where(GoodsReceipt.id == goods_receipt.id)
+            )
 
             logger.info(f"Goods receipt created: {receipt_number} by user {user_id}")
-            return goods_receipt
+            goods_receipt = result.scalar_one()
+            return GoodsReceiptResponse.model_validate(goods_receipt, from_attributes=True)
 
         except HTTPException:
             raise
@@ -213,7 +222,8 @@ class GoodsReceiptService:
             # Base query
             query = select(GoodsReceipt).options(
                 selectinload(GoodsReceipt.supplier),
-                selectinload(GoodsReceipt.purchase_order)
+                selectinload(GoodsReceipt.purchase_order),
+                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item)
             ).where(GoodsReceipt.is_deleted == False)
 
             # Apply filters
@@ -248,7 +258,7 @@ class GoodsReceiptService:
             receipts = result.scalars().all()
 
             return {
-                "items": receipts,
+                "data": receipts,
                 "total": total,
                 "skip": skip,
                 "limit": limit
@@ -278,8 +288,9 @@ class GoodsReceiptService:
 
             # Update allowed fields
             update_data = receipt_data.model_dump(exclude_unset=True)
+            update_data["updated_by"] = user_id
             for field, value in update_data.items():
-                if field in ['delivered_by', 'notes']:  # Only allow these fields to be updated
+                if field in ['delivered_by', 'notes', 'updated_by']:  # Only allow these fields to be updated
                     setattr(receipt, field, value)
 
             await self.session.commit()
@@ -382,7 +393,7 @@ class GoodsReceiptService:
                     reserved_stock=Decimal('0'),
                     par_level_min=Decimal('0'),
                     par_level_max=Decimal('0'),
-                    unit_cost=unit_cost
+                    updated_by=user_id
                 )
                 self.session.add(stock_level)
             else:
@@ -390,8 +401,8 @@ class GoodsReceiptService:
                 stock_level.current_stock += quantity
                 stock_level.available_stock += quantity
                 # Update unit cost with weighted average
-                total_value = (stock_level.current_stock - quantity) * stock_level.unit_cost + quantity * unit_cost
-                stock_level.unit_cost = total_value / stock_level.current_stock if stock_level.current_stock > 0 else unit_cost
+                # total_value = (stock_level.current_stock - quantity) * stock_level.unit_cost + quantity * unit_cost
+                # stock_level.unit_cost = total_value / stock_level.current_stock if stock_level.current_stock > 0 else unit_cost
 
             # Create stock movement record
             stock_movement = StockMovement(
@@ -404,8 +415,8 @@ class GoodsReceiptService:
                 reference_id=reference_id,
                 batch_number=batch_number,
                 expiry_date=expiry_date,
-                notes=f"Goods receipt - {batch_number}" if batch_number else "Goods receipt",
-                created_by=user_id
+                remarks=f"Goods receipt - {batch_number}" if batch_number else "Goods receipt",
+                updated_by=user_id
             )
             self.session.add(stock_movement)
 
@@ -455,7 +466,7 @@ class GoodsReceiptService:
                     quantity=-quantity,  # Negative quantity for reversal
                     reference_type='goods_receipt_reversal',
                     reference_id=reference_id,
-                    notes="Goods receipt reversal",
+                    remarks="Goods receipt reversal",
                     created_by=user_id
                 )
                 self.session.add(stock_movement)
@@ -517,7 +528,7 @@ class GoodsReceiptService:
                         "received_quantity": float(po_item.received_quantity),
                         "remaining_quantity": float(remaining_qty),
                         "unit_cost": float(po_item.unit_cost),
-                        "unit": po_item.item.unit
+                        "unit": po_item.item.unit_type.value if po_item.item.unit_type else None
                     })
 
             return pending_items
