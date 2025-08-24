@@ -20,11 +20,16 @@ class ShipmentItemBase(BaseModel):
 class ShipmentItemCreate(ShipmentItemBase):
     pass
 
+class ItemResponse(BaseModel):
+    item_code: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 class ShipmentItemResponse(ShipmentItemBase):
     id: int
     shipment_id: int
     delivered_quantity: Optional[Decimal] = None
-    item: Optional[dict] = None
+    item: Optional[ItemResponse] = None
 
     class Config:
         from_attributes = True

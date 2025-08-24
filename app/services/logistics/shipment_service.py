@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 
+from app.models.hr.employee import Employee
 from app.models.logistics.shipment import Shipment
 from app.models.logistics.shipment_item import ShipmentItem
 from app.models.logistics.shipment_tracking import ShipmentTracking
@@ -105,7 +106,21 @@ class ShipmentService:
                 shipment.total_volume = total_volume
 
             await self.session.commit()
-            await self.session.refresh(shipment)
+            result = await self.session.execute(
+                select(Shipment)
+                .options(
+                    selectinload(Shipment.from_location),
+                    selectinload(Shipment.to_location),
+                    selectinload(Shipment.driver)
+                        .selectinload(Driver.employee)
+                        .selectinload(Employee.department),  
+                    selectinload(Shipment.vehicle),
+                    selectinload(Shipment.items)
+                        .selectinload(ShipmentItem.item)     
+                )
+                .where(Shipment.id == shipment.id)
+            )
+            shipment = result.scalar_one()
 
             # Create initial tracking record
             await self._create_tracking_update(
@@ -136,7 +151,9 @@ class ShipmentService:
                 .options(
                     selectinload(Shipment.from_location),
                     selectinload(Shipment.to_location),
-                    selectinload(Shipment.driver).selectinload(Driver.employee),
+                    selectinload(Shipment.driver)
+                        .selectinload(Driver.employee)
+                        .selectinload(Employee.department),
                     selectinload(Shipment.vehicle),
                     selectinload(Shipment.items).selectinload(ShipmentItem.item),
                     selectinload(Shipment.tracking_updates)
@@ -167,8 +184,11 @@ class ShipmentService:
             query = select(Shipment).options(
                 selectinload(Shipment.from_location),
                 selectinload(Shipment.to_location),
-                selectinload(Shipment.driver).selectinload(Driver.employee),
-                selectinload(Shipment.vehicle)
+                selectinload(Shipment.driver)
+                    .selectinload(Driver.employee)
+                    .selectinload(Employee.department),
+                selectinload(Shipment.vehicle),
+                selectinload(Shipment.items).selectinload(ShipmentItem.item)
             )
             
             # Apply filters
@@ -214,7 +234,7 @@ class ShipmentService:
 
             return {
                 "data": shipments,
-                "total_count": total_count.scalar() or 0,
+                "total": total_count.scalar() or 0,
                 "skip": skip,
                 "limit": limit
             }
@@ -256,7 +276,24 @@ class ShipmentService:
             shipment.updated_at = datetime.utcnow()
             shipment.updated_by = user_id
             await self.session.commit()
-            await self.session.refresh(shipment)
+            result = await self.session.execute(
+                select(Shipment)
+                .options(
+                    selectinload(Shipment.from_location),
+                    selectinload(Shipment.to_location),
+                    selectinload(Shipment.driver)
+                        .selectinload(Driver.employee)
+                        .selectinload(Employee.department),  
+                    selectinload(Shipment.driver)
+                        .selectinload(Driver.employee)
+                        .selectinload(Employee.location),
+                    selectinload(Shipment.vehicle),
+                    selectinload(Shipment.items)
+                        .selectinload(ShipmentItem.item)     
+                )
+                .where(Shipment.id == shipment.id)
+            )
+            shipment = result.scalar_one()
 
             logger.info(f"Shipment {shipment_id} updated successfully")
             return shipment
@@ -542,8 +579,13 @@ class ShipmentService:
             result = await self.session.execute(
                 select(Shipment)
                 .options(
-                    selectinload(Shipment.from_location),
-                    selectinload(Shipment.to_location)
+                     selectinload(Shipment.from_location),
+                     selectinload(Shipment.to_location),
+                     selectinload(Shipment.driver)
+                        .selectinload(Driver.employee)
+                        .selectinload(Employee.department),
+                     selectinload(Shipment.vehicle),
+                     selectinload(Shipment.items).selectinload(ShipmentItem.item)
                 )
                 .where(
                     Shipment.driver_id == driver_id,
@@ -701,14 +743,19 @@ class ShipmentService:
         )
         return result.scalar_one_or_none() is not None
 
-    async def _create_tracking_update(self, shipment_id: int, status: ShipmentStatus, notes: str, user_id: int):
+    async def _create_tracking_update(self, shipment_id: int, 
+                                      status: ShipmentStatus, notes: str, user_id: int, 
+                                      location: str, latitude: Optional[float] = None, longitude: Optional[float] = None):
         """Create shipment tracking update"""
         tracking = ShipmentTracking(
             shipment_id=shipment_id,
             status=status,
             notes=notes,
             timestamp=datetime.utcnow(),
-            updated_by=user_id
+            updated_by=user_id,
+            location=location,
+            latitude=latitude,
+            longitude=longitude
         )
         self.session.add(tracking)
         await self.session.commit()

@@ -574,9 +574,10 @@ async def get_logistics_dashboard_summary(
             status=None
         )
         
+        shipments = active_shipments["data"]
         status_counts = {}
         for status in ShipmentStatus:
-            count = len([s for s in active_shipments if s.status == status])
+            count = len([s for s in shipments if s.status == status])
             status_counts[status.value] = count
         
         return {

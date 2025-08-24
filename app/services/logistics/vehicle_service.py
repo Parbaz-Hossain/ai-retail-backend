@@ -188,6 +188,7 @@ class VehicleService:
                     detail="Cannot delete vehicle with active shipments"
                 )
 
+            vehicle.is_available = False
             vehicle.is_active = False
             vehicle.is_deleted = True
             await self.session.commit()
