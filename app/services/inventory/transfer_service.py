@@ -62,7 +62,8 @@ class TransferService:
                 selectinload(Transfer.to_location),
                 selectinload(Transfer.items).selectinload(TransferItem.item).options(
                     selectinload(Item.category),      
-                    selectinload(Item.stock_levels),   
+                    selectinload(Item.stock_levels), 
+                    selectinload(Item.stock_type)  
                 )
             )
             .where(Transfer.id == transfer.id)

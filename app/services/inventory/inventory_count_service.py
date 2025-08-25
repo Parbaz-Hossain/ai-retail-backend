@@ -114,7 +114,7 @@ class InventoryCountService:
     ) -> List[InventoryCount]:
         query = select(InventoryCount).options(
             selectinload(InventoryCount.location),
-            selectinload(InventoryCount.items)
+            selectinload(InventoryCount.items).selectinload(InventoryCountItem.item)
         ).order_by(desc(InventoryCount.count_date))
         
         conditions = []

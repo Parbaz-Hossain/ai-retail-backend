@@ -177,10 +177,16 @@ class ItemService:
 
     async def get_low_stock_items(self, location_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get items that are below reorder point"""
-        query = select(Item, StockLevel).join(StockLevel).where(
-            and_(
-                Item.is_active == True,
-                StockLevel.current_stock <= Item.reorder_point
+        query = (select(Item, StockLevel)
+            .join(StockLevel)
+            .options(
+            selectinload(StockLevel.location)  # 👈 add this
+            )
+            .where(
+                and_(
+                    Item.is_active == True,
+                    StockLevel.current_stock <= Item.reorder_point
+                )
             )
         )
         

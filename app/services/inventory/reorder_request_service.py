@@ -62,6 +62,7 @@ class ReorderRequestService:
                     .options(
                         selectinload(Item.category),
                         selectinload(Item.stock_levels),
+                        selectinload(Item.stock_type) 
                     )
             )
             .where(ReorderRequest.id == reorder_request.id)
@@ -124,6 +125,7 @@ class ReorderRequestService:
                     .options(
                         selectinload(Item.category),
                         selectinload(Item.stock_levels),
+                        selectinload(Item.stock_type) 
                     )
             )
             .where(ReorderRequest.id == request_id)
@@ -145,6 +147,7 @@ class ReorderRequestService:
                     .options(
                         selectinload(Item.category),
                         selectinload(Item.stock_levels),
+                        selectinload(Item.stock_type) 
                     )
             ).order_by(desc(ReorderRequest.request_date))
         

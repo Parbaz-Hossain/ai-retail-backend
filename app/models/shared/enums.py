@@ -66,3 +66,15 @@ class TransferStatus(str, Enum):
     IN_TRANSIT = "IN_TRANSIT"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+
+class HistoryActionType(str, Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    VIEW = "VIEW"
+    SEARCH = "SEARCH"
+    EXPORT = "EXPORT"
+    CHAT_MESSAGE = "CHAT_MESSAGE"
+    TASK_COMPLETE = "TASK_COMPLETE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
