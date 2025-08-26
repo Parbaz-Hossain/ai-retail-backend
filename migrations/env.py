@@ -19,6 +19,7 @@ from app.models.organization import department, location
 from app.models.purchase import goods_receipt_item, goods_receipt, item_supplier, purchase_order_item, purchase_order, supplier
 from app.models.system import file_upload, performance_metrics, qr_code, system_setting
 from app.models.engagement import faq, user_history
+from app.models.biometric import fingerprint
 from app.core.config import settings
 
 # this is the Alembic Config object

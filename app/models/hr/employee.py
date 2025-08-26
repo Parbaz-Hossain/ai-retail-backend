@@ -35,3 +35,4 @@ class Employee(BaseModel):
     salaries = relationship("Salary", back_populates="employee")
     attendances = relationship("Attendance", back_populates="employee")
     user_shifts = relationship("UserShift", back_populates="employee")
+    fingerprints = relationship("Fingerprint", back_populates="employee")

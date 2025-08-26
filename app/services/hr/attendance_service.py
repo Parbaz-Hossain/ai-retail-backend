@@ -52,7 +52,7 @@ class AttendanceService:
                     ((UserShift.end_date.is_(None)) | (UserShift.end_date >= today))
                 )
             )
-            user_shift = shift_res.scalar_one_or_none()
+            user_shift = shift_res.scalars().first()
             if not user_shift:
                 raise HTTPException(status_code=400, detail="No active shift for employee")
 
@@ -68,7 +68,7 @@ class AttendanceService:
             holiday_res = await self.session.execute(
                 select(Holiday).where(Holiday.date == data.attendance_date, Holiday.is_active == True)
             )
-            is_holiday = holiday_res.scalar_one_or_none() is not None
+            is_holiday = holiday_res.scalars().first() is not None
 
             # Check existing attendance
             existing_res = await self.session.execute(
@@ -77,7 +77,7 @@ class AttendanceService:
                     Attendance.attendance_date == data.attendance_date
                 )
             )
-            existing = existing_res.scalar_one_or_none()
+            existing = existing_res.scalars().first()
 
             # ========== CHECK-OUT ==========
             if existing:
@@ -106,6 +106,8 @@ class AttendanceService:
                 employee_id=data.employee_id,
                 attendance_date=data.attendance_date,
                 check_in_time=check_in_time,
+                latitude = data.latitude,
+                longitude = data.longitude,
                 bio_check_in=data.bio_check_in or False,
                 is_holiday=is_holiday,
                 status=AttendanceStatus.CHECKED_IN
