@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, validator, EmailStr
 from typing import Optional
 from datetime import datetime
@@ -12,6 +13,8 @@ class LocationBase(BaseModel):
     country: str = "Saudi Arabia"
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -39,6 +42,8 @@ class LocationUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
 class LocationResponse(LocationBase):
     id: int

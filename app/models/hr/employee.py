@@ -26,6 +26,7 @@ class Employee(BaseModel):
     emergency_contact = Column(String(100))
     emergency_phone = Column(String(20))
     address = Column(Text)
+    is_fingerprint_registered = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     
     # Relationships

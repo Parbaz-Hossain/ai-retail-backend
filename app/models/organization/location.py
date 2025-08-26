@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, String, Text, Enum as SQLEnum
+from sqlalchemy import Boolean, Column, Numeric, String, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.db.base import BaseModel
 
@@ -14,6 +14,8 @@ class Location(BaseModel):
     country = Column(String(50), default="Bangladesh")
     phone = Column(String(20))
     email = Column(String(100))
+    latitude = Column(Numeric(10, 8))
+    longitude = Column(Numeric(11, 8))
     is_active = Column(Boolean, default=True)
     
     # Relationships

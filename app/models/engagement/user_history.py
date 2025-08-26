@@ -12,7 +12,7 @@ class UserHistory(BaseModel):
     resource_id = Column(Integer)  # ID of the related resource
     title = Column(String(255), nullable=False)
     description = Column(Text)
-    metadata = Column(JSON)  # Store additional context data
+    user_metadata = Column(JSON)  # Store additional context data
     session_id = Column(String(100))  # Chat session identifier
     ip_address = Column(String(45))
     user_agent = Column(String(500))

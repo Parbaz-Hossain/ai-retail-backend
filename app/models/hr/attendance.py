@@ -18,6 +18,8 @@ class Attendance(BaseModel):
     status = Column(SQLEnum(AttendanceStatus), nullable=False)
     bio_check_in = Column(Boolean, default=False)
     bio_check_out = Column(Boolean, default=False)
+    latitude = Column(Numeric(10, 8))
+    longitude = Column(Numeric(11, 8))
     remarks = Column(Text)
     is_holiday = Column(Boolean, default=False)
     

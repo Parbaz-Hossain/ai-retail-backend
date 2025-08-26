@@ -9,6 +9,8 @@ class AttendanceBase(BaseModel):
     attendance_date: date
     check_in_time: Optional[datetime] = None
     check_out_time: Optional[datetime] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
 class AttendanceCreate(AttendanceBase):
     bio_check_in: Optional[bool] = False
@@ -18,6 +20,8 @@ class AttendanceCreate(AttendanceBase):
 class AttendanceUpdate(BaseModel):
     check_out_time: Optional[datetime] = None
     bio_check_out: Optional[bool] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
     remarks: Optional[str] = None
     status: Optional[AttendanceStatus] = None
 
