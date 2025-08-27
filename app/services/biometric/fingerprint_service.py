@@ -143,6 +143,8 @@ class FingerprintService:
             )
 
             self.session.add(fingerprint)
+            # Update employee's fingerprint registration status
+            employee.is_fingerprint_registered = True
             await self.session.commit()
             await self.session.refresh(fingerprint)
 

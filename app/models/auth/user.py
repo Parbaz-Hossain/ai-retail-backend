@@ -40,6 +40,7 @@ class User(BaseModel):
         overlaps="user_roles,assigned_by_user"
     )
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    employees = relationship("Employee", back_populates="user")
 
     def __repr__(self):
         return f"<User {self.username}>"

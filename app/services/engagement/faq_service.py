@@ -4,8 +4,9 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, desc
+from sqlalchemy.orm import selectinload
 from app.models.engagement.faq import FAQ
-from app.schemas.engagement.faq_schema import FAQCreate, FAQUpdate
+from app.schemas.engagement.faq_schema import FAQCreate, FAQResponse, FAQUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -14,16 +15,21 @@ class FAQService:
         self.session = session
 
     # ---------- Getters ----------
-    async def get_faq(self, faq_id: int, user_id: int) -> Optional[FAQ]:
+    async def get_faq(self, faq_id: int, user_id: int) -> Optional[FAQResponse]:
         try:
             result = await self.session.execute(
-                select(FAQ).where(
+                select(FAQ)
+                .options(selectinload(FAQ.user))
+                .where(
                     FAQ.id == faq_id,
                     FAQ.user_id == user_id,
                     FAQ.is_deleted == False
                 )
             )
-            return result.scalar_one_or_none()
+            faq = result.scalar_one_or_none()
+            if faq:
+                return FAQResponse.model_validate(faq, from_attributes=True)
+            return None
         except Exception as e:
             logger.error(f"Error getting FAQ {faq_id}: {e}")
             return None
@@ -72,7 +78,16 @@ class FAQService:
 
     async def update_faq(self, faq_id: int, data: FAQUpdate, user_id: int) -> Optional[FAQ]:
         try:
-            faq = await self.get_faq(faq_id, user_id)
+            result = await self.session.execute(
+                select(FAQ)
+                .options(selectinload(FAQ.user))
+                .where(
+                    FAQ.id == faq_id,
+                    FAQ.user_id == user_id,
+                    FAQ.is_deleted == False
+                )
+            )
+            faq = result.scalar_one_or_none()
             if not faq:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, 
@@ -99,10 +114,20 @@ class FAQService:
 
     async def delete_faq(self, faq_id: int, user_id: int) -> bool:
         try:
-            faq = await self.get_faq(faq_id, user_id)
+            result = await self.session.execute(
+                select(FAQ)
+                .options(selectinload(FAQ.user))
+                .where(
+                    FAQ.id == faq_id,
+                    FAQ.user_id == user_id,
+                    FAQ.is_deleted == False
+                )
+            )
+            faq = result.scalar_one_or_none()
             if not faq:
                 return False
 
+            faq.is_active = False
             faq.is_deleted = True
             faq.updated_at = datetime.utcnow()
             await self.session.commit()

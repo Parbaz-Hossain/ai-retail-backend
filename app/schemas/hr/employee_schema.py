@@ -17,12 +17,13 @@ class EmployeeBase(BaseModel):
     basic_salary: Optional[Decimal] = None
     housing_allowance: Optional[Decimal] = None
     transport_allowance: Optional[Decimal] = None
-    is_manager: bool = False
+    is_manager: Optional[bool] = False
     bio_id: Optional[str] = None
     profile_image: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
     address: Optional[str] = None
+    
     model_config = ConfigDict(from_attributes=True)
 
 class EmployeeCreate(EmployeeBase):
@@ -61,6 +62,7 @@ class EmployeeUpdate(BaseModel):
 class DepartmentInfo(BaseModel):
     id: int
     name: str
+
     model_config = ConfigDict(from_attributes=True)
 
 class LocationInfo(BaseModel):
@@ -68,15 +70,20 @@ class LocationInfo(BaseModel):
     name: str
     location_type: str
     city: Optional[str]
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
+
     model_config = ConfigDict(from_attributes=True)
     
 class EmployeeResponse(EmployeeBase):
     id: int
     employee_id: str
-    department: Optional[DepartmentInfo]
-    location: Optional[LocationInfo]
+    is_fingerprint_registered: Optional[bool] = False
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
+    department: Optional[DepartmentInfo]
+    location: Optional[LocationInfo]    
+    
     model_config = ConfigDict(from_attributes=True)
 

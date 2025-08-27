@@ -80,34 +80,56 @@ class UserHistoryService:
     async def get_user_histories(
         self,
         user_id: int,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         action_type: Optional[HistoryActionType] = None,
         resource_type: Optional[str] = None,
         is_favorite: Optional[bool] = None,
         is_archived: Optional[bool] = False,
         session_id: Optional[str] = None
-    ) -> List[UserHistory]:
+    ) -> Dict[str, Any]:
         try:
-            query = select(UserHistory).where(
+            conditions = [
                 UserHistory.user_id == user_id,
                 UserHistory.is_deleted == False
+            ]
+            
+            # Add filters
+            if action_type:
+                conditions.append(UserHistory.action_type == action_type)
+            if resource_type:
+                conditions.append(UserHistory.resource_type == resource_type)
+            if is_favorite is not None:
+                conditions.append(UserHistory.is_favorite == is_favorite)
+            if is_archived is not None:
+                conditions.append(UserHistory.is_archived == is_archived)
+            if session_id:
+                conditions.append(UserHistory.session_id == session_id)
+            
+            # Simple count query
+            total_count = await self.session.scalar(
+                select(func.count(UserHistory.id)).where(*conditions)
             )
             
-            if action_type:
-                query = query.where(UserHistory.action_type == action_type)
-            if resource_type:
-                query = query.where(UserHistory.resource_type == resource_type)
-            if is_favorite is not None:
-                query = query.where(UserHistory.is_favorite == is_favorite)
-            if is_archived is not None:
-                query = query.where(UserHistory.is_archived == is_archived)
-            if session_id:
-                query = query.where(UserHistory.session_id == session_id)
+            # Calculate offset
+            skip = (page_index - 1) * page_size
             
-            query = query.order_by(desc(UserHistory.created_at))
-            result = await self.session.execute(query.offset(skip).limit(limit))
-            return result.scalars().all()
+            # Get paginated data
+            histories = await self.session.scalars(
+                select(UserHistory)
+                .where(*conditions)
+                .order_by(desc(UserHistory.created_at))
+                .offset(skip)
+                .limit(page_size)
+            )
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": histories.all()
+            }
+    
         except Exception as e:
             logger.error(f"Error getting user histories: {e}")
             return []

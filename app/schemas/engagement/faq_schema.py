@@ -36,10 +36,10 @@ class FAQResponse(FAQBase):
     id: int
     user_id: int
     is_active: bool
-    view_count: int
-    last_viewed_at: Optional[datetime]
-    created_at: datetime
-    updated_at: Optional[datetime]
+    view_count: Optional[int] = None
+    last_viewed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

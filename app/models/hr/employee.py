@@ -7,7 +7,7 @@ class Employee(BaseModel):
     __tablename__ = 'employees'
     
     employee_id = Column(String(20), unique=True, nullable=False, index=True)
-    user_id = Column(Integer, nullable=False)  # Reference to User from auth system
+    user_id = Column(Integer, ForeignKey("users.id"))  # Reference to User from auth system
     first_name = Column(String(50), nullable=False)
     last_name = Column(String(50), nullable=False)
     email = Column(String(100), unique=True, nullable=False)
@@ -30,6 +30,7 @@ class Employee(BaseModel):
     is_active = Column(Boolean, default=True)
     
     # Relationships
+    user = relationship("User", back_populates="employees")
     department = relationship("Department", back_populates="employees")
     location = relationship("Location", back_populates="employees")
     salaries = relationship("Salary", back_populates="employee")

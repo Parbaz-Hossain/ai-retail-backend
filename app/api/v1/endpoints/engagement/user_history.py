@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.models.auth.user import User
+from app.schemas.common.pagination import HistoryPaginatedResponse
 from app.services.engagement.user_history_service import UserHistoryService
 from app.schemas.engagement.user_history_schema import (
     UserHistoryResponse, UserHistoryListResponse, UserHistoryStats
@@ -15,10 +16,10 @@ from app.models.shared.enums import HistoryActionType
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=UserHistoryListResponse)
+@router.get("/", response_model=HistoryPaginatedResponse[UserHistoryResponse])
 async def get_user_history(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     action_type: Optional[HistoryActionType] = Query(None),
     resource_type: Optional[str] = Query(None),
     is_favorite: Optional[bool] = Query(None),
@@ -33,8 +34,8 @@ async def get_user_history(
         
         histories = await history_service.get_user_histories(
             user_id=current_user.id,
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             action_type=action_type,
             resource_type=resource_type,
             is_favorite=is_favorite,
@@ -42,22 +43,8 @@ async def get_user_history(
             session_id=session_id
         )
         
-        total = await history_service.count_user_histories(
-            user_id=current_user.id,
-            action_type=action_type,
-            resource_type=resource_type,
-            is_favorite=is_favorite,
-            is_archived=is_archived,
-            session_id=session_id
-        )
-        
-        return UserHistoryListResponse(
-            histories=histories,
-            total=total,
-            page=(skip // limit) + 1,
-            limit=limit,
-            has_next=(skip + limit) < total
-        )
+        return histories
+    
     except Exception as e:
         logger.error(f"Error getting user history: {e}")
         raise HTTPException(

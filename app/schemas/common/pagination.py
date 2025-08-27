@@ -9,3 +9,10 @@ class PaginatedResponse(GenericModel, Generic[T]):
     total: int
     skip: int
     limit: int
+
+
+class HistoryPaginatedResponse(GenericModel, Generic[T]):
+    page_index: int
+    page_size: int
+    count: int
+    data: List[T]

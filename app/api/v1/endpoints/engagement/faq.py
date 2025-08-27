@@ -201,7 +201,7 @@ async def update_faq(
             detail="Error updating FAQ"
         )
 
-@router.delete("/{faq_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{faq_id}")
 async def delete_faq(
     faq_id: int,
     request: Request,
@@ -239,6 +239,8 @@ async def delete_faq(
             ip_address=get_client_ip(request),
             user_agent=request.headers.get("User-Agent")
         )
+
+        return {"detail": "FAQ deleted successfully"}
         
     except HTTPException:
         raise

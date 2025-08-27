@@ -9,7 +9,7 @@ class UserHistoryBase(BaseModel):
     resource_id: Optional[int] = None
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=2000)
-    metadata: Optional[Dict[str, Any]] = None
+    user_metadata: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = Field(None, max_length=100)
 
 class UserHistoryCreate(UserHistoryBase):
@@ -19,10 +19,10 @@ class UserHistoryCreate(UserHistoryBase):
 class UserHistoryResponse(UserHistoryBase):
     id: int
     user_id: int
-    is_favorite: bool
-    is_archived: bool
-    archived_at: Optional[datetime]
-    created_at: datetime
+    is_favorite: Optional[bool] = None
+    is_archived: Optional[bool] = None
+    archived_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
