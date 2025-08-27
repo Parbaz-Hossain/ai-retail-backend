@@ -28,3 +28,15 @@ class PermissionInDBBase(PermissionBase):
 
 class Permission(PermissionInDBBase):
     pass
+
+
+class PermissionResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    resource: str
+    action: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True

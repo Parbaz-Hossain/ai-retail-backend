@@ -11,7 +11,7 @@ class PaginatedResponse(GenericModel, Generic[T]):
     limit: int
 
 
-class HistoryPaginatedResponse(GenericModel, Generic[T]):
+class PaginatedResponseNew(GenericModel, Generic[T]):
     page_index: int
     page_size: int
     count: int

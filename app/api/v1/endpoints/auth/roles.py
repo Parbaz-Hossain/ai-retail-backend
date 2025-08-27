@@ -1,9 +1,12 @@
 import logging
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.schemas.auth.role import RoleCreate, RoleUpdate, Role
+from app.schemas.auth.permission import PermissionResponse
+from app.schemas.common.pagination import PaginatedResponseNew
+from app.services.auth.permission_service import PermissionService
 from app.services.auth.role_service import RoleService
 from app.api.dependencies import get_current_superuser
 
@@ -49,6 +52,41 @@ async def get_roles(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get roles"
+        )
+
+@router.get("/all-permissions", response_model=PaginatedResponseNew[PermissionResponse])
+async def get_permissions(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=1000),
+    resource: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None, description="Search in name and description"),
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_superuser)
+):
+    """
+    Get paginated list of permissions (admin only)
+    """
+    try:
+        permission_service = PermissionService(session)
+        permissions = await permission_service.get_permissions(
+            page_index=page_index,
+            page_size=page_size,
+            resource=resource,
+            action=action,
+            is_active=is_active,
+            search=search
+        )
+        return permissions
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get permissions error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get permissions"
         )
 
 @router.get("/{role_id}", response_model=Role)
@@ -135,7 +173,7 @@ async def delete_role(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete role"
         )
-
+    
 @router.post("/{role_id}/assign-permission")
 async def assign_permission_to_role(
     role_id: int,
