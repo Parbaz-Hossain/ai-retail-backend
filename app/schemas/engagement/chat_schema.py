@@ -7,7 +7,6 @@ class ChatMessageBase(BaseModel):
     role: MessageRole
     message: str = Field(..., min_length=1, max_length=10000)
     chat_metadata: Optional[str] = None
-    created_by: Optional[int] = None
 
 class ChatMessageCreate(ChatMessageBase):
     @validator('message')

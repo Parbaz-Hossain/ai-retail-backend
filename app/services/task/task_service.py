@@ -1,8 +1,9 @@
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, desc
-from datetime import datetime, timedelta
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, func, desc, select
+from datetime import datetime
 import uuid
+
 from app.models.task.task import Task
 from app.models.task.task_type import TaskType
 from app.models.task.task_assignment import TaskAssignment
@@ -13,7 +14,7 @@ from app.schemas.task.task_schema import TaskCreate, TaskUpdate, TaskSummary
 from app.core.exceptions import NotFoundError
 
 class TaskService:
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
 
     def generate_task_number(self) -> str:
@@ -23,10 +24,11 @@ class TaskService:
         random_suffix = str(uuid.uuid4())[:6].upper()
         return f"{prefix}-{timestamp}-{random_suffix}"
 
-    def create_task(self, task_data: TaskCreate, created_by: int) -> Task:
+    async def create_task(self, task_data: TaskCreate, created_by: int) -> Task:
         """Create a new task"""
         # Validate task type
-        task_type = self.db.query(TaskType).filter(TaskType.id == task_data.task_type_id).first()
+        result = await self.db.execute(select(TaskType).where(TaskType.id == task_data.task_type_id))
+        task_type = result.scalar_one_or_none()
         if not task_type:
             raise NotFoundError("Task type not found")
 
@@ -47,42 +49,47 @@ class TaskService:
             db_task.estimated_hours = task_type.default_estimated_hours
 
         self.db.add(db_task)
-        self.db.flush()
+        await self.db.flush()
         
         # Handle assignment
         if task_data.assigned_to:
-            self._assign_task(db_task.id, task_data.assigned_to, created_by)
+            await self._assign_task(db_task.id, task_data.assigned_to, created_by)
         elif task_type.auto_assign_enabled:
-            self._auto_assign_task(db_task)
+            await self._auto_assign_task(db_task)
         
-        self.db.commit()
-        self.db.refresh(db_task)
+        await self.db.commit()
+        await self.db.refresh(db_task)
         return db_task
 
-    def update_task(self, task_id: int, task_data: TaskUpdate, user_id: int) -> Task:
+    async def update_task(self, task_id: int, task_data: TaskUpdate, user_id: int) -> Task:
         """Update task"""
-        db_task = self.get_task_by_id(task_id)
+        db_task = await self.get_task_by_id(task_id)
         
         # Update fields
         for field, value in task_data.model_dump(exclude_unset=True).items():
             if field == "assigned_to" and value:
-                self._assign_task(task_id, value, user_id)
+                await self._assign_task(task_id, value, user_id)
             else:
                 setattr(db_task, field, value)
         
         db_task.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(db_task)
+        await self.db.commit()
+        await self.db.refresh(db_task)
         return db_task
 
-    def get_task_by_id(self, task_id: int) -> Task:
+    async def get_task_by_id(self, task_id: int) -> Task:
         """Get task by ID"""
-        task = self.db.query(Task).filter(Task.id == task_id, Task.is_active == True).first()
+        result = await self.db.execute(
+            select(Task).where(
+                and_(Task.id == task_id, Task.is_active == True)
+            )
+        )
+        task = result.scalar_one_or_none()
         if not task:
             raise NotFoundError("Task not found")
         return task
 
-    def get_tasks_by_user(
+    async def get_tasks_by_user(
         self, 
         user_id: int, 
         status: Optional[TaskStatus] = None,
@@ -92,18 +99,20 @@ class TaskService:
         per_page: int = 20
     ) -> Dict[str, Any]:
         """Get tasks assigned to user"""
-        query = self.db.query(Task).filter(
-            Task.assigned_to == user_id,
-            Task.is_active == True
+        query = select(Task).where(
+            and_(
+                Task.assigned_to == user_id,
+                Task.is_active == True
+            )
         )
         
         # Apply filters
         if status:
-            query = query.filter(Task.status == status)
+            query = query.where(Task.status == status)
         if priority:
-            query = query.filter(Task.priority == priority)
+            query = query.where(Task.priority == priority)
         if category:
-            query = query.join(TaskType).filter(TaskType.category == category)
+            query = query.join(TaskType).where(TaskType.category == category)
         
         # Ordering
         query = query.order_by(
@@ -113,9 +122,27 @@ class TaskService:
             desc(Task.created_at)
         )
         
-        # Pagination
-        total = query.count()
-        tasks = query.offset((page - 1) * per_page).limit(per_page).all()
+        # Get total count
+        count_query = select(func.count()).select_from(Task).where(
+            and_(
+                Task.assigned_to == user_id,
+                Task.is_active == True
+            )
+        )
+        if status:
+            count_query = count_query.where(Task.status == status)
+        if priority:
+            count_query = count_query.where(Task.priority == priority)
+        if category:
+            count_query = count_query.join(TaskType).where(TaskType.category == category)
+        
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
+        
+        # Get paginated tasks
+        paginated_query = query.offset((page - 1) * per_page).limit(per_page)
+        result = await self.db.execute(paginated_query)
+        tasks = result.scalars().all()
         
         return {
             "tasks": tasks,
@@ -125,72 +152,106 @@ class TaskService:
             "pages": (total + per_page - 1) // per_page
         }
 
-    def get_task_summary(self, user_id: int, role_names: List[str]) -> TaskSummary:
+    async def get_task_summary(self, user_id: int, role_names: List[str]) -> TaskSummary:
         """Get task summary for user/role"""
-        base_query = self.db.query(Task).filter(Task.is_active == True)
+        base_query = select(Task).where(Task.is_active == True)
         
         # Filter by user assignments or department/role-based tasks
         if "SUPER_ADMIN" not in role_names:
-            user_query = base_query.filter(Task.assigned_to == user_id)
+            user_query = base_query.where(Task.assigned_to == user_id)
         else:
             user_query = base_query
         
-        # Calculate summary
-        total_tasks = user_query.count()
-        pending_tasks = user_query.filter(Task.status == TaskStatus.PENDING).count()
-        in_progress_tasks = user_query.filter(Task.status == TaskStatus.IN_PROGRESS).count()
-        completed_tasks = user_query.filter(Task.status == TaskStatus.COMPLETED).count()
+        # Calculate summary counts
+        total_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True
+        ))
+        total_tasks = total_result.scalar()
+        
+        pending_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.status == TaskStatus.PENDING
+        ))
+        pending_tasks = pending_result.scalar()
+        
+        in_progress_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.status == TaskStatus.IN_PROGRESS
+        ))
+        in_progress_tasks = in_progress_result.scalar()
+        
+        completed_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.status == TaskStatus.COMPLETED
+        ))
+        completed_tasks = completed_result.scalar()
         
         # Overdue tasks
-        overdue_tasks = user_query.filter(
-            and_(
-                Task.due_date < datetime.utcnow(),
-                Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED])
-            )
-        ).count()
+        overdue_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.due_date < datetime.utcnow(),
+            Task.status.notin_([TaskStatus.COMPLETED, TaskStatus.CANCELLED])
+        ))
+        overdue_tasks = overdue_result.scalar()
         
         # Priority counts
-        urgent_tasks = user_query.filter(Task.priority == TaskPriority.URGENT).count()
-        high_priority_tasks = user_query.filter(Task.priority == TaskPriority.HIGH).count()
+        urgent_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.priority == TaskPriority.URGENT
+        ))
+        urgent_tasks = urgent_result.scalar()
+        
+        high_priority_result = await self.db.execute(select(func.count()).select_from(Task).where(
+            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+            Task.is_active == True,
+            Task.priority == TaskPriority.HIGH
+        ))
+        high_priority_tasks = high_priority_result.scalar()
         
         # Completion percentage
         completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
         
         # Status breakdown
-        status_counts = self.db.query(
-            Task.status,
-            func.count(Task.id)
-        ).filter(
-            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
-            Task.is_active == True
-        ).group_by(Task.status).all()
-        
+        status_counts_result = await self.db.execute(
+            select(Task.status, func.count(Task.id)).where(
+                Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+                Task.is_active == True
+            ).group_by(Task.status)
+        )
+        status_counts = status_counts_result.all()
         by_status = {status.value: count for status, count in status_counts}
         
         # Priority breakdown
-        priority_counts = self.db.query(
-            Task.priority,
-            func.count(Task.id)
-        ).filter(
-            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
-            Task.is_active == True
-        ).group_by(Task.priority).all()
-        
+        priority_counts_result = await self.db.execute(
+            select(Task.priority, func.count(Task.id)).where(
+                Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+                Task.is_active == True
+            ).group_by(Task.priority)
+        )
+        priority_counts = priority_counts_result.all()
         by_priority = {priority.value: count for priority, count in priority_counts}
         
         # Category breakdown
-        category_counts = self.db.query(
-            TaskType.category,
-            func.count(Task.id)
-        ).join(TaskType).filter(
-            Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
-            Task.is_active == True
-        ).group_by(TaskType.category).all()
-        
+        category_counts_result = await self.db.execute(
+            select(TaskType.category, func.count(Task.id)).join(TaskType).where(
+                Task.assigned_to == user_id if "SUPER_ADMIN" not in role_names else True,
+                Task.is_active == True
+            ).group_by(TaskType.category)
+        )
+        category_counts = category_counts_result.all()
         by_category = {category: count for category, count in category_counts}
         
         # Recent tasks
-        recent_tasks = user_query.order_by(desc(Task.created_at)).limit(5).all()
+        recent_query = user_query.order_by(desc(Task.created_at)).limit(5)
+        recent_result = await self.db.execute(recent_query)
+        recent_tasks = recent_result.scalars().all()
+        
         recent_tasks_data = [
             {
                 "id": task.id,
@@ -218,24 +279,24 @@ class TaskService:
             recent_tasks=recent_tasks_data
         )
 
-    def assign_task(self, task_id: int, assigned_to: int, assigned_by: int, notes: Optional[str] = None) -> Task:
+    async def assign_task(self, task_id: int, assigned_to: int, assigned_by: int, notes: Optional[str] = None) -> Task:
         """Assign task to user"""
-        task = self.get_task_by_id(task_id)
+        task = await self.get_task_by_id(task_id)
         
         # Create assignment record
-        self._assign_task(task_id, assigned_to, assigned_by, notes)
+        await self._assign_task(task_id, assigned_to, assigned_by, notes)
         
         # Update task
         task.assigned_to = assigned_to
         task.updated_at = datetime.utcnow()
         
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
         return task
 
-    def update_task_status(self, task_id: int, status: TaskStatus, user_id: int, notes: Optional[str] = None, actual_hours: Optional[float] = None) -> Task:
+    async def update_task_status(self, task_id: int, status: TaskStatus, user_id: int, notes: Optional[str] = None, actual_hours: Optional[float] = None) -> Task:
         """Update task status"""
-        task = self.get_task_by_id(task_id)
+        task = await self.get_task_by_id(task_id)
         
         # Update status and timestamps
         old_status = task.status
@@ -259,17 +320,21 @@ class TaskService:
             )
             self.db.add(comment)
         
-        self.db.commit()
-        self.db.refresh(task)
+        await self.db.commit()
+        await self.db.refresh(task)
         return task
 
-    def _assign_task(self, task_id: int, assigned_to: int, assigned_by: int, notes: Optional[str] = None):
+    async def _assign_task(self, task_id: int, assigned_to: int, assigned_by: int, notes: Optional[str] = None):
         """Create task assignment record"""
         # Deactivate previous assignments
-        self.db.query(TaskAssignment).filter(
-            TaskAssignment.task_id == task_id,
-            TaskAssignment.is_active == True
-        ).update({"is_active": False, "unassigned_at": datetime.utcnow()})
+        await self.db.execute(
+            select(TaskAssignment).where(
+                and_(
+                    TaskAssignment.task_id == task_id,
+                    TaskAssignment.is_active == True
+                )
+            ).values(is_active=False, unassigned_at=datetime.utcnow())
+        )
         
         # Create new assignment
         assignment = TaskAssignment(
@@ -280,7 +345,7 @@ class TaskService:
         )
         self.db.add(assignment)
 
-    def _auto_assign_task(self, task: Task):
+    async def _auto_assign_task(self, task: Task):
         """Auto-assign task based on rules"""
         task_type = task.task_type
         if not task_type.auto_assign_rules:
@@ -295,11 +360,12 @@ class TaskService:
             
             # This would be more complex in real implementation
             # For now, just assign to department manager or first available user
-            potential_assignee = self.db.query(User).join(
-                # Join logic to find appropriate user
-            ).first()
+            result = await self.db.execute(
+                select(User).limit(1)  # Simplified - would need proper role/department joins
+            )
+            potential_assignee = result.scalar_one_or_none()
             
             if potential_assignee:
                 task.assigned_to = potential_assignee.id
                 task.auto_assigned = True
-                self._assign_task(task.id, potential_assignee.id, task.created_by, "Auto-assigned by system")
+                await self._assign_task(task.id, potential_assignee.id, task.created_by, "Auto-assigned by system")

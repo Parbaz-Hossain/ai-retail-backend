@@ -260,8 +260,7 @@ class ChatService:
             conversation_id=conversation_id,
             role=message_data.role,
             message=message_data.message,
-            chat_metadata=message_data.chat_metadata,
-            created_by = message_data.created_by
+            chat_metadata=message_data.chat_metadata
         )
         
         self.session.add(message)

@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
 from datetime import datetime, timedelta
 from app.models.task.task import Task
 from app.models.task.task_type import TaskType
@@ -9,30 +10,40 @@ from app.schemas.task.task_schema import TaskCreate
 class TaskAutomationService:
     """Service for creating automated tasks based on system events"""
     
-    def __init__(self, db: Session, task_service: TaskService):
+    def __init__(self, db: AsyncSession, task_service: TaskService):
         self.db = db
         self.task_service = task_service
 
-    def create_low_stock_alert_task(self, item_id: int, location_id: int, current_stock: float, reorder_point: float):
+    async def create_low_stock_alert_task(self, item_id: int, location_id: int, current_stock: float, reorder_point: float):
         """Create task for low stock alert"""
         
         # Get low stock alert task type
-        task_type = self.db.query(TaskType).filter(
-            TaskType.name == "Low Stock Alert",
-            TaskType.category == "INVENTORY"
-        ).first()
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Low Stock Alert",
+                    TaskType.category == "INVENTORY"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
         
         if not task_type:
             return None
         
         # Check if similar task already exists
-        existing_task = self.db.query(Task).filter(
-            Task.reference_type == ReferenceType.LOW_STOCK_ALERT.value,
-            Task.reference_id == item_id,
-            Task.location_id == location_id,
-            Task.status.in_([TaskStatus.PENDING, TaskStatus.IN_PROGRESS]),
-            Task.is_active == True
-        ).first()
+        existing_result = await self.db.execute(
+            select(Task).where(
+                and_(
+                    Task.reference_type == ReferenceType.LOW_STOCK_ALERT.value,
+                    Task.reference_id == item_id,
+                    Task.location_id == location_id,
+                    Task.status.in_([TaskStatus.PENDING, TaskStatus.IN_PROGRESS]),
+                    Task.is_active == True
+                )
+            )
+        )
+        existing_task = existing_result.scalar_one_or_none()
         
         if existing_task:
             return existing_task
@@ -54,15 +65,20 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(hours=24)
         )
         
-        return self.task_service.create_task(task_data, created_by=1)  # System user
+        return await self.task_service.create_task(task_data, created_by=1)  # System user
 
-    def create_salary_generation_task(self, employee_id: int, salary_month: str):
+    async def create_salary_generation_task(self, employee_id: int, salary_month: str):
         """Create task for salary generation"""
         
-        task_type = self.db.query(TaskType).filter(
-            TaskType.name == "Salary Generation",
-            TaskType.category == "HR"
-        ).first()
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Salary Generation",
+                    TaskType.category == "HR"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
         
         if not task_type:
             return None
@@ -81,15 +97,20 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=3)
         )
         
-        return self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=1)
 
-    def create_purchase_approval_task(self, po_id: int, total_amount: float):
+    async def create_purchase_approval_task(self, po_id: int, total_amount: float):
         """Create task for purchase order approval"""
         
-        task_type = self.db.query(TaskType).filter(
-            TaskType.name == "Purchase Order Approval",
-            TaskType.category == "PURCHASE"
-        ).first()
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Purchase Order Approval",
+                    TaskType.category == "PURCHASE"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
         
         if not task_type:
             return None
@@ -111,15 +132,20 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=2)
         )
         
-        return self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=1)
 
-    def create_shipment_delivery_task(self, shipment_id: int, driver_id: int):
+    async def create_shipment_delivery_task(self, shipment_id: int, driver_id: int):
         """Create task for shipment delivery"""
         
-        task_type = self.db.query(TaskType).filter(
-            TaskType.name == "Shipment Delivery",
-            TaskType.category == "LOGISTICS"
-        ).first()
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Shipment Delivery",
+                    TaskType.category == "LOGISTICS"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
         
         if not task_type:
             return None
@@ -139,15 +165,20 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=1)
         )
         
-        return self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=1)
 
-    def create_equipment_maintenance_task(self, equipment_type: str, location_id: int):
+    async def create_equipment_maintenance_task(self, equipment_type: str, location_id: int):
         """Create recurring equipment maintenance task"""
         
-        task_type = self.db.query(TaskType).filter(
-            TaskType.name == "Equipment Maintenance",
-            TaskType.category == "MAINTENANCE"
-        ).first()
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Equipment Maintenance",
+                    TaskType.category == "MAINTENANCE"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
         
         if not task_type:
             return None
@@ -168,4 +199,4 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=30)
         )
         
-        return self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=1)

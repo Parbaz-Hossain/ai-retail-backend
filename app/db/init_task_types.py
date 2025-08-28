@@ -1,10 +1,11 @@
 """
 Initialize default task types in the database
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_
 from app.models.task import TaskType
 
-def init_default_task_types(db: Session):
+async def init_default_task_types(db: AsyncSession):
     """Initialize default task types"""
     default_task_types = [
         # Inventory Tasks
@@ -155,13 +156,18 @@ def init_default_task_types(db: Session):
     
     for task_type_data in default_task_types:
         # Check if task type already exists
-        existing = db.query(TaskType).filter(
-            TaskType.name == task_type_data["name"],
-            TaskType.category == task_type_data["category"]
-        ).first()
+        result = await db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == task_type_data["name"],
+                    TaskType.category == task_type_data["category"]
+                )
+            )
+        )
+        existing = result.scalar_one_or_none()
         
         if not existing:
             task_type = TaskType(**task_type_data)
             db.add(task_type)
     
-    db.commit()
+    await db.commit()
