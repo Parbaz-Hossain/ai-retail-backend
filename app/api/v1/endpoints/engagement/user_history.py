@@ -158,3 +158,30 @@ async def get_session_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error retrieving session history"
         )
+    
+@router.delete("/{history_id}", status_code=status.HTTP_200_OK)
+async def delete_history(
+    history_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a specific history item"""
+    try:
+        history_service = UserHistoryService(session)
+        success = await history_service.delete_user_history(history_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="History item not found"
+            )
+        
+        return {"message": "History item deleted successfully"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error deleting history item"
+        )

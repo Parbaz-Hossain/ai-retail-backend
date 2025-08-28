@@ -29,7 +29,7 @@ class UserHistoryService:
                 resource_id=data.resource_id,
                 title=data.title,
                 description=data.description,
-                metadata=data.metadata,
+                user_metadata=data.user_metadata,
                 session_id=data.session_id,
                 ip_address=data.ip_address,
                 user_agent=data.user_agent
@@ -58,7 +58,7 @@ class UserHistoryService:
         title: str,
         resource_id: Optional[int] = None,
         description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        user_metadata: Optional[Dict[str, Any]] = None,
         session_id: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None
@@ -69,7 +69,7 @@ class UserHistoryService:
             resource_id=resource_id,
             title=title,
             description=description,
-            metadata=metadata,
+            user_metadata=user_metadata,
             session_id=session_id,
             ip_address=ip_address,
             user_agent=user_agent
@@ -298,3 +298,25 @@ class UserHistoryService:
                 "most_used_resource": "None",
                 "favorite_count": 0
             }
+        
+    async def delete_user_history(self, history_id: int, user_id: int) -> bool:
+        try:
+            result = await self.session.execute(
+                select(UserHistory).where(
+                    UserHistory.id == history_id,
+                    UserHistory.user_id == user_id,
+                    UserHistory.is_deleted == False
+                )
+            )
+            history = result.scalar_one_or_none()
+            if not history:
+                return False
+            
+            history.is_deleted = True
+            await self.session.commit()
+            return True
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error deleting history: {e}")
+            return False
+    

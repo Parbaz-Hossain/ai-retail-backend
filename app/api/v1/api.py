@@ -7,6 +7,7 @@ from app.api.v1.endpoints.inventory import analytics, categories, inventory_coun
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.organization import departments, locations
 from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
+from app.api.v1.endpoints.task import tasks, task_types, webhooks, mobile
 
 api_router = APIRouter()
 
@@ -55,3 +56,9 @@ api_router.include_router(user_history.router, prefix="/engagement/user-history"
 
 # Biometric routes
 api_router.include_router(fingerprint.router, prefix="/biometric/fingerprint", tags=["Biometric"])
+
+# Task Management routes
+api_router.include_router(tasks.router, prefix="/task-management/task", tags=["Task Management"])
+api_router.include_router(task_types.router, prefix="/task-management/task-type", tags=["Task Management"])
+api_router.include_router(webhooks.router, prefix="/task-management/webhook", tags=["Task Management"])
+api_router.include_router(mobile.router, prefix="/task-management/mobile", tags=["Task Management"])
