@@ -23,6 +23,11 @@ from app.models.logistics.driver import Driver
 from app.models.logistics.vehicle import Vehicle
 from app.models.logistics.shipment_item import ShipmentItem
 from app.models.logistics.shipment_tracking import ShipmentTracking
+from app.models.task.task import Task
+from app.models.task.task_type import TaskType
+from app.models.task.task_assignment import TaskAssignment
+from app.models.task.task_comment import TaskComment
+from app.models.task.task_attachment import TaskAttachment
 
 
 __all__ = [
@@ -49,5 +54,10 @@ __all__ = [
     "Driver",
     "Vehicle",
     "ShipmentItem",
-    "ShipmentTracking"
+    "ShipmentTracking",
+    "Task",
+    "TaskType",
+    "TaskAssignment",
+    "TaskComment",
+    "TaskAttachment"
 ]

@@ -138,3 +138,8 @@ class ReferenceType(str, Enum):
     EQUIPMENT_MAINTENANCE = "EQUIPMENT_MAINTENANCE"
     MONTHLY_REPORT = "MONTHLY_REPORT"
     CUSTOMER_COMPLAINT = "CUSTOMER_COMPLAINT"
+
+class MessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"

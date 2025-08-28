@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.biometric import fingerprint
-from app.api.v1.endpoints.engagement import faq, user_history
+from app.api.v1.endpoints.engagement import chat, faq, user_history
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
@@ -53,6 +53,7 @@ api_router.include_router(vehicles.router, prefix="/logistics/vehicle", tags=["L
 # Engagement routes
 api_router.include_router(faq.router, prefix="/engagement/faq", tags=["Engagement"])
 api_router.include_router(user_history.router, prefix="/engagement/user-history", tags=["Engagement"])
+api_router.include_router(chat.router, prefix="/engagement/chat", tags=["Engagement"])
 
 # Biometric routes
 api_router.include_router(fingerprint.router, prefix="/biometric/fingerprint", tags=["Biometric"])
