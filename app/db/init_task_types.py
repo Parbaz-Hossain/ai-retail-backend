@@ -3,7 +3,7 @@ Initialize default task types in the database
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from app.models.task import TaskType
+from app.models.task.task_type import TaskType
 
 async def init_default_task_types(db: AsyncSession):
     """Initialize default task types"""

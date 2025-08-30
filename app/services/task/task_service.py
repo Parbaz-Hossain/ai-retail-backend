@@ -1,7 +1,8 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, func, desc, select
-from datetime import datetime
+from sqlalchemy import and_, func, desc, select, update
+from sqlalchemy.orm import selectinload
+from datetime import datetime, timezone
 import uuid
 
 from app.models.task.task import Task
@@ -58,7 +59,10 @@ class TaskService:
             await self._auto_assign_task(db_task)
         
         await self.db.commit()
-        await self.db.refresh(db_task)
+        await self.db.refresh(db_task, attribute_names=[
+            "task_type", "creator", "assignee", "department", 
+            "location", "created_at", "updated_at"
+        ])
         return db_task
 
     async def update_task(self, task_id: int, task_data: TaskUpdate, user_id: int) -> Task:
@@ -80,7 +84,15 @@ class TaskService:
     async def get_task_by_id(self, task_id: int) -> Task:
         """Get task by ID"""
         result = await self.db.execute(
-            select(Task).where(
+            select(Task)
+            .options(            
+                selectinload(Task.task_type),
+                selectinload(Task.creator),
+                selectinload(Task.assignee),
+                selectinload(Task.department),
+                selectinload(Task.location)
+            )
+            .where(
                 and_(Task.id == task_id, Task.is_active == True)
             )
         )
@@ -99,13 +111,22 @@ class TaskService:
         per_page: int = 20
     ) -> Dict[str, Any]:
         """Get tasks assigned to user"""
-        query = select(Task).where(
+        query = (
+        select(Task)
+            .options(            
+                selectinload(Task.task_type),
+                selectinload(Task.creator),
+                selectinload(Task.assignee),
+                selectinload(Task.department),
+                selectinload(Task.location)
+            )
+            .where(
             and_(
                 Task.assigned_to == user_id,
                 Task.is_active == True
-            )
+            ))
         )
-        
+            
         # Apply filters
         if status:
             query = query.where(Task.status == status)
@@ -328,12 +349,12 @@ class TaskService:
         """Create task assignment record"""
         # Deactivate previous assignments
         await self.db.execute(
-            select(TaskAssignment).where(
+            update(TaskAssignment).where(
                 and_(
                     TaskAssignment.task_id == task_id,
                     TaskAssignment.is_active == True
                 )
-            ).values(is_active=False, unassigned_at=datetime.utcnow())
+            ).values(is_active=False, unassigned_at=datetime.now(timezone.utc))  # Use timezone-aware datetime
         )
         
         # Create new assignment

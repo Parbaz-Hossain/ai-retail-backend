@@ -35,19 +35,19 @@ class TaskTypeUpdate(BaseModel):
 class TaskTypeResponse(BaseModel):
     id: int
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     category: str
-    auto_assign_enabled: bool
-    auto_assign_rules: Optional[Dict[str, Any]]
-    default_priority: str
+    auto_assign_enabled: Optional[bool] = None
+    auto_assign_rules: Optional[Dict[str, Any]] = None
+    default_priority: Optional[str] = None
     default_estimated_hours: Optional[float]
-    sla_hours: Optional[int]
-    requires_approval: bool
-    approval_roles: Optional[List[str]]
-    notification_settings: Optional[Dict[str, Any]]
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    sla_hours: Optional[int] = None
+    requires_approval: Optional[bool] = None
+    approval_roles: Optional[List[str]] = None
+    notification_settings: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

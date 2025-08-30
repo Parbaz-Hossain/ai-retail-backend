@@ -5,7 +5,7 @@ Optimized for the mobile UI shown in the images
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, desc, or_
+from sqlalchemy import and_, desc, or_, select, func
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
@@ -17,7 +17,7 @@ from app.models.shared.enums import TaskStatus, TaskPriority
 router = APIRouter()
 
 @router.get("/dashboard/today")
-def get_today_dashboard(
+async def get_today_dashboard(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -29,42 +29,96 @@ def get_today_dashboard(
     start_of_day = datetime.combine(today, time.min)
     end_of_day = datetime.combine(today, time.max)
     
-    # Get user's tasks
-    user_tasks = db.query(Task).filter(
-        Task.assigned_to == current_user.id,
-        Task.is_active == True
+    # Get user's tasks base query
+    user_tasks_query = select(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True
+        )
     )
     
-    # Today's overview
-    total_tasks = user_tasks.count()
-    pending_tasks = user_tasks.filter(Task.status == TaskStatus.PENDING).count()
-    in_progress_tasks = user_tasks.filter(Task.status == TaskStatus.IN_PROGRESS).count()
-    urgent_tasks = user_tasks.filter(Task.priority == TaskPriority.URGENT).count()
+    # Total tasks
+    total_result = await db.execute(select(func.count()).select_from(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True
+        )
+    ))
+    total_tasks = total_result.scalar()
+    
+    # Pending tasks
+    pending_result = await db.execute(select(func.count()).select_from(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
+            Task.status == TaskStatus.PENDING
+        )
+    ))
+    pending_tasks = pending_result.scalar()
+    
+    # In progress tasks
+    in_progress_result = await db.execute(select(func.count()).select_from(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
+            Task.status == TaskStatus.IN_PROGRESS
+        )
+    ))
+    in_progress_tasks = in_progress_result.scalar()
+    
+    # Urgent tasks
+    urgent_result = await db.execute(select(func.count()).select_from(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
+            Task.priority == TaskPriority.URGENT
+        )
+    ))
+    urgent_tasks = urgent_result.scalar()
     
     # Due today
-    due_today = user_tasks.filter(
+    due_today_result = await db.execute(select(func.count()).select_from(Task).where(
         and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
             Task.due_date >= start_of_day,
             Task.due_date <= end_of_day
         )
-    ).count()
+    ))
+    due_today = due_today_result.scalar()
+    
+    # Completed tasks
+    completed_result = await db.execute(select(func.count()).select_from(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
+            Task.status == TaskStatus.COMPLETED
+        )
+    ))
+    completed_tasks = completed_result.scalar()
     
     # Completion percentage
-    completed_tasks = user_tasks.filter(Task.status == TaskStatus.COMPLETED).count()
     completion_percentage = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
     
     # Recent urgent tasks
-    recent_tasks = user_tasks.filter(
-        or_(
-            Task.priority == TaskPriority.URGENT,
-            Task.priority == TaskPriority.HIGH,
-            Task.status == TaskStatus.IN_PROGRESS
+    recent_tasks_query = select(Task).join(TaskType).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True,
+            or_(
+                Task.priority == TaskPriority.URGENT,
+                Task.priority == TaskPriority.HIGH,
+                Task.status == TaskStatus.IN_PROGRESS
+            )
         )
     ).order_by(
         desc(Task.priority == TaskPriority.URGENT),
         desc(Task.priority == TaskPriority.HIGH),
         Task.due_date.asc()
-    ).limit(3).all()
+    ).limit(3)
+    
+    recent_result = await db.execute(recent_tasks_query)
+    recent_tasks = recent_result.scalars().all()
     
     # Format tasks for mobile
     formatted_tasks = []
@@ -95,7 +149,7 @@ def get_today_dashboard(
     }
 
 @router.get("/dashboard/department-overview")
-def get_department_overview_mobile(
+async def get_department_overview_mobile(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -104,39 +158,48 @@ def get_department_overview_mobile(
     # Get user's role-based access
     role_names = [role.role.name for role in current_user.user_roles if role.is_active]
     
-    # Get department/location context
-    # This would be based on user's department or managed locations
-    
     department_overview = []
     
     # Branch Manager Overview
     if "BRANCH_MANAGER" in role_names or current_user.is_superuser:
-        branch_tasks = db.query(Task).join(TaskType).filter(
-            TaskType.category.in_(["INVENTORY", "OPERATIONS", "PURCHASE"]),
-            Task.is_active == True
+        branch_tasks_query = select(Task).join(TaskType).where(
+            and_(
+                TaskType.category.in_(["INVENTORY", "OPERATIONS", "PURCHASE"]),
+                Task.is_active == True
+            )
         )
+        branch_result = await db.execute(branch_tasks_query)
+        branch_tasks = branch_result.scalars().all()
         
-        branch_summary = _calculate_role_summary_mobile(branch_tasks.all(), "Branch Manager", "👨‍💼")
+        branch_summary = await _calculate_role_summary_mobile(branch_tasks, "Branch Manager", "👨‍💼")
         department_overview.append(branch_summary)
     
     # Chef Overview
     if "CHEF" in role_names or current_user.is_superuser:
-        chef_tasks = db.query(Task).join(TaskType).filter(
-            TaskType.category.in_(["OPERATIONS", "MAINTENANCE"]),
-            Task.reference_type.in_(["LOW_STOCK_ALERT", "EQUIPMENT_MAINTENANCE", "MENU_PLANNING"]),
-            Task.is_active == True
+        chef_tasks_query = select(Task).join(TaskType).where(
+            and_(
+                TaskType.category.in_(["OPERATIONS", "MAINTENANCE"]),
+                Task.reference_type.in_(["LOW_STOCK_ALERT", "EQUIPMENT_MAINTENANCE", "MENU_PLANNING"]),
+                Task.is_active == True
+            )
         )
+        chef_result = await db.execute(chef_tasks_query)
+        chef_tasks = chef_result.scalars().all()
         
-        chef_summary = _calculate_role_summary_mobile(chef_tasks.all(), "Chef", "👨‍🍳")
+        chef_summary = await _calculate_role_summary_mobile(chef_tasks, "Chef", "👨‍🍳")
         department_overview.append(chef_summary)
     
     # Staff Overview
-    staff_tasks = db.query(Task).filter(
-        Task.assigned_to == current_user.id,
-        Task.is_active == True
+    staff_tasks_query = select(Task).where(
+        and_(
+            Task.assigned_to == current_user.id,
+            Task.is_active == True
+        )
     )
+    staff_result = await db.execute(staff_tasks_query)
+    staff_tasks = staff_result.scalars().all()
     
-    staff_summary = _calculate_role_summary_mobile(staff_tasks.all(), "Staff", "👥")
+    staff_summary = await _calculate_role_summary_mobile(staff_tasks, "Staff", "👥")
     department_overview.append(staff_summary)
     
     return {
@@ -144,7 +207,7 @@ def get_department_overview_mobile(
     }
 
 @router.get("/tasks/by-role/{role_name}")
-def get_tasks_by_role_mobile(
+async def get_tasks_by_role_mobile(
     role_name: str,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
@@ -175,27 +238,30 @@ def get_tasks_by_role_mobile(
     filter_config = role_filters[role_name.lower()]
     
     # Build query based on filters
-    query = db.query(Task).filter(Task.is_active == True)
+    query = select(Task).where(Task.is_active == True)
     
     if "categories" in filter_config:
-        query = query.join(TaskType).filter(TaskType.category.in_(filter_config["categories"]))
+        query = query.join(TaskType).where(TaskType.category.in_(filter_config["categories"]))
     
     if "assigned_to" in filter_config:
-        query = query.filter(Task.assigned_to == filter_config["assigned_to"])
+        query = query.where(Task.assigned_to == filter_config["assigned_to"])
     
     if "priorities" in filter_config:
-        query = query.filter(Task.priority.in_(filter_config["priorities"]))
+        query = query.where(Task.priority.in_(filter_config["priorities"]))
     
     if "reference_types" in filter_config:
-        query = query.filter(Task.reference_type.in_(filter_config["reference_types"]))
+        query = query.where(Task.reference_type.in_(filter_config["reference_types"]))
     
     # Order by priority and due date
-    tasks = query.order_by(
+    query = query.order_by(
         desc(Task.priority == TaskPriority.URGENT),
         desc(Task.priority == TaskPriority.HIGH),
         Task.due_date.asc(),
         desc(Task.created_at)
-    ).limit(50).all()
+    ).limit(50)
+    
+    result = await db.execute(query)
+    tasks = result.scalars().all()
     
     # Group tasks by status for mobile display
     grouped_tasks = {
@@ -263,7 +329,7 @@ def _get_task_color(priority: TaskPriority, status: TaskStatus):
     else:
         return "gray"
 
-def _calculate_role_summary_mobile(tasks: List[Task], role_name: str, icon: str):
+async def _calculate_role_summary_mobile(tasks: List[Task], role_name: str, icon: str):
     """Calculate summary for role tasks formatted for mobile"""
     total_tasks = len(tasks)
     pending_tasks = len([t for t in tasks if t.status == TaskStatus.PENDING])

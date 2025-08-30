@@ -20,6 +20,7 @@ from app.models.purchase import goods_receipt_item, goods_receipt, item_supplier
 from app.models.system import file_upload, performance_metrics, qr_code, system_setting
 from app.models.engagement import faq, user_history, chat
 from app.models.biometric import fingerprint
+from app.models.task import task_type, task, task_comment, task_attachment, task_assignment
 from app.core.config import settings
 
 # this is the Alembic Config object

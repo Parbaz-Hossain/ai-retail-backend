@@ -45,34 +45,47 @@ class TaskStatusUpdate(BaseModel):
     notes: Optional[str] = None
     actual_hours: Optional[float] = None
 
+class LocationInfo(BaseModel):
+    id: int
+    name: str
+
+class DepartmentInfo(BaseModel):
+    id: int
+    name: str
+
+class TaskTypeInfo(BaseModel):
+    id: int
+    name: str
+    category: Optional[str] = None
+
 class TaskResponse(BaseModel):
     id: int
     task_number: str
     title: str
-    description: Optional[str]
-    task_type: Dict[str, Any]
-    reference_type: Optional[str]
-    reference_id: Optional[int]
-    reference_data: Optional[Dict[str, Any]]
-    created_by: Dict[str, Any]
-    assigned_to: Optional[Dict[str, Any]]
-    department: Optional[Dict[str, Any]]
-    location: Optional[Dict[str, Any]]
+    description: Optional[str] = None
+    task_type: Optional['TaskTypeInfo'] = None
+    reference_type: Optional[str] = None
+    reference_id: Optional[int] = None
+    reference_data: Optional[Dict[str, Any]] = None
+    created_by: Optional[int] = None
+    assigned_to: Optional[int] = None
+    department: Optional['DepartmentInfo'] = None
+    location: Optional['LocationInfo'] = None
     status: TaskStatus
     priority: TaskPriority
-    due_date: Optional[datetime]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    estimated_hours: Optional[float]
-    actual_hours: Optional[float]
-    tags: Optional[str]
+    due_date: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    estimated_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
+    tags: Optional[str] = None
     is_recurring: bool
-    recurrence_pattern: Optional[str]
-    parent_task_id: Optional[int]
-    auto_assigned: bool
-    escalation_level: int
-    created_at: datetime
-    updated_at: datetime
+    recurrence_pattern: Optional[str] = None
+    parent_task_id: Optional[int] = None
+    auto_assigned: Optional[bool] = None
+    escalation_level: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

@@ -9,10 +9,11 @@ class TaskCommentCreate(BaseModel):
 class TaskCommentResponse(BaseModel):
     id: int
     task_id: int
-    user: Dict[str, Any]
+    user_id: int
     comment: str
-    is_internal: bool
-    created_at: datetime
+    is_internal: Optional[bool] = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

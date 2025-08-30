@@ -127,7 +127,8 @@ class ShipmentService:
                 shipment.id,
                 ShipmentStatus.READY_FOR_PICKUP,
                 f"Shipment created and ready for pickup from {from_location.name}",
-                user_id
+                user_id,
+                from_location.name
             )
 
             logger.info(f"Shipment created successfully: {shipment.shipment_number}")
@@ -405,7 +406,8 @@ class ShipmentService:
                 shipment_id,
                 ShipmentStatus.PICKED_UP,
                 f"Shipment picked up from {shipment.from_location.name}",
-                user_id
+                user_id,
+                shipment.from_location.name
             )
 
             logger.info(f"Pickup OTP verified for shipment {shipment_id}")
@@ -460,7 +462,8 @@ class ShipmentService:
                 shipment_id,
                 ShipmentStatus.DELIVERED,
                 f"Shipment delivered to {shipment.to_location.name}",
-                user_id
+                user_id,
+                shipment.to_location.name
             )
 
             logger.info(f"Delivery OTP verified for shipment {shipment_id}")
@@ -745,7 +748,7 @@ class ShipmentService:
 
     async def _create_tracking_update(self, shipment_id: int, 
                                       status: ShipmentStatus, notes: str, user_id: int, 
-                                      location: str, latitude: Optional[float] = None, longitude: Optional[float] = None):
+                                      location: Optional[str] = None, latitude: Optional[float] = None, longitude: Optional[float] = None):
         """Create shipment tracking update"""
         tracking = ShipmentTracking(
             shipment_id=shipment_id,

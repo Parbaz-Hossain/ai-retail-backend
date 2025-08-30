@@ -1,6 +1,7 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
@@ -11,7 +12,7 @@ from app.schemas.task.task_type_schema import TaskTypeCreate, TaskTypeUpdate, Ta
 router = APIRouter()
 
 @router.post("/", response_model=TaskTypeResponse, status_code=status.HTTP_201_CREATED)
-def create_task_type(
+async def create_task_type(
     *,
     db: AsyncSession = Depends(get_async_session),
     task_type_in: TaskTypeCreate,
@@ -25,41 +26,44 @@ def create_task_type(
         )
     
     task_type = TaskType(**task_type_in.model_dump())
+    task_type.created_by = current_user.id
     db.add(task_type)
-    db.commit()
-    db.refresh(task_type)
+    await db.commit()
+    await db.refresh(task_type)
     return task_type
 
 @router.get("/", response_model=List[TaskTypeResponse])
-def get_task_types(
+async def get_task_types(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
     category: str = None
 ) -> Any:
     """Get all task types"""
-    query = db.query(TaskType).filter(TaskType.is_active == True)
+    query = select(TaskType).where(TaskType.is_active == True)
     
     if category:
-        query = query.filter(TaskType.category == category)
+        query = query.where(TaskType.category == category)
     
-    task_types = query.all()
+    result = await db.execute(query)
+    task_types = result.scalars().all()
     return task_types
 
 @router.get("/{task_type_id}", response_model=TaskTypeResponse)
-def get_task_type(
+async def get_task_type(
     *,
     db: AsyncSession = Depends(get_async_session),
     task_type_id: int,
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Get task type by ID"""
-    task_type = db.query(TaskType).filter(TaskType.id == task_type_id).first()
+    result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
+    task_type = result.scalar_one_or_none()
     if not task_type:
         raise HTTPException(status_code=404, detail="Task type not found")
     return task_type
 
 @router.put("/{task_type_id}", response_model=TaskTypeResponse)
-def update_task_type(
+async def update_task_type(
     *,
     db: AsyncSession = Depends(get_async_session),
     task_type_id: int,
@@ -73,19 +77,21 @@ def update_task_type(
             detail="Not enough permissions"
         )
     
-    task_type = db.query(TaskType).filter(TaskType.id == task_type_id).first()
+    result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
+    task_type = result.scalar_one_or_none()
     if not task_type:
         raise HTTPException(status_code=404, detail="Task type not found")
-    
+        
+    task_type.updated_by = current_user.id
     for field, value in task_type_in.model_dump(exclude_unset=True).items():
         setattr(task_type, field, value)
     
-    db.commit()
-    db.refresh(task_type)
+    await db.commit()
+    await db.refresh(task_type)
     return task_type
 
 @router.delete("/{task_type_id}")
-def delete_task_type(
+async def delete_task_type(
     *,
     db: AsyncSession = Depends(get_async_session),
     task_type_id: int,
@@ -98,11 +104,13 @@ def delete_task_type(
             detail="Not enough permissions"
         )
     
-    task_type = db.query(TaskType).filter(TaskType.id == task_type_id).first()
+    result = await db.execute(select(TaskType).where(TaskType.id == task_type_id))
+    task_type = result.scalar_one_or_none()
     if not task_type:
         raise HTTPException(status_code=404, detail="Task type not found")
     
     task_type.is_active = False
-    db.commit()
+    task_type.is_deleted = True
+    await db.commit()
     
     return {"message": "Task type deleted successfully"}
