@@ -49,17 +49,19 @@ async def get_reorder_requests(
 @router.post("/auto-generate", response_model=List[ReorderRequest])
 async def auto_generate_reorder_requests(
     location_id: Optional[int] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Auto-generate reorder requests for items below reorder point"""
     service = ReorderRequestService(db)
-    requests = await service.auto_generate_reorder_requests(location_id)
+    requests = await service.auto_generate_reorder_requests(location_id, user_id=current_user.id)
     return requests
 
 @router.get("/{request_id}", response_model=ReorderRequest)
 async def get_reorder_request(
     request_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get reorder request by ID"""
     service = ReorderRequestService(db)

@@ -1,4 +1,3 @@
-# app/services/purchase/goods_receipt_service.py
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
+
 from app.models.purchase.goods_receipt import GoodsReceipt
 from app.models.purchase.goods_receipt_item import GoodsReceiptItem
 from app.models.purchase.purchase_order import PurchaseOrder
@@ -20,6 +20,8 @@ from app.schemas.purchase.goods_receipt_schema import (
     GoodsReceiptResponse,
     GoodsReceiptUpdate
 )
+from app.services.task.task_service import TaskService
+from app.models.shared.enums import TaskStatus, ReferenceType
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +165,18 @@ class GoodsReceiptService:
             await self._check_po_completion(purchase_order)
 
             await self.session.commit()
+
+            # COMPLETE PURCHASE ORDER APPROVAL TASK
+            await self._complete_po_approval_task(purchase_order.id, user_id)
+            
+            # CHECK AND UPDATE LOW STOCK TASKS
+            for receipt_item in receipt_items:
+                await self._check_and_complete_low_stock_task(
+                    receipt_item.item_id,
+                    receipt_item.location_id,
+                    user_id
+                )
+
              # Reload PO with items eagerly
             result = await self.session.execute(
                 select(GoodsReceipt)
@@ -536,3 +550,90 @@ class GoodsReceiptService:
         except Exception as e:
             logger.error(f"Error getting pending receipts for PO {po_id}: {str(e)}")
             return []
+        
+    async def _complete_po_approval_task(self, po_id: int, user_id: int):
+        """Complete purchase order approval task"""
+        try:
+            from app.models.task.task import Task
+            
+            # Find related task
+            result = await self.session.execute(
+                select(Task).where(
+                    and_(
+                        Task.reference_type == ReferenceType.PURCHASE_ORDER.value,
+                        Task.reference_id == po_id,
+                        Task.status != TaskStatus.COMPLETED,
+                        Task.is_active == True
+                    )
+                )
+            )
+            task = result.scalar_one_or_none()
+            
+            if task:
+                task_service = TaskService(self.session)
+                await task_service.update_task_status(
+                    task_id=task.id,
+                    status=TaskStatus.COMPLETED,
+                    user_id=user_id,
+                    notes="Purchase order received and processed"
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to complete PO task: {str(e)}")
+    
+    async def _check_and_complete_low_stock_task(
+        self, 
+        item_id: int, 
+        location_id: int,
+        user_id: int
+    ):
+        """Check and complete low stock tasks after receiving goods"""
+        try:
+            from app.models.task.task import Task
+            from app.models.inventory.stock_level import StockLevel
+            from app.models.inventory.item import Item
+            
+            # Check current stock level
+            stock_result = await self.session.execute(
+                select(StockLevel, Item)
+                .join(Item)
+                .where(
+                    and_(
+                        StockLevel.item_id == item_id,
+                        StockLevel.location_id == location_id
+                    )
+                )
+            )
+            result = stock_result.first()
+            
+            if result:
+                stock_level, item = result
+                
+                # If stock is now above reorder point
+                if stock_level.current_stock > item.reorder_point:
+                    # Find and complete related low stock task
+                    task_result = await self.session.execute(
+                        select(Task).where(
+                            and_(
+                                Task.reference_type == ReferenceType.LOW_STOCK_ALERT.value,
+                                Task.reference_id == item_id,
+                                Task.location_id == location_id,
+                                Task.status != TaskStatus.COMPLETED,
+                                Task.is_active == True
+                            )
+                        )
+                    )
+                    task = task_result.scalar_one_or_none()
+                    
+                    if task:
+                        task_service = TaskService(self.session)
+                        await task_service.update_task_status(
+                            task_id=task.id,
+                            status=TaskStatus.COMPLETED,
+                            user_id=user_id,
+                            notes=f"Stock replenished. Current: {stock_level.current_stock}"
+                        )
+                        
+        except Exception as e:
+            logger.error(f"Failed to complete low stock task: {str(e)}")
+    
