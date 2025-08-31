@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
@@ -23,7 +24,7 @@ async def trigger_low_stock_check(
 ) -> Any:
     """Manually trigger low stock check and task creation"""
     integration_service = TaskIntegrationService(db)
-    await integration_service.check_and_create_low_stock_tasks()
+    await integration_service.check_and_create_low_stock_tasks(user_id=current_user.id)
     return {"message": "Low stock check completed and tasks created"}
 
 @router.post("/reorder-request/{request_id}/create-approval-task")
@@ -33,8 +34,13 @@ async def create_reorder_approval_task(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Create approval task for reorder request"""
-    result = await db.execute(select(ReorderRequest).where(ReorderRequest.id == request_id))
+    result = await db.execute(
+        select(ReorderRequest)
+        .options(selectinload(ReorderRequest.location))
+        .where(ReorderRequest.id == request_id)
+    )
     reorder_request = result.scalar_one_or_none()
+    
     if not reorder_request:
         raise HTTPException(status_code=404, detail="Reorder request not found")
     
@@ -55,7 +61,7 @@ async def create_purchase_approval_task(
         raise HTTPException(status_code=404, detail="Purchase order not found")
     
     integration_service = TaskIntegrationService(db)
-    task = await integration_service.create_purchase_approval_task(purchase_order)
+    task = await integration_service.create_purchase_approval_task(purchase_order, user_id=current_user.id)
     return {"message": "Approval task created", "task_id": task.id}
 
 @router.post("/shipment/{shipment_id}/create-tasks")
@@ -71,7 +77,7 @@ async def create_shipment_tasks(
         raise HTTPException(status_code=404, detail="Shipment not found")
     
     integration_service = TaskIntegrationService(db)
-    task = await integration_service.create_shipment_tasks(shipment)
+    task = await integration_service.create_shipment_tasks(shipment, user_id=current_user.id)
     return {"message": "Shipment tasks created", "task_id": task.id if task else None}
 
 @router.post("/salary/create-monthly-tasks")
@@ -90,5 +96,5 @@ async def create_monthly_salary_tasks(
             )
     
     integration_service = TaskIntegrationService(db)
-    await integration_service.create_salary_processing_tasks()
+    await integration_service.create_salary_processing_tasks(user_id=current_user.id)
     return {"message": "Monthly salary tasks created"}

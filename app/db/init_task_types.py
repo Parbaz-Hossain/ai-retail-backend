@@ -136,8 +136,6 @@ async def init_default_task_types(db: AsyncSession):
             "name": "Monthly Report Generation",
             "category": "OPERATIONS",
             "description": "Generate monthly operational reports",
-            "is_recurring": True,
-            "recurrence_pattern": "MONTHLY",
             "default_priority": "MEDIUM",
             "default_estimated_hours": 4.0,
             "sla_hours": 72
@@ -171,3 +169,14 @@ async def init_default_task_types(db: AsyncSession):
             db.add(task_type)
     
     await db.commit()
+
+import asyncio
+from app.core.database import async_session_maker  # or however you create sessions
+
+if __name__ == "__main__":
+    async def main():
+        async with async_session_maker() as session:  # Use session maker directly
+            await init_default_task_types(session)
+            print("Task types initialization completed successfully!")
+
+    asyncio.run(main())

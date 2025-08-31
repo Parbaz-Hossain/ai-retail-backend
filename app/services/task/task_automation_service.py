@@ -14,7 +14,7 @@ class TaskAutomationService:
         self.db = db
         self.task_service = task_service
 
-    async def create_low_stock_alert_task(self, item_id: int, location_id: int, current_stock: float, reorder_point: float):
+    async def create_low_stock_alert_task(self, item_id: int, location_id: int, current_stock: float, reorder_point: float, user_id: int):
         """Create task for low stock alert"""
         
         # Get low stock alert task type
@@ -65,41 +65,9 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(hours=24)
         )
         
-        return await self.task_service.create_task(task_data, created_by=1)  # System user
+        return await self.task_service.create_task(task_data, created_by=user_id or 1)  # System user
 
-    async def create_salary_generation_task(self, employee_id: int, salary_month: str):
-        """Create task for salary generation"""
-        
-        result = await self.db.execute(
-            select(TaskType).where(
-                and_(
-                    TaskType.name == "Salary Generation",
-                    TaskType.category == "HR"
-                )
-            )
-        )
-        task_type = result.scalar_one_or_none()
-        
-        if not task_type:
-            return None
-        
-        task_data = TaskCreate(
-            title=f"Generate Salary - Employee #{employee_id} - {salary_month}",
-            description=f"Generate and process salary for employee #{employee_id} for {salary_month}",
-            task_type_id=task_type.id,
-            reference_type=ReferenceType.SALARY_GENERATION.value,
-            reference_id=employee_id,
-            reference_data={
-                "employee_id": employee_id,
-                "salary_month": salary_month
-            },
-            priority=TaskPriority.MEDIUM,
-            due_date=datetime.utcnow() + timedelta(days=3)
-        )
-        
-        return await self.task_service.create_task(task_data, created_by=1)
-
-    async def create_purchase_approval_task(self, po_id: int, total_amount: float):
+    async def create_purchase_approval_task(self, po_id: int, total_amount: float, user_id: int):
         """Create task for purchase order approval"""
         
         result = await self.db.execute(
@@ -132,9 +100,9 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=2)
         )
         
-        return await self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=user_id or 1)
 
-    async def create_shipment_delivery_task(self, shipment_id: int, driver_id: int):
+    async def create_shipment_delivery_task(self, shipment_id: int, driver_id: int, user_id: int):
         """Create task for shipment delivery"""
         
         result = await self.db.execute(
@@ -165,8 +133,40 @@ class TaskAutomationService:
             due_date=datetime.utcnow() + timedelta(days=1)
         )
         
-        return await self.task_service.create_task(task_data, created_by=1)
+        return await self.task_service.create_task(task_data, created_by=user_id)
 
+    async def create_salary_generation_task(self, employee_id: int, salary_month: str, user_id: int):
+        """Create task for salary generation"""
+        
+        result = await self.db.execute(
+            select(TaskType).where(
+                and_(
+                    TaskType.name == "Salary Generation",
+                    TaskType.category == "HR"
+                )
+            )
+        )
+        task_type = result.scalar_one_or_none()
+        
+        if not task_type:
+            return None
+        
+        task_data = TaskCreate(
+            title=f"Generate Salary - Employee #{employee_id} - {salary_month}",
+            description=f"Generate and process salary for employee #{employee_id} for {salary_month}",
+            task_type_id=task_type.id,
+            reference_type=ReferenceType.SALARY_GENERATION.value,
+            reference_id=employee_id,
+            reference_data={
+                "employee_id": employee_id,
+                "salary_month": salary_month
+            },
+            priority=TaskPriority.MEDIUM,
+            due_date=datetime.utcnow() + timedelta(days=3)
+        )
+        
+        return await self.task_service.create_task(task_data, created_by=user_id or 1)
+    
     async def create_equipment_maintenance_task(self, equipment_type: str, location_id: int):
         """Create recurring equipment maintenance task"""
         

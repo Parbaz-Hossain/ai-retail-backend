@@ -1,8 +1,10 @@
 """
 Integration service to connect task management with existing operations
 """
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from app.services.task.task_automation_service import TaskAutomationService
 from app.services.task.task_service import TaskService
 from app.models.inventory.stock_level import StockLevel
@@ -21,11 +23,13 @@ class TaskIntegrationService:
         self.task_service = TaskService(db)
         self.automation_service = TaskAutomationService(db, self.task_service)
 
-    async def check_and_create_low_stock_tasks(self):
+    async def check_and_create_low_stock_tasks(self, user_id: int):
         """Check stock levels and create low stock alert tasks"""
         # Get items below reorder point
         result = await self.db.execute(
-            select(StockLevel).join(Item).where(
+            select(StockLevel)
+            .options(selectinload(StockLevel.item))
+            .join(Item).where(
                 and_(
                     StockLevel.current_stock <= Item.reorder_point,
                     Item.is_active == True,
@@ -40,12 +44,13 @@ class TaskIntegrationService:
                 item_id=stock_level.item_id,
                 location_id=stock_level.location_id,
                 current_stock=float(stock_level.current_stock),
-                reorder_point=float(stock_level.item.reorder_point)
+                reorder_point=float(stock_level.item.reorder_point),
+                user_id=user_id
             )
 
     async def create_reorder_approval_task(self, reorder_request: ReorderRequest):
         """Create task for reorder request approval"""
-        from app.schemas.task import TaskCreate
+        from app.schemas.task.task_schema import TaskCreate
         from app.models.shared.enums import TaskPriority, ReferenceType
         from datetime import datetime, timedelta
         
@@ -74,63 +79,29 @@ class TaskIntegrationService:
         
         return await self.task_service.create_task(task_data, created_by=reorder_request.requested_by or 1)
 
-    async def create_salary_processing_tasks(self):
-        """Create monthly salary processing tasks"""
-        from datetime import datetime
-        from calendar import monthrange
-        
-        # Only create if we're past 25th of the month
-        current_date = datetime.now()
-        if current_date.day < 25:
-            return
-        
-        # Get active employees
-        result = await self.db.execute(
-            select(Employee).where(Employee.is_active == True)
-        )
-        active_employees = result.scalars().all()
-        
-        # Create salary generation tasks for each employee
-        for employee in active_employees:
-            salary_month = f"{current_date.year}-{current_date.month:02d}"
-            
-            # Check if salary already processed this month
-            salary_result = await self.db.execute(
-                select(Salary).where(
-                    and_(
-                        Salary.employee_id == employee.id,
-                        Salary.salary_month == f"{current_date.year}-{current_date.month:02d}-01"
-                    )
-                )
-            )
-            existing_salary = salary_result.scalar_one_or_none()
-            
-            if not existing_salary:
-                await self.automation_service.create_salary_generation_task(
-                    employee_id=employee.id,
-                    salary_month=salary_month
-                )
-
-    async def create_purchase_approval_task(self, purchase_order: PurchaseOrder):
+    async def create_purchase_approval_task(self, purchase_order: PurchaseOrder, user_id: int):
         """Create task for purchase order approval"""
         return await self.automation_service.create_purchase_approval_task(
             po_id=purchase_order.id,
-            total_amount=float(purchase_order.total_amount)
+            total_amount=float(purchase_order.total_amount),
+            user_id=user_id
         )
 
-    async def create_shipment_tasks(self, shipment: Shipment):
-        """Create tasks related to shipment"""
+    async def create_shipment_tasks(self, shipment: Shipment, user_id: int):
+        """Create tasks related to shipment"""      
+        
+        # Create tracking/monitoring task for logistics manager
+        from app.schemas.task.task_schema import TaskCreate
+        from app.models.shared.enums import TaskPriority, ReferenceType
+        from datetime import datetime, timedelta
+
         # Create delivery task for driver
         if shipment.driver_id:
             await self.automation_service.create_shipment_delivery_task(
                 shipment_id=shipment.id,
-                driver_id=shipment.driver_id
+                driver_id=shipment.driver_id,
+                user_id=user_id or shipment.created_by or 1
             )
-        
-        # Create tracking/monitoring task for logistics manager
-        from app.schemas.task import TaskCreate
-        from app.models.shared.enums import TaskPriority, ReferenceType
-        from datetime import datetime, timedelta
         
         task_type = await self._get_or_create_task_type(
             name="Shipment Monitoring",
@@ -153,8 +124,49 @@ class TaskIntegrationService:
             due_date=shipment.expected_delivery_date
         )
         
-        return await self.task_service.create_task(task_data, created_by=shipment.created_by or 1)
+        return await self.task_service.create_task(task_data, created_by=user_id or shipment.created_by or 1)
 
+    async def create_salary_processing_tasks(self, user_id: int):
+        """Create monthly salary processing tasks"""
+        from datetime import datetime
+        from calendar import monthrange
+        
+        # Only create if we're past 25th of the month
+        current_date = datetime.now()
+        if current_date.day < 25:
+            return
+        
+        # Get active employees
+        result = await self.db.execute(
+            select(Employee).where(Employee.is_active == True)
+        )
+        active_employees = result.scalars().all()
+        
+         # Create salary generation tasks for each employee
+        for employee in active_employees:
+            salary_month_str = f"{current_date.year}-{current_date.month:02d}"
+        
+        # Create a proper date object for comparison
+        salary_month_date = date(current_date.year, current_date.month, 1)
+        
+        # Check if salary already processed this month
+        salary_result = await self.db.execute(
+            select(Salary).where(
+                and_(
+                    Salary.employee_id == employee.id,
+                    Salary.salary_month == salary_month_date  # Use date object instead of string
+                )
+            )
+        )
+        existing_salary = salary_result.scalar_one_or_none()
+        
+        if not existing_salary:
+            await self.automation_service.create_salary_generation_task(
+                employee_id=employee.id,
+                salary_month=salary_month_str,
+                user_id=user_id
+            )
+    
     async def create_maintenance_tasks(self, location_id: int):
         """Create recurring maintenance tasks"""
         maintenance_types = [
@@ -173,7 +185,7 @@ class TaskIntegrationService:
 
     async def _get_or_create_task_type(self, name: str, category: str, description: str):
         """Get existing task type or create new one"""
-        from app.models.task import TaskType
+        from app.models.task.task_type import TaskType
         
         result = await self.db.execute(
             select(TaskType).where(
