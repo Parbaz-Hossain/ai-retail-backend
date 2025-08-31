@@ -22,6 +22,7 @@ from app.schemas.logistics.shipment_schema import (
     ShipmentCreate, ShipmentUpdate, ShipmentResponse,
     ShipmentItemCreate, OTPVerificationRequest
 )
+from app.services.task.task_integration_service import TaskIntegrationService
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,21 @@ class ShipmentService:
                 shipment.total_volume = total_volume
 
             await self.session.commit()
+
+            # CREATE SHIPMENT TASKS
+            task_integration = TaskIntegrationService(self.session)
+            
+            # Create delivery task if driver is assigned
+            if shipment.driver_id:
+                await task_integration.automation_service.create_shipment_delivery_task(
+                    shipment_id=shipment.id,
+                    driver_id=shipment.driver_id,
+                    user_id=user_id
+                )
+            
+            # Create monitoring task for logistics manager
+            await task_integration.create_shipment_tasks(shipment, user_id)
+
             result = await self.session.execute(
                 select(Shipment)
                 .options(
@@ -346,6 +362,15 @@ class ShipmentService:
                 shipment.vehicle_id = vehicle_id
 
             await self.session.commit()
+
+            # CREATE OR UPDATE DELIVERY TASK
+            if driver_id:
+                task_integration = TaskIntegrationService(self.session)
+                await task_integration.automation_service.create_shipment_delivery_task(
+                    shipment_id=shipment_id,
+                    driver_id=driver_id,
+                    user_id=user_id
+                )
             
             # Create tracking update
             await self._create_tracking_update(

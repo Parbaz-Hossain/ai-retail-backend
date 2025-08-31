@@ -1,16 +1,22 @@
+import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_, desc, func, cast, Date
+from datetime import datetime, date, timedelta
+
 from app.models.inventory.stock_movement import StockMovement
+from app.models.inventory.stock_level import StockLevel
 from app.models.inventory.item import Item
 from app.models.organization.location import Location
 from app.schemas.inventory.stock_movement import StockMovementCreate
 from app.schemas.inventory.inventory_response import MovementSummaryResponse
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import StockMovementType
-from datetime import datetime, date, timedelta
+from app.services.task.task_integration_service import TaskIntegrationService
+
+logger = logging.getLogger(__name__)
 
 class StockMovementService:
     def __init__(self, db: AsyncSession):
@@ -55,6 +61,13 @@ class StockMovementService:
         # Update stock levels if auto_update_stock is True
         if auto_update_stock:
             await self._update_stock_level_for_movement(stock_movement, current_user_id)
+
+        # CHECK FOR LOW STOCK AND CREATE TASK
+        await self._check_and_create_low_stock_task(
+            movement_data.item_id, 
+            movement_data.location_id,
+            current_user_id
+        )
 
         await self.db.commit()
         await self.db.refresh(stock_movement)
@@ -389,6 +402,47 @@ class StockMovementService:
             'net_value': float((inbound_data[1] or 0) - (outbound_data[1] or 0))
         }
 
+    async def _check_and_create_low_stock_task(
+        self, 
+        item_id: int, 
+        location_id: int,
+        user_id: int
+    ):
+        """Check if item is below reorder point and create task"""
+        try:
+            # Get current stock level            
+            stock_result = await self.db.execute(
+                select(StockLevel, Item)
+                .join(Item)
+                .where(
+                    and_(
+                        StockLevel.item_id == item_id,
+                        StockLevel.location_id == location_id,
+                        Item.is_active == True
+                    )
+                )
+            )
+            result = stock_result.first()
+            
+            if result:
+                stock_level, item = result
+                
+                # Check if below reorder point
+                if stock_level.current_stock <= item.reorder_point and item.reorder_point > 0:
+                    # Create task using integration service
+                    task_integration = TaskIntegrationService(self.db)
+                    await task_integration.automation_service.create_low_stock_alert_task(
+                        item_id=item_id,
+                        location_id=location_id,
+                        current_stock=float(stock_level.current_stock),
+                        reorder_point=float(item.reorder_point),
+                        user_id=user_id
+                    )
+                    
+        except Exception as e:
+            # Log but don't fail the main operation
+            logger.error(f"Failed to create low stock task: {str(e)}")
+    
     async def _update_stock_level_for_movement(self, movement: StockMovement, current_user_id: int):
         """Update stock level based on movement type"""
         from app.services.inventory.stock_level_service import StockLevelService

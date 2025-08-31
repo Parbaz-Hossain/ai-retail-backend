@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
+
 from app.models.purchase.purchase_order import PurchaseOrder
 from app.models.purchase.purchase_order_item import PurchaseOrderItem
 from app.models.purchase.supplier import Supplier
@@ -18,6 +19,7 @@ from app.schemas.purchase.purchase_order_schema import (
     PurchaseOrderUpdate, 
     PurchaseOrderItemCreate
 )
+from app.services.task.task_integration_service import TaskIntegrationService
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,7 @@ class PurchaseOrderService:
         po_data: PurchaseOrderCreate, 
         user_id: int
     ) -> PurchaseOrder:
-        """Create new purchase order"""
+        """Create new purchase order with optional auto-approval task"""
         try:
             # Verify supplier exists
             supplier_result = await self.session.execute(
@@ -134,6 +136,9 @@ class PurchaseOrderService:
 
             self.session.add_all(po_items)
             await self.session.commit()
+
+            # Auto-submit for approval if requested
+            await self._submit_for_approval(purchase_order.id, user_id)
 
             # Reload PO with items eagerly
             result = await self.session.execute(
@@ -506,3 +511,37 @@ class PurchaseOrderService:
         except Exception as e:
             logger.error(f"Error getting PO summary: {str(e)}")
             return {}
+        
+    async def _submit_for_approval(self, po_id: int, user_id: int) -> bool:
+        """Submit purchase order for approval and create approval task"""
+        try:
+            po = await self.get_purchase_order(po_id)
+            if not po:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Purchase order not found"
+                )
+
+            if po.status != PurchaseOrderStatus.DRAFT:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only draft purchase orders can be submitted for approval"
+                )
+
+            po.status = PurchaseOrderStatus.PENDING
+            
+            # CREATE APPROVAL TASK
+            task_integration = TaskIntegrationService(self.session)
+            await task_integration.create_purchase_approval_task(po, user_id)
+            
+            await self.session.commit()
+
+            logger.info(f"Purchase order submitted for approval: {po_id} by user {user_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error submitting purchase order for approval: {str(e)}")
+            return False
