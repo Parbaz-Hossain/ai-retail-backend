@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_, func, desc
+from datetime import datetime, date
+from decimal import Decimal
+
 from app.models.inventory.reorder_request import ReorderRequest
 from app.models.inventory.reorder_request_item import ReorderRequestItem
 from app.models.inventory.item import Item
@@ -11,8 +14,7 @@ from app.models.organization.location import Location
 from app.schemas.inventory.reorder_request import ReorderRequestCreate, ReorderRequestUpdate, ReorderRequestItemCreate
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import ReorderRequestStatus
-from datetime import datetime, date
-from decimal import Decimal
+from app.services.task.task_integration_service import TaskIntegrationService
 
 class ReorderRequestService:
     def __init__(self, db: AsyncSession):
@@ -52,7 +54,14 @@ class ReorderRequestService:
             await self._add_reorder_item(reorder_request.id, item_data, current_user_id)
 
         await self.db.commit()
+
+        # CREATE APPROVAL TASK
+        task_integration = TaskIntegrationService(self.db)
+        await task_integration.create_reorder_approval_task(reorder_request)
+
         await self.db.refresh(reorder_request)
+
+        # Reload with relationships
         result = await self.db.execute(
             select(ReorderRequest)
             .options(
@@ -224,7 +233,7 @@ class ReorderRequestService:
         await self.db.refresh(reorder_request)
         return reorder_request
 
-    async def auto_generate_reorder_requests(self, location_id: Optional[int] = None) -> List[ReorderRequest]:
+    async def auto_generate_reorder_requests(self, user_id: int, location_id: Optional[int] = None) -> List[ReorderRequest]:
         """Auto-generate reorder requests for items below reorder point"""
         # Get items below reorder point
         query = select(Item, StockLevel).join(StockLevel).where(
@@ -265,6 +274,7 @@ class ReorderRequestService:
 
         # Create reorder requests for each location
         created_requests = []
+        task_integration = TaskIntegrationService(self.db)
         for loc_id, items in items_by_location.items():
             request_items = []
             for item_data in items:
@@ -282,7 +292,9 @@ class ReorderRequestService:
                 items=request_items
             )
 
-            request = await self.create_reorder_request(request_data, current_user_id=1)  # System user
+            request = await self.create_reorder_request(request_data, current_user_id=user_id)  # System user
+             # Create high-priority task for auto-generated requests
+            await task_integration.create_reorder_approval_task(request)
             created_requests.append(request)
 
         return created_requests
