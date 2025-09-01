@@ -2,34 +2,13 @@
 Background tasks for periodic task creation and management
 """
 import asyncio
-from celery import Celery
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from app.core.config import settings
+from app.core.celery_app import celery_app
+from app.core.database import get_async_session
 from app.services.task.task_integration_service import TaskIntegrationService
 from app.services.task.task_dashboard_service import TaskDashboardService
 from app.utils.task_notifications import TaskNotificationService
 
-# Initialize Celery (you'll need to configure this based on your setup)
-celery_app = Celery('tasks', broker=settings.CELERY_BROKER_URL)
-
 # Create async engine for background tasks
-async_engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    future=True,
-    pool_pre_ping=True,
-)
-
-async_session_maker = async_sessionmaker(
-    bind=async_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
-
-async def get_async_db_session():
-    """Get async database session for background tasks"""
-    async with async_session_maker() as session:
-        return session
 
 def run_async_task(coro):
     """Helper function to run async coroutines in Celery tasks"""
@@ -44,7 +23,7 @@ def run_async_task(coro):
 def check_low_stock_and_create_tasks():
     """Periodic task to check stock levels and create alert tasks"""
     async def _check_low_stock():
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             integration_service = TaskIntegrationService(db)
             await integration_service.check_and_create_low_stock_tasks()
@@ -60,7 +39,7 @@ def check_low_stock_and_create_tasks():
 def create_monthly_salary_tasks():
     """Monthly task to create salary processing tasks"""
     async def _create_salary_tasks():
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             integration_service = TaskIntegrationService(db)
             await integration_service.create_salary_processing_tasks()
@@ -79,7 +58,7 @@ def create_maintenance_tasks_for_all_locations():
         from app.models.organization import Location
         from sqlalchemy import select
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             integration_service = TaskIntegrationService(db)
             
@@ -107,7 +86,7 @@ def check_overdue_tasks_and_notify():
         from sqlalchemy import select, and_
         from datetime import datetime
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             notification_service = TaskNotificationService(db)
             
@@ -145,7 +124,7 @@ def check_tasks_due_soon():
         from sqlalchemy import select, and_
         from datetime import datetime, timedelta
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             notification_service = TaskNotificationService(db)
             
@@ -185,7 +164,7 @@ def send_daily_task_digests():
         from app.models.auth import User
         from sqlalchemy import select
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             notification_service = TaskNotificationService(db)
             
@@ -218,7 +197,7 @@ def escalate_overdue_high_priority_tasks():
         from sqlalchemy import select, and_
         from datetime import datetime, timedelta
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             notification_service = TaskNotificationService(db)
             
@@ -285,7 +264,7 @@ def generate_task_analytics_cache():
         import json
         from app.core.redis import redis_client  # Assuming you have Redis setup
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             dashboard_service = TaskDashboardService(db)
             
@@ -318,7 +297,7 @@ def cleanup_completed_tasks():
         from sqlalchemy import select, and_, func
         from datetime import datetime, timedelta
         
-        db = await get_async_db_session()
+        db = await get_async_session()
         try:
             # Archive tasks completed more than 6 months ago
             archive_threshold = datetime.utcnow() - timedelta(days=180)
@@ -364,7 +343,8 @@ def cleanup_completed_tasks():
 celery_app.conf.beat_schedule = {
     'check-low-stock-every-hour': {
         'task': 'app.workers.celery_tasks.task_management_tasks.check_low_stock_and_create_tasks',
-        'schedule': 3600.0,  # Every hour
+        # 'schedule': 3600.0,  # Every hour
+        'schedule': 60.0,  # Every minute (for testing purposes)
     },
     'create-monthly-salary-tasks': {
         'task': 'app.workers.celery_tasks.task_management_tasks.create_monthly_salary_tasks',
