@@ -100,7 +100,7 @@ class TaskIntegrationService:
             await self.automation_service.create_shipment_delivery_task(
                 shipment_id=shipment.id,
                 driver_id=shipment.driver_id,
-                user_id=user_id or shipment.created_by or 1
+                user_id=user_id or 1
             )
         
         task_type = await self._get_or_create_task_type(

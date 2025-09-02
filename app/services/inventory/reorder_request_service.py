@@ -54,11 +54,6 @@ class ReorderRequestService:
             await self._add_reorder_item(reorder_request.id, item_data, current_user_id)
 
         await self.db.commit()
-
-        # CREATE APPROVAL TASK
-        task_integration = TaskIntegrationService(self.db)
-        await task_integration.create_reorder_approval_task(reorder_request)
-
         await self.db.refresh(reorder_request)
 
         # Reload with relationships
@@ -76,7 +71,14 @@ class ReorderRequestService:
             )
             .where(ReorderRequest.id == reorder_request.id)
         )
-        return result.scalars().unique().one()
+
+        reorder_request = result.scalars().unique().one()
+        
+        # CREATE APPROVAL TASK
+        task_integration = TaskIntegrationService(self.db)
+        await task_integration.create_reorder_approval_task(reorder_request)
+        
+        return reorder_request
 
     async def _generate_request_number(self) -> str:
         """Generate unique request number"""
