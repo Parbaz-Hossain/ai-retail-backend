@@ -110,17 +110,9 @@ class ShipmentService:
 
             # CREATE SHIPMENT TASKS
             task_integration = TaskIntegrationService(self.session)
-            
-            # Create delivery task if driver is assigned
-            if shipment.driver_id:
-                await task_integration.automation_service.create_shipment_delivery_task(
-                    shipment_id=shipment.id,
-                    driver_id=shipment.driver_id,
-                    user_id=user_id
-                )
-            
+                        
             # Create monitoring task for logistics manager
-            await task_integration.create_shipment_tasks(shipment, user_id)
+            await task_integration.create_shipment_tasks(shipment, user_id=user_id)
 
             result = await self.session.execute(
                 select(Shipment)
@@ -129,7 +121,10 @@ class ShipmentService:
                     selectinload(Shipment.to_location),
                     selectinload(Shipment.driver)
                         .selectinload(Driver.employee)
-                        .selectinload(Employee.department),  
+                        .options(
+                            selectinload(Employee.department),
+                            selectinload(Employee.location)  # ← Add this line
+                        ), 
                     selectinload(Shipment.vehicle),
                     selectinload(Shipment.items)
                         .selectinload(ShipmentItem.item)     

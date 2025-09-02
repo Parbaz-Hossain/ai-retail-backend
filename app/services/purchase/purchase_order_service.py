@@ -143,6 +143,7 @@ class PurchaseOrderService:
             # Reload PO with items eagerly
             result = await self.session.execute(
                 select(PurchaseOrder)
+                .options(selectinload(PurchaseOrder.supplier))
                 .options(selectinload(PurchaseOrder.items))
                 .where(PurchaseOrder.id == purchase_order.id)
             )
