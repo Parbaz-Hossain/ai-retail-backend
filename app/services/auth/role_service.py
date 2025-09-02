@@ -3,7 +3,8 @@ from typing import Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.models.auth.role import Role
 from app.models.auth.permission import Permission
 from app.models.auth.role_permission import RolePermission
@@ -19,7 +20,12 @@ class RoleService:
         """Get role by ID"""
         try:
             result = await self.session.execute(
-                select(Role).where(
+                select(Role)
+                .options(
+                    selectinload(Role.role_permissions.and_(RolePermission.is_active == True))
+                    .selectinload(RolePermission.permission)
+                )
+                .where(
                     Role.id == role_id,
                     Role.is_deleted == False
                 )
