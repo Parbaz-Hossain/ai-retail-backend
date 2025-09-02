@@ -70,7 +70,6 @@ class TransferService:
         )
         return result.scalar_one_or_none()
 
-
     async def _generate_transfer_number(self) -> str:
         """Generate unique transfer number"""
         today = date.today()

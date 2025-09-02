@@ -30,7 +30,7 @@ api_router.include_router(salary.router, prefix="/hr/salary", tags=["Human Resou
 api_router.include_router(holidays.router, prefix="/hr/holiday", tags=["Human Resource"])
 
 # Inventory routes
-api_router.include_router(analytics.router, prefix="/inventory/analytics", tags=["Inventory"])
+# api_router.include_router(analytics.router, prefix="/inventory/analytics", tags=["Inventory"])
 api_router.include_router(categories.router, prefix="/inventory/category", tags=["Inventory"])
 api_router.include_router(inventory_counts.router, prefix="/inventory/inventory-count", tags=["Inventory"])
 api_router.include_router(items.router, prefix="/inventory/item", tags=["Inventory"])
