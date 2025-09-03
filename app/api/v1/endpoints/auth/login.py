@@ -49,7 +49,7 @@ async def login(
         # Create tokens
         tokens = await auth_service.create_tokens(
             user=user,
-            device_info=login_data.device_info,
+            device_info="",
             ip_address=req_context["ip_address"]
         )
         

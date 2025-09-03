@@ -25,7 +25,7 @@ async def generate_employee_salary(
 @router.post("/generate-bulk")
 async def generate_bulk_salary(
     background_tasks: BackgroundTasks,
-    salary_month: date,
+    salary_month: date = Query(..., description="Salary month in YYYY-MM-dd format"),
     location_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_async_session),

@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.biometric import fingerprint
+from app.api.v1.endpoints.dashboard import dashboard
 from app.api.v1.endpoints.engagement import chat, faq, user_history
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.organization import departments, locations
 from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
+from app.api.v1.endpoints.reports import reports
 from app.api.v1.endpoints.task import tasks, task_types, webhooks, mobile
 
 api_router = APIRouter()
@@ -63,3 +65,9 @@ api_router.include_router(tasks.router, prefix="/task-management/task", tags=["T
 api_router.include_router(task_types.router, prefix="/task-management/task-type", tags=["Task Management"])
 api_router.include_router(webhooks.router, prefix="/task-management/webhook", tags=["Task Management"])
 api_router.include_router(mobile.router, prefix="/task-management/mobile", tags=["Task Management"])
+
+# Dashboard route
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+
+# Report routes
+api_router.include_router(reports.router, prefix="/reports", tags=["Reports"])
