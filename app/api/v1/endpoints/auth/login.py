@@ -12,6 +12,7 @@ from app.schemas.auth.user import UserResponse
 from app.services.auth.auth_service import AuthService
 from app.services.auth.user_service import UserService
 from app.api.dependencies import get_current_user
+from app.utils.rate_limiter import check_login_rate_limit
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,7 +21,8 @@ logger = logging.getLogger(__name__)
 async def login(
     request: Request,
     login_data: LoginRequest,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+     _: None = Depends(check_login_rate_limit)
 ):
     """Authenticate user and return tokens"""
     try:

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to {{ app_name }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .welcome-message {
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .highlight {
+            color: #667eea;
+            font-weight: 600;
+        }
+        .features {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        .features h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            position: relative;
+            padding-left: 25px;
+        }
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #dee2e6;
+        }
+        .footer p {
+            margin: 5px 0;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+            }
+            .header, .content, .footer {
+                padding: 20px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to {{ app_name }}!</h1>
+        </div>
+        
+        <div class="content">
+            <p class="welcome-message">
+                Hello <span class="highlight">{{ username }}</span>,
+            </p>
+            
+            <p>Welcome to the future of retail management! We're thrilled to have you join our community of forward-thinking retailers who are transforming their businesses with AI-powered insights.</p>
+            
+            <div class="features">
+                <h3>🚀 What you can do with {{ app_name }}:</h3>
+                <ul class="feature-list">
+                    <li>Smart inventory management with AI predictions</li>
+                    <li>Real-time sales analytics and reporting</li>
+                    <li>Customer behavior analysis and insights</li>
+                    <li>Automated supply chain optimization</li>
+                    <li>Advanced forecasting and demand planning</li>
+                    <li>Seamless integration with existing systems</li>
+                </ul>
+            </div>
+            
+            <p>Your account is now active and ready to use. You can start exploring all the powerful features that will help streamline your retail operations and boost your business performance.</p>
+            
+            <div style="text-align: center;">
+                <a href="http://127.0.0.1:8000" class="cta-button">Get Started Now</a>
+            </div>
+            
+            <p><strong>Need help getting started?</strong><br>
+            Our support team is here to help you every step of the way. Don't hesitate to reach out if you have any questions or need assistance setting up your account.</p>
+        </div>
+        
+        <div class="footer">
+            <p><strong>{{ app_name }}</strong></p>
+            <p>Revolutionizing retail with artificial intelligence</p>
+            
+            <div class="social-links">
+                <a href="#">Help Center</a> |
+                <a href="#">Documentation</a> |
+                <a href="#">Contact Support</a>
+            </div>
+            
+            <p>This email was sent to you because you created an account with {{ app_name }}.</p>
+            <p>© 2025 {{ app_name }}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
