@@ -1,6 +1,13 @@
 """
 Initialize default task types in the database
 """
+import os
+import sys
+
+# Add project root to Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+sys.path.insert(0, project_root)
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.models.task.task_type import TaskType
