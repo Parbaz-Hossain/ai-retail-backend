@@ -155,6 +155,9 @@ class RoleService:
         try:
             result = await self.session.execute(
                 select(Role)
+                .options(
+                    selectinload(Role.role_permissions).selectinload(RolePermission.permission)
+                )
                 .where(Role.is_deleted == False)
                 .offset(skip)
                 .limit(limit)
