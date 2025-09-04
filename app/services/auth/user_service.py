@@ -61,6 +61,25 @@ class UserService:
             logger.error(f"Error getting user by username: {str(e)}")
             return None
     
+    async def get_users_by_roles(self, role_names: list) -> list:
+        """Get active users by role names"""
+
+        result = await self.session.execute(
+            select(User)
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))
+            .where(User.is_active == True)
+        )
+        all_users = result.scalars().all()
+
+        # Filter users by roles
+        filtered_users = []
+        for user in all_users:
+            user_role_names = [ur.role.name.upper() for ur in user.user_roles if ur.is_active]
+            if any(role.upper() in user_role_names for role in role_names):
+                filtered_users.append(user)
+
+        return filtered_users
+    
     async def create_user(self, user_create: UserCreate, created_by: Optional[int] = None) -> User:
         """Create new user"""
         try:

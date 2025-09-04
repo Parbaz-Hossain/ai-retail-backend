@@ -53,8 +53,9 @@ class TransferService:
         for item_data in transfer_data.items:
             await self._add_transfer_item(transfer.id, item_data, transfer_data.from_location_id, current_user_id)
 
-        await self.db.commit()
+        await self.db.commit()        
         await self.db.refresh(transfer)
+
         result = await self.db.execute(
             select(Transfer)
             .options(
@@ -68,7 +69,14 @@ class TransferService:
             )
             .where(Transfer.id == transfer.id)
         )
-        return result.scalar_one_or_none()
+        transfer =  result.scalar_one_or_none()
+    
+        # CREATE APPROVAL TASK WITH NOTIFICATIONS
+        from app.services.task.task_integration_service import TaskIntegrationService
+        task_integration = TaskIntegrationService(self.db)
+        await task_integration.create_transfer_approval_task(transfer, current_user_id)
+        
+        return transfer
 
     async def _generate_transfer_number(self) -> str:
         """Generate unique transfer number"""
@@ -123,7 +131,8 @@ class TransferService:
                 selectinload(Transfer.to_location),
                 selectinload(Transfer.items).selectinload(TransferItem.item).options(
                     selectinload(Item.category),      
-                    selectinload(Item.stock_levels),   
+                    selectinload(Item.stock_levels),
+                    selectinload(Item.stock_type) 
                 )
             )
             .where(Transfer.id == transfer_id)
@@ -146,6 +155,7 @@ class TransferService:
                 selectinload(Transfer.items).selectinload(TransferItem.item).options(
                     selectinload(Item.category),       # preload category
                     selectinload(Item.stock_levels),   # preload stock_levels
+                    selectinload(Item.stock_type)
                 )
             )
             .order_by(desc(Transfer.transfer_date))

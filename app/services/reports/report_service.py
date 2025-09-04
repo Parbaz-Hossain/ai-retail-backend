@@ -64,19 +64,15 @@ class ReportService:
                 Item.unit_cost,
                 (StockLevel.current_stock * Item.unit_cost).label("stock_value"),
                 case(
-                    [
-                        (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
-                        (StockLevel.current_stock <= Item.reorder_point, "LOW"),
-                        (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
-                    ],
+                    (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
+                    (StockLevel.current_stock <= Item.reorder_point, "LOW"),
+                    (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
                     else_="NORMAL"
                 ).label("stock_status"),
                 case(
-                    [
-                        (StockLevel.current_stock <= 0, "CRITICAL"),
-                        (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
-                        (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
-                    ],
+                    (StockLevel.current_stock <= 0, "CRITICAL"),
+                    (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
+                    (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
                     else_="LOW"
                 ).label("priority"),
                 Item.unit_type.label("unit")

@@ -2,10 +2,10 @@
 Fixed Background tasks with proper asyncio handling for Celery
 """
 import asyncio
-from app.api.dependencies import get_current_active_user
 from app.core.celery_app import celery_app
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import settings
+from app.services.auth.user_service import UserService
 
 # Create async engine for background tasks with proper pool settings
 async_engine = create_async_engine(
@@ -74,6 +74,145 @@ def run_async_in_celery(coro):
         raise
 
 @celery_app.task(bind=True)
+def send_daily_hr_tasks(self):
+    """Daily task to create and notify HR managers about daily tasks"""
+    async def _send_daily_hr_tasks():
+        async with async_session_maker() as db:
+            try:
+                from app.services.task.task_integration_service import TaskIntegrationService
+                from app.services.communication.email_service import EmailService
+                from app.services.notification.notification_service import NotificationService
+                from app.services.auth.user_service import UserService
+                
+                integration_service = TaskIntegrationService(db)
+                email_service = EmailService()
+                notification_service = NotificationService(db)
+                user_service = UserService(db)
+                
+                # Get HR managers
+                hr_managers = await user_service.get_users_by_roles(["HR_MANAGER"])
+                
+                for hr_manager in hr_managers:
+                    # Create daily attendance processing task
+                    from app.schemas.task.task_schema import TaskCreate
+                    from app.models.shared.enums import TaskPriority
+                    from datetime import datetime, timedelta, date
+                    
+                    task_data = TaskCreate(
+                        title=f"Daily Attendance Processing - {date.today()}",
+                        description="Process and review daily employee attendance records",
+                        task_type_id=5,  # Assuming HR task type ID
+                        priority=TaskPriority.HIGH,
+                        assigned_to=hr_manager.id,
+                        due_date=datetime.utcnow() + timedelta(hours=8)
+                    )
+                    
+                    task = await integration_service.task_service.create_task(task_data, created_by=1)
+                    
+                    # Send email notification
+                    await email_service.send_email(
+                        to_email=hr_manager.email,
+                        subject="Daily HR Task - Attendance Processing",
+                        html_content=f"""
+                        <h2>Daily HR Task Assigned</h2>
+                        <p>Your daily attendance processing task has been created:</p>
+                        <ul>
+                            <li><strong>Task:</strong> {task.title}</li>
+                            <li><strong>Priority:</strong> {task.priority.value}</li>
+                            <li><strong>Due:</strong> {task.due_date.strftime('%Y-%m-%d %H:%M')}</li>
+                        </ul>
+                        <p>Please complete this task in your dashboard.</p>
+                        """,
+                        text_content=f"Daily HR Task: {task.title}"
+                    )
+                    
+                    # Send real-time UI notification
+                    await notification_service.send_real_time_notification(
+                        user_id=hr_manager.id,
+                        notification_type="DAILY_TASK",
+                        title="Daily HR Task Assigned",
+                        message=f"Daily attendance processing task for {date.today()}",
+                        data={"task_id": task.id}
+                    )
+                
+                return f"✅ Daily HR tasks sent to {len(hr_managers)} managers"
+                
+            except Exception as e:
+                print(f"❌ Error sending daily HR tasks: {e}")
+                raise
+    
+    return run_async_in_celery(_send_daily_hr_tasks())
+
+@celery_app.task(bind=True)
+def send_daily_inventory_tasks(self):
+    """Daily task to create and notify inventory managers"""
+    async def _send_daily_inventory_tasks():
+        async with async_session_maker() as db:
+            try:
+                from app.services.task.task_integration_service import TaskIntegrationService
+                from app.services.communication.email_service import EmailService
+                from app.services.notification.notification_service import NotificationService
+                
+                integration_service = TaskIntegrationService(db)
+                email_service = EmailService()
+                notification_service = NotificationService(db)                
+                user_service = UserService(db)
+                
+                # Get HR managers
+                inventory_managers = await user_service.get_users_by_roles(["INVENTORY_MANAGER"])
+                
+                for manager in inventory_managers:
+                    # Create daily inventory count task
+                    from app.schemas.task.task_schema import TaskCreate
+                    from app.models.shared.enums import TaskPriority
+                    from datetime import datetime, timedelta, date
+                    
+                    task_data = TaskCreate(
+                        title=f"Daily Inventory Count - {date.today()}",
+                        description="Perform daily inventory count and stock verification",
+                        task_type_id=3,  # Assuming inventory task type ID
+                        priority=TaskPriority.MEDIUM,
+                        assigned_to=manager.id,
+                        due_date=datetime.utcnow() + timedelta(hours=12)
+                    )
+                    
+                    task = await integration_service.task_service.create_task(task_data, created_by=1)
+                    
+                    # Send email notification
+                    await email_service.send_email(
+                        to_email=manager.email,
+                        subject="Daily Inventory Task - Stock Count",
+                        html_content=f"""
+                        <h2>Daily Inventory Task Assigned</h2>
+                        <p>Your daily inventory count task has been created:</p>
+                        <ul>
+                            <li><strong>Task:</strong> {task.title}</li>
+                            <li><strong>Priority:</strong> {task.priority.value}</li>
+                            <li><strong>Due:</strong> {task.due_date.strftime('%Y-%m-%d %H:%M')}</li>
+                        </ul>
+                        <p>Please complete the stock count in your dashboard.</p>
+                        """,
+                        text_content=f"Daily Inventory Task: {task.title}"
+                    )
+                    
+                    # Send real-time UI notification
+                    await notification_service.send_real_time_notification(
+                        user_id=manager.id,
+                        notification_type="DAILY_TASK",
+                        title="Daily Inventory Task Assigned",
+                        message=f"Daily inventory count task for {date.today()}",
+                        data={"task_id": task.id}
+                    )
+                
+                return f"✅ Daily inventory tasks sent to {len(inventory_managers)} managers"
+                
+            except Exception as e:
+                print(f"❌ Error sending daily inventory tasks: {e}")
+                raise
+    
+    return run_async_in_celery(_send_daily_inventory_tasks())
+
+@celery_app.task(bind=True)
 def check_low_stock_and_create_tasks(self):
     """Periodic task to check stock levels and create alert tasks"""
     async def _check_low_stock():
@@ -82,7 +221,7 @@ def check_low_stock_and_create_tasks(self):
                 from app.services.task.task_integration_service import TaskIntegrationService
                 
                 integration_service = TaskIntegrationService(db)
-                await integration_service.check_and_create_low_stock_tasks(user_id=1)
+                await integration_service.check_and_create_low_stock_tasks(user_id=1) # System user
                 return "✅ Low stock check completed and tasks created"
             except Exception as e:
                 print(f"❌ Error in low stock check: {e}")
