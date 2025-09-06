@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.item_service import ItemService
 from app.schemas.inventory.item import Item, ItemCreate, ItemUpdate
 from app.schemas.inventory.stock_level import LowStockItem
@@ -25,10 +26,10 @@ async def create_item(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[Item])
+@router.get("/", response_model=PaginatedResponse[Item])
 async def get_items(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
     category_id: Optional[int] = Query(None),
     stock_type_id: Optional[int] = Query(None),
@@ -38,8 +39,8 @@ async def get_items(
     """Get all items with optional filters"""
     service = ItemService(db)
     items = await service.get_items(
-        skip=skip, 
-        limit=limit, 
+        page_index=page_index,
+        page_size=page_size,
         search=search,
         category_id=category_id,
         stock_type_id=stock_type_id,

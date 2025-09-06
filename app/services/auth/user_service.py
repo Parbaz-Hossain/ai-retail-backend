@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import func, select, and_, or_
 from sqlalchemy.orm import selectinload
 from app.models.auth.user import User
 from app.models.auth.role import Role
@@ -11,7 +11,7 @@ from app.models.auth.permission import Permission
 from app.models.auth.user_role import UserRole
 from app.models.auth.role_permission import RolePermission
 from app.core.security import get_password_hash, generate_password_reset_token
-from app.schemas.auth.user import UserCreate, UserUpdate
+from app.schemas.auth.user import UserCreate, UserResponse, UserUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -313,28 +313,70 @@ class UserService:
             logger.error(f"Error removing role: {str(e)}")
             return False
     
-    async def get_users(self, skip: int = 0, limit: int = 100, search: str = None) -> List[User]:
-        """Get paginated list of users"""
+    async def get_users(
+        self,
+        page_index: int = 1,
+        page_size: int = 100,
+        search: str = None
+    ) -> Dict[str, Any]:
+        """Get paginated list of users with roles"""
         try:
-            query = select(User).where(User.is_deleted == False)
+            conditions = [User.is_deleted == False]
             
             if search:
-                query = query.where(
+                search_term = f"%{search}%"
+                conditions.append(
                     or_(
-                        User.email.ilike(f"%{search}%"),
-                        User.username.ilike(f"%{search}%"),
-                        User.full_name.ilike(f"%{search}%")
+                        User.email.ilike(search_term),
+                        User.username.ilike(search_term),
+                        User.full_name.ilike(search_term)
                     )
                 )
             
-            query = query.offset(skip).limit(limit)
-            result = await self.session.execute(query)
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(User.id)).where(*conditions)
+            )
             
-            return result.scalars().all()
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            users = await self.session.scalars(
+                select(User)
+                .where(*conditions)
+                .offset(skip)
+                .limit(page_size)
+            )
+            
+            # Get roles for each user and create UserResponse objects
+            user_responses = []
+            for user in users.all():
+                roles = await self.get_user_roles(user.id)
+                user_response = UserResponse(
+                    **user.__dict__,
+                    roles=[
+                        {"id": role.id, "name": role.name, "description": role.description}
+                        for role in roles
+                    ]
+                )
+                user_responses.append(user_response)
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": user_responses
+            }
             
         except Exception as e:
             logger.error(f"Error getting users: {str(e)}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
     
     async def count_users(self, search: str = None) -> int:
         """Count users"""

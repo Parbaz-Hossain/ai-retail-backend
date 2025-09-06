@@ -5,13 +5,6 @@ from pydantic.generics import GenericModel
 T = TypeVar("T")
 
 class PaginatedResponse(GenericModel, Generic[T]):
-    data: List[T]
-    total: int
-    skip: int
-    limit: int
-
-
-class PaginatedResponseNew(GenericModel, Generic[T]):
     page_index: int
     page_size: int
     count: int

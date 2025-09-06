@@ -185,8 +185,8 @@ class PurchaseOrderService:
 
     async def get_purchase_orders(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         status: Optional[PurchaseOrderStatus] = None,
         supplier_id: Optional[int] = None,
         start_date: Optional[date] = None,
@@ -224,26 +224,29 @@ class PurchaseOrderService:
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.session.execute(count_query)
-            total = total_result.scalar()
+            total = total_result.scalar() or 0
 
-            # Apply pagination and execute
-            query = query.offset(skip).limit(limit).order_by(PurchaseOrder.order_date.desc())
+            # Calculate offset and apply pagination
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size).order_by(PurchaseOrder.order_date.desc())
             result = await self.session.execute(query)
             purchase_orders = result.scalars().all()
 
             return {
-                "data": purchase_orders,
-                "total": total,
-                "skip": skip,
-                "limit": limit
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": purchase_orders
             }
 
         except Exception as e:
             logger.error(f"Error getting purchase orders: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to get purchase orders"
-            )
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_purchase_order(
         self,

@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 from decimal import Decimal
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.reorder_request_service import ReorderRequestService
 from app.schemas.inventory.reorder_request import ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate
 from app.models.shared.enums import ReorderRequestStatus
@@ -26,10 +27,10 @@ async def create_reorder_request(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[ReorderRequest])
+@router.get("/", response_model=PaginatedResponse[ReorderRequest])
 async def get_reorder_requests(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     location_id: Optional[int] = Query(None),
     status: Optional[ReorderRequestStatus] = Query(None),
     priority: Optional[str] = Query(None),
@@ -38,8 +39,8 @@ async def get_reorder_requests(
     """Get all reorder requests with optional filters"""
     service = ReorderRequestService(db)
     requests = await service.get_reorder_requests(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         location_id=location_id,
         status=status,
         priority=priority

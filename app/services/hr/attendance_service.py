@@ -1,9 +1,9 @@
 import logging
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from datetime import date, datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.attendance import Attendance
@@ -136,30 +136,59 @@ class AttendanceService:
     # ---------- Attendance Retrieval ----------
     async def get_attendance(
         self,
+        page_index: int = 1,
+        page_size: int = 100,
         employee_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        status: Optional[AttendanceStatus] = None,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Attendance]:
+        status: Optional[AttendanceStatus] = None
+    ) -> Dict[str, Any]:
+        """Get paginated attendance records with filtering"""
         try:
-            query = select(Attendance).options(selectinload(Attendance.employee))
+            conditions = []
+            
             if employee_id:
-                query = query.where(Attendance.employee_id == employee_id)
+                conditions.append(Attendance.employee_id == employee_id)
             if start_date:
-                query = query.where(Attendance.attendance_date >= start_date)
+                conditions.append(Attendance.attendance_date >= start_date)
             if end_date:
-                query = query.where(Attendance.attendance_date <= end_date)
+                conditions.append(Attendance.attendance_date <= end_date)
             if status:
-                query = query.where(Attendance.status == status)
+                conditions.append(Attendance.status == status)
 
-            result = await self.session.execute(query.order_by(Attendance.attendance_date.desc()).offset(skip).limit(limit))
-            return result.scalars().all()
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(Attendance.id)).where(*conditions)
+            )
+
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+
+            # Get paginated data
+            attendances = await self.session.scalars(
+                select(Attendance)
+                .options(selectinload(Attendance.employee))
+                .where(*conditions)
+                .order_by(Attendance.attendance_date.desc())
+                .offset(skip)
+                .limit(page_size)
+            )
+
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": attendances.all()
+            }
 
         except Exception as e:
             logger.error(f"Error fetching attendance: {e}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     # ---------- Summary ----------
     async def get_employee_attendance_summary(self, employee_id: int, month: int, year: int) -> Dict:

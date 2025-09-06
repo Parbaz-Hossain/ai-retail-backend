@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_level_service import StockLevelService
 from app.schemas.inventory.stock_level import StockLevel, StockLevelCreate, StockLevelUpdate
 from app.schemas.inventory.inventory_response import StockSummaryResponse
@@ -25,10 +26,10 @@ async def create_stock_level(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[StockLevel])
+@router.get("/", response_model=PaginatedResponse[StockLevel])
 async def get_stock_levels(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     location_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
     low_stock_only: bool = Query(False),
@@ -37,8 +38,8 @@ async def get_stock_levels(
     """Get all stock levels with optional filters"""
     service = StockLevelService(db)
     stock_levels = await service.get_stock_levels(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         location_id=location_id,
         item_id=item_id,
         low_stock_only=low_stock_only

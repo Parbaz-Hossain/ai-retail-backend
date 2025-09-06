@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.schemas.auth.role import RoleCreate, RoleUpdate, Role
 from app.schemas.auth.permission import PermissionResponse
-from app.schemas.common.pagination import PaginatedResponseNew
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.auth.permission_service import PermissionService
 from app.services.auth.role_service import RoleService
 from app.api.dependencies import get_current_superuser
@@ -34,18 +34,21 @@ async def create_role(
             detail="Failed to create role"
         )
 
-@router.get("/", response_model=List[Role])
+@router.get("/", response_model=PaginatedResponse[Role])
 async def get_roles(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_superuser)
 ):
-    """Get roles list (admin only)"""
+    """Get roles list with pagination (admin only)"""
     try:
         role_service = RoleService(session)
-        roles = await role_service.get_roles(skip=skip, limit=limit)
-        return roles
+        result = await role_service.get_roles(
+            page_index=page_index,
+            page_size=page_size
+        )
+        return result
         
     except Exception as e:
         logger.error(f"Get roles error: {str(e)}")
@@ -54,7 +57,7 @@ async def get_roles(
             detail="Failed to get roles"
         )
 
-@router.get("/all-permissions", response_model=PaginatedResponseNew[PermissionResponse])
+@router.get("/all-permissions", response_model=PaginatedResponse[PermissionResponse])
 async def get_permissions(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=1000),

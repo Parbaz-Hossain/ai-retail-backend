@@ -4,6 +4,7 @@ from typing import List, Optional, Dict
 from decimal import Decimal
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.transfer_service import TransferService
 from app.schemas.inventory.transfer import Transfer, TransferCreate, TransferUpdate
 from app.models.shared.enums import TransferStatus
@@ -26,10 +27,10 @@ async def create_transfer(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[Transfer])
+@router.get("/", response_model=PaginatedResponse[Transfer])
 async def get_transfers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     from_location_id: Optional[int] = Query(None),
     to_location_id: Optional[int] = Query(None),
     status: Optional[TransferStatus] = Query(None),
@@ -38,8 +39,8 @@ async def get_transfers(
     """Get all transfers with optional filters"""
     service = TransferService(db)
     transfers = await service.get_transfers(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         from_location_id=from_location_id,
         to_location_id=to_location_id,
         status=status

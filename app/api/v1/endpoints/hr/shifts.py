@@ -3,6 +3,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.shift_service import ShiftService
 from app.schemas.hr.shift_schema import (
     ShiftTypeCreate, ShiftTypeUpdate, ShiftTypeResponse,
@@ -23,14 +24,21 @@ async def create_shift_type(
     service = ShiftService(session)
     return await service.create_shift_type(shift_type, current_user.id)
 
-@router.get("/types", response_model=List[ShiftTypeResponse])
+@router.get("/types", response_model=PaginatedResponse[ShiftTypeResponse])
 async def get_shift_types(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     is_active: Optional[bool] = Query(None),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """Get all shift types"""
+    """Get all shift types with pagination"""
     service = ShiftService(session)
-    return await service.get_shift_types(is_active)
+    return await service.get_shift_types(
+        page_index=page_index,
+        page_size=page_size,
+        is_active=is_active
+    )
+
 
 @router.get("/types/{shift_type_id}", response_model=ShiftTypeResponse)
 async def get_shift_type(

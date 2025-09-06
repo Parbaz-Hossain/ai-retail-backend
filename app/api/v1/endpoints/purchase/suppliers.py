@@ -34,8 +34,8 @@ async def create_supplier(
 
 @router.get("/", response_model=PaginatedResponse[SupplierResponse])
 async def get_suppliers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
     is_active: bool = Query(None),
     session: AsyncSession = Depends(get_async_session)
@@ -44,8 +44,8 @@ async def get_suppliers(
     try:
         supplier_service = SupplierService(session)
         result = await supplier_service.get_suppliers(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             search=search,
             is_active=is_active
         )
@@ -60,7 +60,8 @@ async def get_suppliers(
 @router.get("/{supplier_id}", response_model=SupplierResponse)
 async def get_supplier(
     supplier_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get supplier by ID"""
     try:
@@ -193,7 +194,8 @@ async def remove_item_from_supplier(
 @router.get("/{supplier_id}/items", response_model=List[ItemSupplierResponse])
 async def get_supplier_items(
     supplier_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get all items for a supplier"""
     try:

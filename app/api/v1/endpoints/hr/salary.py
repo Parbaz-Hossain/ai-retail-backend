@@ -5,6 +5,7 @@ from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_active_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.salary_service import SalaryService
 from app.schemas.hr.salary_schema import SalaryCreate, SalaryUpdate, SalaryResponse, SalaryPaymentUpdate
 from app.models.auth.user import User
@@ -58,17 +59,22 @@ async def mark_salary_paid(
         current_user.id
     )
 
-@router.get("/employee/{employee_id}", response_model=List[SalaryResponse])
+@router.get("/employee/{employee_id}", response_model=PaginatedResponse[SalaryResponse])
 async def get_employee_salaries(
     employee_id: int,
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(12, ge=1, le=50),
     year: Optional[int] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(12, ge=1, le=50),
     session: AsyncSession = Depends(get_async_session)
 ):
-    """Get employee salary history"""
+    """Get employee salary history with pagination"""
     service = SalaryService(session)
-    return await service.get_employee_salaries(employee_id, year, skip, limit)
+    return await service.get_employee_salaries(
+        employee_id=employee_id,
+        page_index=page_index,
+        page_size=page_size,
+        year=year
+    )
 
 @router.get("/reports")
 async def get_salary_reports(

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.inventory_count_service import InventoryCountService
 from app.schemas.inventory.inventory_count import InventoryCount, InventoryCountCreate, InventoryCountUpdate
 from app.models.auth.user import User
@@ -24,10 +25,10 @@ async def create_inventory_count(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[InventoryCount])
+@router.get("/", response_model=PaginatedResponse[InventoryCount])
 async def get_inventory_counts(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     location_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_async_session)
@@ -35,8 +36,8 @@ async def get_inventory_counts(
     """Get all inventory counts with optional filters"""
     service = InventoryCountService(db)
     counts = await service.get_inventory_counts(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         location_id=location_id,
         status=status
     )

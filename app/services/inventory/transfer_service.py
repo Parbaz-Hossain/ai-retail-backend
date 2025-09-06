@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -141,41 +141,63 @@ class TransferService:
 
     async def get_transfers(
         self, 
-        skip: int = 0, 
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         from_location_id: Optional[int] = None,
         to_location_id: Optional[int] = None,
         status: Optional[TransferStatus] = None
-    ) -> List[Transfer]:
-        query = (
-        select(Transfer)
-            .options(
-                selectinload(Transfer.from_location),
-                selectinload(Transfer.to_location),
-                selectinload(Transfer.items).selectinload(TransferItem.item).options(
-                    selectinload(Item.category),       # preload category
-                    selectinload(Item.stock_levels),   # preload stock_levels
-                    selectinload(Item.stock_type)
+    ) -> Dict[str, Any]:
+        """Get transfers with pagination"""
+        try:
+            query = (
+                select(Transfer)
+                .options(
+                    selectinload(Transfer.from_location),
+                    selectinload(Transfer.to_location),
+                    selectinload(Transfer.items).selectinload(TransferItem.item).options(
+                        selectinload(Item.category),
+                        selectinload(Item.stock_levels),
+                    )
                 )
+                .order_by(desc(Transfer.transfer_date))
             )
-            .order_by(desc(Transfer.transfer_date))
-        )
 
-        
-        conditions = []
-        if from_location_id:
-            conditions.append(Transfer.from_location_id == from_location_id)
-        if to_location_id:
-            conditions.append(Transfer.to_location_id == to_location_id)
-        if status:
-            conditions.append(Transfer.status == status)
+            conditions = []
+            if from_location_id:
+                conditions.append(Transfer.from_location_id == from_location_id)
+            if to_location_id:
+                conditions.append(Transfer.to_location_id == to_location_id)
+            if status:
+                conditions.append(Transfer.status == status)
+                
+            if conditions:
+                query = query.where(and_(*conditions))
             
-        if conditions:
-            query = query.where(and_(*conditions))
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            transfers = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": transfers
+            }
+        except Exception as e:
+            logger.error(f"Error getting transfers: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def approve_transfer(self, transfer_id: int, current_user_id: int) -> Transfer:
         """Approve transfer and reserve stock"""
