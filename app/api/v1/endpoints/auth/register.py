@@ -16,7 +16,7 @@ async def register_user(
     request: Request,
     user_create: UserCreate,
     session: AsyncSession = Depends(get_async_session),
-    # _: None = Depends(check_login_rate_limit)
+     _: None = Depends(check_login_rate_limit)
 ):
     """Register new user with email verification"""
     try:
@@ -34,10 +34,10 @@ async def register_user(
         new_user = await user_service.create_user(user_create)
         
         # Send welcome email (async)
-        # await email_service.send_welcome_email(
-        #     to_email=new_user.email,
-        #     username=new_user.username
-        # )
+        await email_service.send_welcome_email(
+            to_email=new_user.email,
+            username=new_user.username
+        )
         
         # Get user with roles
         roles = await user_service.get_user_roles(new_user.id)

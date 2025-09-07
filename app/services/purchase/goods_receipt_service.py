@@ -223,8 +223,8 @@ class GoodsReceiptService:
 
     async def get_goods_receipts(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         supplier_id: Optional[int] = None,
         purchase_order_id: Optional[int] = None,
         start_date: Optional[date] = None,
@@ -237,7 +237,8 @@ class GoodsReceiptService:
             query = select(GoodsReceipt).options(
                 selectinload(GoodsReceipt.supplier),
                 selectinload(GoodsReceipt.purchase_order),
-                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item)
+                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
+                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
             ).where(GoodsReceipt.is_deleted == False)
 
             # Apply filters
@@ -264,27 +265,30 @@ class GoodsReceiptService:
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.session.execute(count_query)
-            total = total_result.scalar()
+            total = total_result.scalar() or 0
 
-            # Apply pagination and execute
-            query = query.offset(skip).limit(limit).order_by(GoodsReceipt.receipt_date.desc())
+            # Calculate offset and apply pagination
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size).order_by(GoodsReceipt.receipt_date.desc())
             result = await self.session.execute(query)
             receipts = result.scalars().all()
 
             return {
-                "data": receipts,
-                "total": total,
-                "skip": skip,
-                "limit": limit
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": receipts
             }
 
         except Exception as e:
             logger.error(f"Error getting goods receipts: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to get goods receipts"
-            )
-
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+        
     async def update_goods_receipt(
         self,
         receipt_id: int,

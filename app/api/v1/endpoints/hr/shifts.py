@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.shift_service import ShiftService
 from app.schemas.hr.shift_schema import (
     ShiftTypeCreate, ShiftTypeUpdate, ShiftTypeResponse,
@@ -17,25 +18,34 @@ router = APIRouter()
 async def create_shift_type(
     shift_type: ShiftTypeCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new shift type"""
     service = ShiftService(session)
     return await service.create_shift_type(shift_type, current_user.id)
 
-@router.get("/types", response_model=List[ShiftTypeResponse])
+@router.get("/types", response_model=PaginatedResponse[ShiftTypeResponse])
 async def get_shift_types(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     is_active: Optional[bool] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
-    """Get all shift types"""
+    """Get all shift types with pagination"""
     service = ShiftService(session)
-    return await service.get_shift_types(is_active)
+    return await service.get_shift_types(
+        page_index=page_index,
+        page_size=page_size,
+        is_active=is_active
+    )
+
 
 @router.get("/types/{shift_type_id}", response_model=ShiftTypeResponse)
 async def get_shift_type(
     shift_type_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get a specific shift type by ID"""
     service = ShiftService(session)
@@ -49,7 +59,7 @@ async def update_shift_type(
     shift_type_id: int,
     shift_type: ShiftTypeUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update shift type"""
     service = ShiftService(session)
@@ -60,7 +70,7 @@ async def update_shift_type(
 async def assign_shift_to_employee(
     assignment: UserShiftCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Assign shift to employee"""
     service = ShiftService(session)
@@ -69,7 +79,8 @@ async def assign_shift_to_employee(
 @router.get("/employee/{employee_id}/current", response_model=Optional[UserShiftResponse])
 async def get_employee_current_shift(
     employee_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get employee's current shift"""
     service = ShiftService(session)
@@ -78,7 +89,8 @@ async def get_employee_current_shift(
 @router.get("/employee/{employee_id}/history", response_model=List[UserShiftResponse])
 async def get_employee_shift_history(
     employee_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get employee's shift history"""
     service = ShiftService(session)

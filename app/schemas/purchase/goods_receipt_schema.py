@@ -3,12 +3,28 @@ from decimal import Decimal
 from pydantic import BaseModel, validator
 from datetime import datetime, date
 
+
+class ItemInfo(BaseModel):
+    item_code: str
+    name: str
+
+    class Config:
+        from_attributes = True
+
+class LocationInfo(BaseModel):
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class GoodsReceiptItemBase(BaseModel):
     purchase_order_item_id: int
+    item : Optional[ItemInfo] = None
     received_quantity: Decimal
     batch_number: Optional[str] = None
     expiry_date: Optional[date] = None
     location_id: int
+    location : Optional[LocationInfo] = None
 
     @validator('received_quantity')
     def validate_positive_quantity(cls, v):
@@ -25,9 +41,6 @@ class GoodsReceiptItemResponse(GoodsReceiptItemBase):
     item_id: int
     ordered_quantity: Decimal
     unit_cost: Decimal
-    item_name: Optional[str] = None
-    item_code: Optional[str] = None
-    location_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -52,15 +65,21 @@ class GoodsReceiptUpdate(BaseModel):
     notes: Optional[str] = None
     updated_by: Optional[int] = None
 
+class SupplierInfo(BaseModel):
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class GoodsReceiptResponse(GoodsReceiptBase):
     id: int
     receipt_number: str
     supplier_id: int
+    supplier: Optional[SupplierInfo] = None
     received_by: int
     created_at: datetime
     updated_at: Optional[datetime]
     items: List[GoodsReceiptItemResponse] = []
-    supplier_name: Optional[str] = None
     po_number: Optional[str] = None
     received_by_name: Optional[str] = None
 

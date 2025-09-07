@@ -67,32 +67,55 @@ class StockLevelService:
 
     async def get_stock_levels(
         self, 
-        skip: int = 0, 
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         location_id: Optional[int] = None,
         item_id: Optional[int] = None,
         low_stock_only: bool = False
-    ) -> List[StockLevel]:
-        query = select(StockLevel).options(
-            selectinload(StockLevel.item),
-            selectinload(StockLevel.location)
-        )
-        
-        conditions = []
-        if location_id:
-            conditions.append(StockLevel.location_id == location_id)
-        if item_id:
-            conditions.append(StockLevel.item_id == item_id)
+    ) -> Dict[str, Any]:
+        """Get stock levels with pagination"""
+        try:
+            query = select(StockLevel).options(
+                selectinload(StockLevel.item),
+                selectinload(StockLevel.location)
+            )
             
-        if conditions:
-            query = query.where(and_(*conditions))
+            conditions = []
+            if location_id:
+                conditions.append(StockLevel.location_id == location_id)
+            if item_id:
+                conditions.append(StockLevel.item_id == item_id)
+                
+            if conditions:
+                query = query.where(and_(*conditions))
 
-        if low_stock_only:
-            query = query.join(Item).where(StockLevel.current_stock <= Item.reorder_point)
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            if low_stock_only:
+                query = query.join(Item).where(StockLevel.current_stock <= Item.reorder_point)
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            stock_levels = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": stock_levels
+            }
+        except Exception as e:
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_stock_level(self, stock_level_id: int, stock_level_data: StockLevelUpdate, current_user_id: int) -> StockLevel:
         stock_level = await self.get_stock_level_by_id(stock_level_id)

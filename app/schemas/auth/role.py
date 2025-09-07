@@ -27,3 +27,4 @@ class RoleInDBBase(RoleBase):
 
 class Role(RoleInDBBase):
     permissions: List['Permission'] = []
+    

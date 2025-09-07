@@ -1,9 +1,9 @@
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import date, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.shift_type import ShiftType
@@ -51,16 +51,50 @@ class ShiftService:
             logger.error(f"Error creating shift type: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error creating shift type")
 
-    async def get_shift_types(self, is_active: Optional[bool] = None) -> List[ShiftType]:
+    async def get_shift_types(
+        self,
+        page_index: int = 1,
+        page_size: int = 100,
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Get paginated shift types with filtering"""
         try:
-            query = select(ShiftType)
+            conditions = []
+            
             if is_active is not None:
-                query = query.where(ShiftType.is_active == is_active)
-            result = await self.session.execute(query)
-            return result.scalars().all()
+                conditions.append(ShiftType.is_active == is_active)
+            
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(ShiftType.id)).where(*conditions)
+            )
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            shift_types = await self.session.scalars(
+                select(ShiftType)
+                .where(*conditions)
+                .offset(skip)
+                .limit(page_size)
+            )
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": shift_types.all()
+            }
+            
         except Exception as e:
             logger.error(f"Error getting shift types: {e}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
         
     async def get_shift_type(self, shift_type_id: int) -> Optional[ShiftType]:
         try:

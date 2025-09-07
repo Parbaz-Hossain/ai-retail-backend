@@ -7,18 +7,14 @@ Run:  python scripts/seed/seed_auth.py
 
 import os, sys
 import asyncio
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+sys.path.insert(0, project_root)
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import async_session_maker, engine
 from app.models.base import Base
 from app.models.auth.permission import Permission
-from app.models.auth.role import Role
-from app.models.auth.role_permission import RolePermission
-from app.models.auth.user import User
-from app.models.auth.user_role import UserRole
-from app.core.security import get_password_hash
 
 # ----------------------------------------------------------------------
 # SEED DATA

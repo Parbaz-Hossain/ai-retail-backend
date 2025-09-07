@@ -1,5 +1,4 @@
 import logging
-from typing import List, Dict, Any
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -88,7 +87,7 @@ class EmailService:
     ) -> bool:
         """Send password reset email"""
         try:
-            reset_url = f"http://localhost:3000/reset-password?token={reset_token}"
+            reset_url = f"http://127.0.0.1:8000/api/v1/auth/change-password?token={reset_token}"
             
             template = self.template_env.get_template('password_reset.html')
             html_content = template.render(

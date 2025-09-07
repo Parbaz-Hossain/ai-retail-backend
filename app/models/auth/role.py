@@ -23,5 +23,10 @@ class Role(BaseModel):
         cascade="all, delete-orphan"
     )
 
+    @property
+    def permissions(self):
+        """Get list of permissions from role_permissions"""
+        return [rp.permission for rp in self.role_permissions if rp.permission]
+
     def __repr__(self):
         return f"<Role {self.name}>"

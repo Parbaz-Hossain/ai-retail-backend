@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_type_service import StockTypeService
 from app.schemas.inventory.stock_type import StockType, StockTypeCreate, StockTypeUpdate
 from app.models.auth.user import User
@@ -24,22 +25,28 @@ async def create_stock_type(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[StockType])
+@router.get("/", response_model=PaginatedResponse[StockType])
 async def get_stock_types(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all stock types with optional search"""
     service = StockTypeService(db)
-    stock_types = await service.get_stock_types(skip=skip, limit=limit, search=search)
+    stock_types = await service.get_stock_types(
+        page_index=page_index, 
+        page_size=page_size, 
+        search=search
+    )
     return stock_types
 
 @router.get("/{stock_type_id}", response_model=StockType)
 async def get_stock_type(
     stock_type_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock type by ID"""
     service = StockTypeService(db)

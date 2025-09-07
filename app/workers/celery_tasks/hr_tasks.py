@@ -34,7 +34,7 @@ def run_async_task(coro):
         loop.close()
 
 @celery_app.task  # ← Use main celery_app
-def process_daily_attendance_task():
+def process_daily_attendance():
     """Daily task to process attendance for all employees"""
     async def _process_attendance():
         async with async_session_maker() as db:
@@ -54,7 +54,7 @@ def process_daily_attendance_task():
     return run_async_task(_process_attendance())
 
 @celery_app.task  # ← Use main celery_app
-def generate_monthly_salaries_task(salary_month: str = None):
+def generate_monthly_salaries(salary_month: str = None):
     """Monthly task to generate salaries for all employees"""
     async def _generate_salaries():
         async with async_session_maker() as db:

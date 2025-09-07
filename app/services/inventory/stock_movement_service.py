@@ -82,52 +82,68 @@ class StockMovementService:
 
     async def get_stock_movements(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         item_id: Optional[int] = None,
         location_id: Optional[int] = None,
         movement_type: Optional[StockMovementType] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
-    ) -> List[StockMovement]:
+    ) -> Dict[str, Any]:
         """Get all stock movements with optional filters"""
-        
-        query = (
-            select(StockMovement)
-            .options(
-                selectinload(StockMovement.item).options(
-                    selectinload(Item.category),       # preload category
-                    selectinload(Item.stock_levels),   # preload stock levels
-                ),
-                selectinload(StockMovement.location),  # preload location
+        try:
+            query = (
+                select(StockMovement)
+                .options(
+                    selectinload(StockMovement.item).options(
+                        selectinload(Item.category),
+                        selectinload(Item.stock_levels),
+                    ),
+                    selectinload(StockMovement.location),
+                )
             )
-        )
-        
-        # Apply filters
-        conditions = []
-        
-        if item_id:
-            conditions.append(StockMovement.item_id == item_id)
-        
-        if location_id:
-            conditions.append(StockMovement.location_id == location_id)
-        
-        if movement_type:
-            conditions.append(StockMovement.movement_type == movement_type)
-        
-        if start_date:
-            conditions.append(cast(StockMovement.movement_date, Date) >= start_date)
-        
-        if end_date:
-            conditions.append(cast(StockMovement.movement_date, Date) <= end_date)
-        
-        if conditions:
-            query = query.where(and_(*conditions))
-        
-        query = query.order_by(desc(StockMovement.movement_date)).offset(skip).limit(limit)
-        
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            
+            # Apply filters
+            conditions = []
+            if item_id:
+                conditions.append(StockMovement.item_id == item_id)
+            if location_id:
+                conditions.append(StockMovement.location_id == location_id)
+            if movement_type:
+                conditions.append(StockMovement.movement_type == movement_type)
+            if start_date:
+                conditions.append(cast(StockMovement.movement_date, Date) >= start_date)
+            if end_date:
+                conditions.append(cast(StockMovement.movement_date, Date) <= end_date)
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.order_by(desc(StockMovement.movement_date)).offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            movements = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": movements
+            }
+        except Exception as e:
+            logger.error(f"Error getting stock movements: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def get_stock_movement_by_id(self, movement_id: int) -> Optional[StockMovement]:
         """Get stock movement by ID"""

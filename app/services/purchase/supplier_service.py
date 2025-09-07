@@ -74,8 +74,8 @@ class SupplierService:
 
     async def get_suppliers(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         search: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> Dict[str, Any]:
@@ -99,27 +99,30 @@ class SupplierService:
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.session.execute(count_query)
-            total = total_result.scalar()
+            total = total_result.scalar() or 0
 
-            # Apply pagination and execute
-            query = query.offset(skip).limit(limit).order_by(Supplier.name)
+            # Calculate offset and apply pagination
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size).order_by(Supplier.name)
             result = await self.session.execute(query)
             suppliers = result.scalars().all()
 
             return {
-                "data": suppliers,
-                "total": total,
-                "skip": skip,
-                "limit": limit
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": suppliers
             }
 
         except Exception as e:
             logger.error(f"Error getting suppliers: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to get suppliers"
-            )
-
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+        
     async def update_supplier(
         self, 
         supplier_id: int, 

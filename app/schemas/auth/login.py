@@ -6,7 +6,6 @@ from app.schemas.auth.user import User, UserResponse
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    device_info: Optional[str] = None
 
 class LoginResponse(BaseModel):
     user: UserResponse

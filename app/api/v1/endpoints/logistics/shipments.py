@@ -41,8 +41,8 @@ async def create_shipment(
 
 @router.get("/", response_model=PaginatedResponse[ShipmentResponse])
 async def get_shipments(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None, description="Search by shipment number or reference type"),
     status: Optional[ShipmentStatus] = Query(None, description="Filter by shipment status"),
     from_location_id: Optional[int] = Query(None, description="Filter by source location"),
@@ -58,8 +58,8 @@ async def get_shipments(
     try:
         shipment_service = ShipmentService(session)
         shipments = await shipment_service.get_shipments(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             search=search,
             status=status,
             from_location_id=from_location_id,
@@ -80,7 +80,8 @@ async def get_shipments(
 @router.get("/statistics")
 async def get_shipment_statistics(
     days: int = Query(30, ge=1, le=365, description="Number of days to calculate statistics for"),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get shipment statistics including completion rates, delivery times, and performance metrics"""
     try:
@@ -97,7 +98,8 @@ async def get_shipment_statistics(
 @router.get("/driver/{driver_id}/active", response_model=List[ShipmentResponse])
 async def get_active_shipments_by_driver(
     driver_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get active shipments assigned to a specific driver"""
     try:
@@ -114,7 +116,8 @@ async def get_active_shipments_by_driver(
 @router.get("/{shipment_id}", response_model=ShipmentResponse)
 async def get_shipment(
     shipment_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get detailed shipment information by ID"""
     try:
@@ -304,7 +307,8 @@ async def cancel_shipment(
 @router.get("/{shipment_id}/tracking", response_model=List[ShipmentTrackingResponse])
 async def get_shipment_tracking(
     shipment_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get complete tracking history for a shipment"""
     try:
@@ -321,7 +325,8 @@ async def get_shipment_tracking(
 @router.get("/{shipment_id}/otp/pickup")
 async def get_pickup_otp(
     shipment_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get pickup OTP for a shipment (for authorized users only)"""
     try:
@@ -357,7 +362,8 @@ async def get_pickup_otp(
 @router.get("/{shipment_id}/otp/delivery")
 async def get_delivery_otp(
     shipment_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get delivery OTP for a shipment (for authorized users only)"""
     try:
@@ -394,7 +400,8 @@ async def get_delivery_otp(
 async def regenerate_shipment_otps(
     shipment_id: int,
     otp_type: str = Body(..., embed=True, regex="^(pickup|delivery|both)$"),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Regenerate pickup and/or delivery OTP for a shipment"""
     try:
@@ -452,7 +459,8 @@ async def get_shipments_by_status(
     status: ShipmentStatus,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get all shipments with a specific status"""
     try:
@@ -480,7 +488,8 @@ async def get_shipments_by_location(
     location_type: str = Query("both", regex="^(from|to|both)$", description="Filter by source, destination, or both"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get shipments associated with a specific location"""
     try:
@@ -557,7 +566,8 @@ async def add_tracking_update(
 
 @router.get("/dashboard/summary")
 async def get_logistics_dashboard_summary(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get logistics dashboard summary with key metrics"""
     try:

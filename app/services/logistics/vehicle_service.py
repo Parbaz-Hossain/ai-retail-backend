@@ -64,8 +64,8 @@ class VehicleService:
 
     async def get_vehicles(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         search: Optional[str] = None,
         vehicle_type: Optional[str] = None,
         is_available: Optional[bool] = None,
@@ -97,24 +97,33 @@ class VehicleService:
                 conditions.append(Vehicle.is_active == is_active)
             
             query = query.where(and_(*conditions))
-            query = query.offset(skip).limit(limit).order_by(Vehicle.created_at.desc())
             
-            result = await self.session.execute(query)
-            vehicles = result.scalars().all()
+            # Get total count
             total = await self.session.scalar(
                 select(func.count()).select_from(Vehicle).where(and_(*conditions))
             )
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size).order_by(Vehicle.created_at.desc())
+            result = await self.session.execute(query)
+            vehicles = result.scalars().all()
 
             return {
-                "data": vehicles,
-                "total": total,
-                "skip": skip,
-                "limit": limit
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": vehicles
             }
 
         except Exception as e:
             logger.error(f"Error getting vehicles: {str(e)}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_vehicle(self, vehicle_id: int, vehicle_data: VehicleUpdate, user_id: int) -> Optional[Vehicle]:
         """Update vehicle"""

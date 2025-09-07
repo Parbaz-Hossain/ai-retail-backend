@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -107,28 +107,51 @@ class InventoryCountService:
 
     async def get_inventory_counts(
         self, 
-        skip: int = 0, 
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         location_id: Optional[int] = None,
         status: Optional[str] = None
-    ) -> List[InventoryCount]:
-        query = select(InventoryCount).options(
-            selectinload(InventoryCount.location),
-            selectinload(InventoryCount.items).selectinload(InventoryCountItem.item)
-        ).order_by(desc(InventoryCount.count_date))
-        
-        conditions = []
-        if location_id:
-            conditions.append(InventoryCount.location_id == location_id)
-        if status:
-            conditions.append(InventoryCount.status == status)
+    ) -> Dict[str, Any]:
+        """Get inventory counts with pagination"""
+        try:
+            query = select(InventoryCount).options(
+                selectinload(InventoryCount.location),
+                selectinload(InventoryCount.items).selectinload(InventoryCountItem.item)
+            ).order_by(desc(InventoryCount.count_date))
             
-        if conditions:
-            query = query.where(and_(*conditions))
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            conditions = []
+            if location_id:
+                conditions.append(InventoryCount.location_id == location_id)
+            if status:
+                conditions.append(InventoryCount.status == status)
+                
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            counts = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": counts
+            }
+        except Exception as e:
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_inventory_count(self, count_id: int, count_data: InventoryCountUpdate, current_user_id: int) -> InventoryCount:
         inventory_count = await self.get_inventory_count_by_id(count_id)

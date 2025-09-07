@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_level_service import StockLevelService
 from app.schemas.inventory.stock_level import StockLevel, StockLevelCreate, StockLevelUpdate
 from app.schemas.inventory.inventory_response import StockSummaryResponse
@@ -25,20 +26,21 @@ async def create_stock_level(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[StockLevel])
+@router.get("/", response_model=PaginatedResponse[StockLevel])
 async def get_stock_levels(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     location_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
     low_stock_only: bool = Query(False),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all stock levels with optional filters"""
     service = StockLevelService(db)
     stock_levels = await service.get_stock_levels(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         location_id=location_id,
         item_id=item_id,
         low_stock_only=low_stock_only
@@ -48,7 +50,8 @@ async def get_stock_levels(
 @router.get("/summary/{location_id}", response_model=StockSummaryResponse)
 async def get_location_stock_summary(
     location_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock summary for a location"""
     service = StockLevelService(db)
@@ -59,7 +62,8 @@ async def get_location_stock_summary(
 async def get_stock_level_by_item_location(
     item_id: int,
     location_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock level for specific item and location"""
     service = StockLevelService(db)
@@ -71,7 +75,8 @@ async def get_stock_level_by_item_location(
 @router.get("/{stock_level_id}", response_model=StockLevel)
 async def get_stock_level(
     stock_level_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock level by ID"""
     service = StockLevelService(db)

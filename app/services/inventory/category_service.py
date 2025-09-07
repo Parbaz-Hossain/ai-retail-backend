@@ -1,8 +1,8 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 
 from app.models.inventory.item import Item
 from app.models.inventory.category import Category
@@ -53,23 +53,51 @@ class CategoryService:
         )
         return result.scalar_one_or_none()
 
-    async def get_categories(self, skip: int = 0, limit: int = 100, search: Optional[str] = None) -> List[Category]:
-        query = select(Category).options(
-            selectinload(Category.parent),
-            selectinload(Category.children)
-        ).where(Category.is_active == True)
-        
-        if search:
-            query = query.where(
-                or_(
-                    Category.name.ilike(f"%{search}%"),
-                    Category.description.ilike(f"%{search}%")
+    async def get_categories(self, 
+                             page_index: int = 1, 
+                             page_size: int = 100, 
+                             search: Optional[str] = None) -> Dict[str, Any]:
+        """Get categories with pagination"""
+        try:
+            query = select(Category).options(
+                selectinload(Category.parent),
+                selectinload(Category.children)
+            ).where(Category.is_active == True)
+            
+            if search:
+                query = query.where(
+                    or_(
+                        Category.name.ilike(f"%{search}%"),
+                        Category.description.ilike(f"%{search}%")
+                    )
                 )
-            )
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_count = await self.db.execute(count_query)
+            total = total_count.scalar() or 0
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            categories = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": categories
+            }
+        except Exception as e:
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def get_root_categories(self) -> List[Category]:
         """Get categories without parent (root level)"""

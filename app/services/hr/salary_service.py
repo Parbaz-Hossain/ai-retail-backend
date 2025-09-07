@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 from calendar import monthrange
@@ -173,12 +173,52 @@ class SalaryService:
         logger.info(f"Salary marked paid: {salary_id} by {user_id}")
         return salary
 
-    async def get_employee_salaries(self, employee_id: int, year: Optional[int] = None, skip: int = 0, limit: int = 12) -> List[Salary]:
-        query = select(Salary).where(Salary.employee_id == employee_id)
-        if year:
-            query = query.where(extract('year', Salary.salary_month) == year)
-        result = await self.session.execute(query.order_by(Salary.salary_month.desc()).offset(skip).limit(limit))
-        return result.scalars().all()
+    async def get_employee_salaries(
+        self, 
+        employee_id: int,
+        page_index: int = 1,
+        page_size: int = 12,
+        year: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Get paginated employee salary history"""
+        try:
+            conditions = [Salary.employee_id == employee_id]
+            
+            if year:
+                conditions.append(extract('year', Salary.salary_month) == year)
+            
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(Salary.id)).where(*conditions)
+            )
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            salaries = await self.session.scalars(
+                select(Salary)
+                .where(*conditions)
+                .order_by(Salary.salary_month.desc())
+                .offset(skip)
+                .limit(page_size)
+            )
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": salaries.all()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting employee salaries: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def get_salary_reports(self, month: int, year: int, location_id: Optional[int], department_id: Optional[int]) -> Dict:
         salary_date = date(year, month, 1)

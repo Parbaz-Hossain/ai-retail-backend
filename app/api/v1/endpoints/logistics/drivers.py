@@ -7,6 +7,7 @@ from app.core.database import get_async_session
 from app.api.dependencies import get_current_user
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.driver_schema import DriverCreate, DriverUpdate, DriverResponse
+from app.schemas.logistics.shipment_schema import ShipmentResponse
 from app.services.logistics.driver_service import DriverService
 
 router = APIRouter()
@@ -34,19 +35,20 @@ async def create_driver(
 
 @router.get("/", response_model=PaginatedResponse[DriverResponse])
 async def get_drivers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
     is_available: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get list of drivers with optional filters"""
     try:
         driver_service = DriverService(session)
         drivers = await driver_service.get_drivers(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             search=search,
             is_available=is_available,
             is_active=is_active
@@ -61,7 +63,8 @@ async def get_drivers(
 
 @router.get("/available", response_model=List[DriverResponse])
 async def get_available_drivers(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get all available drivers"""
     try:
@@ -78,7 +81,8 @@ async def get_available_drivers(
 @router.get("/license-expiry", response_model=List[DriverResponse])
 async def get_drivers_license_expiry(
     days_ahead: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get drivers with licenses expiring soon"""
     try:
@@ -95,7 +99,8 @@ async def get_drivers_license_expiry(
 @router.get("/{driver_id}", response_model=DriverResponse)
 async def get_driver(
     driver_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get driver by ID"""
     try:
@@ -197,16 +202,22 @@ async def update_driver_availability(
             detail="Failed to update driver availability"
         )
 
-@router.get("/{driver_id}/shipments")
+@router.get("/{driver_id}/shipments", response_model=PaginatedResponse[ShipmentResponse])
 async def get_driver_shipments(
     driver_id: int,
-    limit: int = Query(10, ge=1, le=100),
-    session: AsyncSession = Depends(get_async_session)
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
-    """Get recent shipments for a driver"""
+    """Get shipments for a driver with pagination"""
     try:
         driver_service = DriverService(session)
-        shipments = await driver_service.get_driver_shipments(driver_id, limit)
+        shipments = await driver_service.get_driver_shipments(
+            driver_id=driver_id,
+            page_index=page_index,
+            page_size=page_size
+        )
         return shipments
     except Exception as e:
         logger.error(f"Error getting driver shipments: {str(e)}")

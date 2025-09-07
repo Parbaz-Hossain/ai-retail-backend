@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.category_service import CategoryService
 from app.schemas.inventory.category import Category, CategoryCreate, CategoryUpdate
 from app.models.auth.user import User
@@ -24,21 +25,27 @@ async def create_category(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[Category])
+@router.get("/", response_model=PaginatedResponse[Category])
 async def get_categories(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all categories with optional search"""
     service = CategoryService(db)
-    categories = await service.get_categories(skip=skip, limit=limit, search=search)
+    categories = await service.get_categories(
+        page_index=page_index, 
+        page_size=page_size, 
+        search=search
+    )
     return categories
 
 @router.get("/root", response_model=List[Category])
 async def get_root_categories(
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get root level categories (no parent)"""
     service = CategoryService(db)
@@ -48,7 +55,8 @@ async def get_root_categories(
 @router.get("/{category_id}", response_model=Category)
 async def get_category(
     category_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get category by ID"""
     try:

@@ -1,9 +1,10 @@
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from app.models.auth.role import Role
 from app.models.auth.permission import Permission
 from app.models.auth.role_permission import RolePermission
@@ -19,7 +20,12 @@ class RoleService:
         """Get role by ID"""
         try:
             result = await self.session.execute(
-                select(Role).where(
+                select(Role)
+                .options(
+                    selectinload(Role.role_permissions.and_(RolePermission.is_active == True))
+                    .selectinload(RolePermission.permission)
+                )
+                .where(
                     Role.id == role_id,
                     Role.is_deleted == False
                 )
@@ -144,19 +150,50 @@ class RoleService:
             logger.error(f"Error deleting role: {str(e)}")
             return False
     
-    async def get_roles(self, skip: int = 0, limit: int = 100) -> List[Role]:
-        """Get paginated list of roles"""
+    async def get_roles(
+        self,
+        page_index: int = 1,
+        page_size: int = 100
+    ) -> Dict[str, Any]:
+        """Get paginated list of roles with permissions"""
         try:
-            result = await self.session.execute(
-                select(Role)
-                .where(Role.is_deleted == False)
-                .offset(skip)
-                .limit(limit)
+            conditions = [Role.is_deleted == False]
+            
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(Role.id)).where(*conditions)
             )
-            return result.scalars().all()
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            roles = await self.session.scalars(
+                select(Role)
+                .options(
+                    selectinload(Role.role_permissions.and_(RolePermission.is_active == True))
+                    .selectinload(RolePermission.permission)
+                )
+                .where(*conditions)
+                .offset(skip)
+                .limit(page_size)
+            )
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": roles.all()
+            }
+            
         except Exception as e:
             logger.error(f"Error getting roles: {str(e)}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
     
     async def assign_permission_to_role(self, role_id: int, permission_id: int) -> bool:
         """Assign permission to role"""
