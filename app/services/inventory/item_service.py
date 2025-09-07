@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from app.models.inventory.item import Item
 from app.models.inventory.stock_level import StockLevel
 from app.models.inventory.category import Category
@@ -83,43 +83,65 @@ class ItemService:
 
     async def get_items(
         self, 
-        skip: int = 0, 
-        limit: int = 100, 
+        page_index: int = 1,
+        page_size: int = 100,
         search: Optional[str] = None,
         category_id: Optional[int] = None,
         stock_type_id: Optional[int] = None,
         low_stock_only: bool = False
-    ) -> List[Item]:
-        query = select(Item).options(
-            selectinload(Item.category),
-            selectinload(Item.stock_type),
-            selectinload(Item.stock_levels)
-        ).where(Item.is_active == True)
-        
-        if search:
-            query = query.where(
-                or_(
-                    Item.name.ilike(f"%{search}%"),
-                    Item.item_code.ilike(f"%{search}%"),
-                    Item.description.ilike(f"%{search}%")
-                )
-            )
-        
-        if category_id:
-            query = query.where(Item.category_id == category_id)
+    ) -> Dict[str, Any]:
+        """Get items with pagination"""
+        try:
+            query = select(Item).options(
+                selectinload(Item.category),
+                selectinload(Item.stock_type),
+                selectinload(Item.stock_levels)
+            ).where(Item.is_active == True)
             
-        if stock_type_id:
-            query = query.where(Item.stock_type_id == stock_type_id)
+            if search:
+                query = query.where(
+                    or_(
+                        Item.name.ilike(f"%{search}%"),
+                        Item.item_code.ilike(f"%{search}%"),
+                        Item.description.ilike(f"%{search}%")
+                    )
+                )
+            
+            if category_id:
+                query = query.where(Item.category_id == category_id)
+                
+            if stock_type_id:
+                query = query.where(Item.stock_type_id == stock_type_id)
 
-        if low_stock_only:
-            # Join with stock levels to filter low stock items
-            query = query.join(StockLevel).where(
-                StockLevel.current_stock <= Item.reorder_point
-            )
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            if low_stock_only:
+                query = query.join(StockLevel).where(
+                    StockLevel.current_stock <= Item.reorder_point
+                )
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            items = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": items
+            }
+        except Exception as e:
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_item(self, item_id: int, item_data: ItemUpdate, current_user_id: int) -> Item:
         item = await self.get_item_by_id(item_id)

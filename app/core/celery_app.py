@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from app.core.config import settings
 import sys
 
@@ -39,14 +40,24 @@ if sys.platform == 'win32':
 celery_app.conf.beat_schedule = {
     # Original schedules
     "generate-monthly-salaries": {
-        "task": "app.workers.celery_tasks.hr_tasks.generate_monthly_salaries_task",
+        "task": "app.workers.celery_tasks.hr_tasks.generate_monthly_salaries",
         "schedule": 86400.0 * 30,  # Every 30 days
     },
     "process-attendance-daily": {
-        "task": "app.workers.celery_tasks.hr_tasks.process_daily_attendance_task",
+        "task": "app.workers.celery_tasks.hr_tasks.process_daily_attendance",
         "schedule": 3600.0,  # Every hour
     },
-    
+
+    # Daily task schedules
+    'send-daily-hr-tasks': {
+        'task': 'app.workers.celery_tasks.task_management_tasks.send_daily_hr_tasks',
+        'schedule': crontab(hour=8, minute=0),  # 9 AM daily
+    },
+    'send-daily-inventory-tasks': {
+        'task': 'app.workers.celery_tasks.task_management_tasks.send_daily_inventory_tasks',
+        'schedule': crontab(hour=8, minute=0),  # 10 AM daily
+    },
+
     # Task management schedules (from task_management_tasks.py)
     'check-low-stock-every-hour': {
         'task': 'app.workers.celery_tasks.task_management_tasks.check_low_stock_and_create_tasks',

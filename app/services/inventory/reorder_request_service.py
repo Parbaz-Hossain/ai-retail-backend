@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -145,13 +145,15 @@ class ReorderRequestService:
 
     async def get_reorder_requests(
         self, 
-        skip: int = 0, 
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         location_id: Optional[int] = None,
         status: Optional[ReorderRequestStatus] = None,
         priority: Optional[str] = None
-    ) -> List[ReorderRequest]:
-        query = select(ReorderRequest).options(
+    ) -> Dict[str, Any]:
+        """Get reorder requests with pagination"""
+        try:
+            query = select(ReorderRequest).options(
                 selectinload(ReorderRequest.location),
                 selectinload(ReorderRequest.items)
                     .selectinload(ReorderRequestItem.item)
@@ -161,21 +163,42 @@ class ReorderRequestService:
                         selectinload(Item.stock_type) 
                     )
             ).order_by(desc(ReorderRequest.request_date))
-        
-        conditions = []
-        if location_id:
-            conditions.append(ReorderRequest.location_id == location_id)
-        if status:
-            conditions.append(ReorderRequest.status == status)
-        if priority:
-            conditions.append(ReorderRequest.priority == priority)
             
-        if conditions:
-            query = query.where(and_(*conditions))
-        
-        query = query.offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
+            conditions = []
+            if location_id:
+                conditions.append(ReorderRequest.location_id == location_id)
+            if status:
+                conditions.append(ReorderRequest.status == status)
+            if priority:
+                conditions.append(ReorderRequest.priority == priority)
+                
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size)
+            result = await self.db.execute(query)
+            requests = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": requests
+            }
+        except Exception as e:
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_reorder_request(self, request_id: int, request_data: ReorderRequestUpdate, current_user_id: int) -> ReorderRequest:
         reorder_request = await self.get_reorder_request_by_id(request_id)

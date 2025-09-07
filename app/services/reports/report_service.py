@@ -25,7 +25,7 @@ from app.models.hr.salary import Salary
 from app.models.logistics.shipment import Shipment
 from app.models.task.task import Task
 from app.models.shared.enums import StockMovementType, PurchaseOrderStatus, AttendanceStatus, TaskStatus
-from app.schemas.common.pagination import PaginatedResponseNew
+from app.schemas.common.pagination import PaginatedResponse
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class ReportService:
         search: Optional[str] = None,
         sort_by: str = "item_name",
         sort_order: str = "asc"
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate comprehensive stock levels report"""
         try:
             # Build base query
@@ -64,19 +64,15 @@ class ReportService:
                 Item.unit_cost,
                 (StockLevel.current_stock * Item.unit_cost).label("stock_value"),
                 case(
-                    [
-                        (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
-                        (StockLevel.current_stock <= Item.reorder_point, "LOW"),
-                        (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
-                    ],
+                    (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
+                    (StockLevel.current_stock <= Item.reorder_point, "LOW"),
+                    (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
                     else_="NORMAL"
                 ).label("stock_status"),
                 case(
-                    [
-                        (StockLevel.current_stock <= 0, "CRITICAL"),
-                        (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
-                        (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
-                    ],
+                    (StockLevel.current_stock <= 0, "CRITICAL"),
+                    (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
+                    (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
                     else_="LOW"
                 ).label("priority"),
                 Item.unit_type.label("unit")
@@ -165,7 +161,7 @@ class ReportService:
                     "unit": row.unit.value if row.unit else "PCS"
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -186,7 +182,7 @@ class ReportService:
         item_id: Optional[int] = None,
         movement_type: Optional[str] = None,
         search: Optional[str] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate stock movements report with detailed transaction history"""
         try:
             # Default date range (last 30 days)
@@ -276,7 +272,7 @@ class ReportService:
                     "transaction_direction": "IN" if row.movement_type in [StockMovementType.INBOUND] else "OUT"
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -294,7 +290,7 @@ class ReportService:
         location_id: Optional[int] = None,
         category_id: Optional[int] = None,
         priority: Optional[str] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate low stock alerts report"""
         try:
             # Build query for items below reorder point
@@ -387,7 +383,7 @@ class ReportService:
                     "days_out_of_stock": self._calculate_days_out_of_stock(row.current_stock)
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -417,7 +413,7 @@ class ReportService:
         supplier_id: Optional[int] = None,
         status: Optional[str] = None,
         search: Optional[str] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate comprehensive purchase orders summary report"""
         try:
             # Default date range (last 30 days)
@@ -516,7 +512,7 @@ class ReportService:
                     "days_pending": (datetime.now().date() - row.order_date).days if row.status == PurchaseOrderStatus.PENDING else None
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -537,7 +533,7 @@ class ReportService:
         location_id: Optional[int] = None,
         forecast_period: str = "monthly",
         category_id: Optional[int] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate AI-powered demand forecast report"""
         try:
             # This is a simplified version - in reality, you'd use ML models for forecasting
@@ -646,7 +642,7 @@ class ReportService:
                     "forecastAccuracy": round(min(100, variation_percentage + 10), 2)  # Simulated accuracy
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -668,7 +664,7 @@ class ReportService:
         department_id: Optional[int] = None,
         employee_id: Optional[int] = None,
         attendance_status: Optional[str] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate comprehensive attendance summary report"""
         try:
             # Default date range (current month)
@@ -822,7 +818,7 @@ class ReportService:
                     "productivity_score": round((attendance_percentage + punctuality_percentage) / 2, 2)
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -858,7 +854,7 @@ class ReportService:
         salary_month: Optional[date] = None,
         department_id: Optional[int] = None,
         payment_status: Optional[str] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate comprehensive salary summary report"""
         try:
             # Default to current month if not specified
@@ -1013,7 +1009,7 @@ class ReportService:
                     "cost_per_day": round(float(row.net_salary) / max(1, row.working_days or 1), 2)
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,
@@ -1036,7 +1032,7 @@ class ReportService:
         driver_id: Optional[int] = None,
         from_location_id: Optional[int] = None,
         to_location_id: Optional[int] = None
-    ) -> PaginatedResponseNew[Dict]:
+    ) -> PaginatedResponse[Dict]:
         """Generate comprehensive shipment tracking report"""
         try:
             # Default date range (last 30 days)
@@ -1226,7 +1222,7 @@ class ReportService:
                     )
                 })
 
-            return PaginatedResponseNew(
+            return PaginatedResponse(
                 page_index=page_index,
                 page_size=page_size,
                 count=total_count,

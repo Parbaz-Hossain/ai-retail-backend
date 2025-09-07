@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.schemas.auth.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.auth.user_service import UserService
 from app.api.dependencies import get_current_user, get_current_superuser
 
@@ -44,31 +45,23 @@ async def create_user(
             detail="Failed to create user"
         )
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("/", response_model=PaginatedResponse[UserResponse])
 async def get_users(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=100),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
-    """Get users list (admin only)"""
+    """Get users list with pagination (admin only)"""
     try:
         user_service = UserService(session)
         
-        users = await user_service.get_users(
-            skip=skip,
-            limit=limit,
+        result = await user_service.get_users(
+            page_index=page_index,
+            page_size=page_size,
             search=search
         )
-        
-        # Get roles for each user
-        result = []
-        for user in users:
-            roles = await user_service.get_user_roles(user.id)
-            result.append(UserResponse(
-                **user.__dict__,
-                roles=[{"id": role.id, "name": role.name, "description": role.description} for role in roles]
-            ))
         
         return result
         
@@ -78,11 +71,12 @@ async def get_users(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get users"
         )
-
+    
 @router.get("/count")
 async def get_users_count(
     search: str = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get users count (admin only)"""
     try:
@@ -253,7 +247,8 @@ async def assign_role_to_user(
 async def remove_role_from_user(
     user_id: int,
     role_name: str,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Remove role from user (admin only)"""
     try:

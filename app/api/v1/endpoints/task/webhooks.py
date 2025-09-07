@@ -23,9 +23,18 @@ async def trigger_low_stock_check(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Manually trigger low stock check and task creation"""
+    
+   # Check if user has permission
+    role_names = [role.role.name for role in current_user.user_roles if role.is_active]
+    if not any(role in ["INVENTORY_MANAGER", "BRANCH_MANAGER", "SUPER_ADMIN"] for role in role_names):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
     integration_service = TaskIntegrationService(db)
     await integration_service.check_and_create_low_stock_tasks(user_id=current_user.id)
-    return {"message": "Low stock check completed and tasks created"}
+    return {"message": "Low stock check completed and notifications sent"}
 
 @router.post("/reorder-request/{request_id}/create-approval-task")
 async def create_reorder_approval_task(

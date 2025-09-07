@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.organization.department_service import DepartmentService
 from app.schemas.organization.department_schema import DepartmentCreate, DepartmentUpdate, DepartmentResponse
 from app.models.auth.user import User
@@ -13,28 +14,35 @@ router = APIRouter()
 async def create_department(
     department: DepartmentCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new department"""
     service = DepartmentService(session)
     return await service.create_department(department, current_user.id)
 
-@router.get("/", response_model=List[DepartmentResponse])
+@router.get("/", response_model=PaginatedResponse[DepartmentResponse])
 async def get_departments(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all departments with filtering"""
     service = DepartmentService(session)
-    return await service.get_departments(skip, limit, search, is_active)
+    return await service.get_departments(
+        page_index=page_index, 
+        page_size=page_size, 
+        search=search, 
+        is_active=is_active
+    )
 
 @router.get("/{department_id}", response_model=DepartmentResponse)
 async def get_department(
     department_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get department by ID"""
     service = DepartmentService(session)
@@ -47,7 +55,8 @@ async def get_department(
 async def update_department(
     department_id: int,
     department: DepartmentUpdate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Update department"""
     service = DepartmentService(session)
@@ -57,7 +66,7 @@ async def update_department(
 async def delete_department(
     department_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete department"""
     service = DepartmentService(session)

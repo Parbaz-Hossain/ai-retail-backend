@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.models.auth.user import User
-from app.schemas.common.pagination import PaginatedResponseNew
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.engagement.user_history_service import UserHistoryService
 from app.schemas.engagement.user_history_schema import (
     UserHistoryResponse, UserHistoryListResponse, UserHistoryStats
@@ -16,7 +16,7 @@ from app.models.shared.enums import HistoryActionType
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=PaginatedResponseNew[UserHistoryResponse])
+@router.get("/", response_model=PaginatedResponse[UserHistoryResponse])
 async def get_user_history(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),

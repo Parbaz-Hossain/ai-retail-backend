@@ -4,10 +4,17 @@ from pydantic import BaseModel, validator
 from datetime import datetime, date
 from app.models.shared.enums import PurchaseOrderStatus
 
+class ItemInfo(BaseModel):
+    item_code: str
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class PurchaseOrderItemBase(BaseModel):
     item_id: int
     quantity: Decimal
-    unit_cost: Decimal
+    unit_cost: Decimal    
 
     @validator('quantity', 'unit_cost')
     def validate_positive(cls, v):
@@ -20,11 +27,10 @@ class PurchaseOrderItemCreate(PurchaseOrderItemBase):
 
 class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     id: int
-    purchase_order_id: int
+    purchase_order_id: int    
+    item : Optional[ItemInfo] = None
     total_cost: Decimal
     received_quantity: Decimal
-    item_name: Optional[str] = None
-    item_code: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -54,6 +60,13 @@ class PurchaseOrderUpdate(BaseModel):
     discount_amount: Optional[Decimal] = None
     items: Optional[List[PurchaseOrderItemCreate]] = None
 
+class SupplierInfo(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class PurchaseOrderResponse(PurchaseOrderBase):
     id: int
     po_number: str
@@ -66,7 +79,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     created_at: datetime
     updated_at: Optional[datetime]
     items: List[PurchaseOrderItemResponse] = []
-    supplier_name: Optional[str] = None
+    supplier: Optional[SupplierInfo] = None
 
     class Config:
         from_attributes = True

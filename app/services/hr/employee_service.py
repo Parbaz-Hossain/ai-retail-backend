@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -188,33 +188,29 @@ class EmployeeService:
     # ---------- Listing ----------
     async def get_employees(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         department_id: Optional[int] = None,
         location_id: Optional[int] = None,
         is_manager: Optional[bool] = None,
         is_active: Optional[bool] = None,
         search: Optional[str] = None
-    ) -> List[Employee]:
+    ) -> Dict[str, Any]:
+        """Get paginated list of employees with filtering"""
         try:
-            query = (
-                select(Employee)
-                .options(
-                    selectinload(Employee.department),
-                    selectinload(Employee.location),
-                )
-            )
+            conditions = []
+            
             if is_active is not None:
-                query = query.where(Employee.is_active == is_active)
+                conditions.append(Employee.is_active == is_active)
             if department_id:
-                query = query.where(Employee.department_id == department_id)
+                conditions.append(Employee.department_id == department_id)
             if location_id:
-                query = query.where(Employee.location_id == location_id)
+                conditions.append(Employee.location_id == location_id)
             if is_manager is not None:
-                query = query.where(Employee.is_manager == is_manager)
+                conditions.append(Employee.is_manager == is_manager)
             if search:
                 like = f"%{search}%"
-                query = query.where(
+                conditions.append(
                     or_(
                         Employee.first_name.ilike(like),
                         Employee.last_name.ilike(like),
@@ -224,12 +220,41 @@ class EmployeeService:
                     )
                 )
 
-            result = await self.session.execute(query.offset(skip).limit(limit))
-            return result.scalars().all()
+            # Get total count
+            total_count = await self.session.scalar(
+                select(func.count(Employee.id)).where(*conditions)
+            )
+
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+
+            # Get paginated data
+            employees = await self.session.scalars(
+                select(Employee)
+                .options(
+                    selectinload(Employee.department),
+                    selectinload(Employee.location),
+                )
+                .where(*conditions)
+                .offset(skip)
+                .limit(page_size)
+            )
+
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": employees.all()
+            }
 
         except Exception as e:
             logger.error(f"Error getting employees: {e}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     # ---------- Quick helpers ----------
     async def get_managers(self, location_id: Optional[int] = None) -> List[Employee]:

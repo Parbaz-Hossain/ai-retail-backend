@@ -34,20 +34,21 @@ async def create_vehicle(
 
 @router.get("/", response_model=PaginatedResponse[VehicleResponse])
 async def get_vehicles(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
     vehicle_type: Optional[str] = Query(None),
     is_available: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get list of vehicles with optional filters"""
     try:
         vehicle_service = VehicleService(session)
         vehicles = await vehicle_service.get_vehicles(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             search=search,
             vehicle_type=vehicle_type,
             is_available=is_available,
@@ -60,11 +61,12 @@ async def get_vehicles(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve vehicles"
         )
-
+    
 @router.get("/available", response_model=List[VehicleResponse])
 async def get_available_vehicles(
     min_capacity_weight: Optional[float] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get all available vehicles"""
     try:
@@ -80,7 +82,8 @@ async def get_available_vehicles(
 
 @router.get("/maintenance-due", response_model=List[VehicleResponse])
 async def get_vehicles_needing_maintenance(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get vehicles that need maintenance"""
     try:
@@ -97,7 +100,8 @@ async def get_vehicles_needing_maintenance(
 @router.get("/documents-expiry", response_model=List[VehicleResponse])
 async def get_vehicles_documents_expiry(
     days_ahead: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get vehicles with documents expiring soon"""
     try:
@@ -114,7 +118,8 @@ async def get_vehicles_documents_expiry(
 @router.get("/{vehicle_id}", response_model=VehicleResponse)
 async def get_vehicle(
     vehicle_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get vehicle by ID"""
     try:
@@ -248,7 +253,8 @@ async def update_vehicle_mileage(
 async def get_vehicle_utilization_stats(
     vehicle_id: int,
     days: int = Query(30, ge=1, le=365),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get vehicle utilization statistics"""
     try:

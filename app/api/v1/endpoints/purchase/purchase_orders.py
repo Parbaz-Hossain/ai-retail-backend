@@ -35,21 +35,22 @@ async def create_purchase_order(
 
 @router.get("/", response_model=PaginatedResponse[PurchaseOrderResponse])
 async def get_purchase_orders(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     status_filter: Optional[PurchaseOrderStatus] = Query(None, alias="status"),
     supplier_id: Optional[int] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     search: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get purchase orders with pagination and filters"""
     try:
         po_service = PurchaseOrderService(session)
         result = await po_service.get_purchase_orders(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             status=status_filter,
             supplier_id=supplier_id,
             start_date=start_date,
@@ -67,7 +68,8 @@ async def get_purchase_orders(
 @router.get("/{po_id}", response_model=PurchaseOrderResponse)
 async def get_purchase_order(
     po_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get purchase order by ID"""
     try:
@@ -267,7 +269,8 @@ async def get_purchase_order_summary(
 @router.get("/{po_id}/pending-items", response_model=List[Any])
 async def get_pending_items_for_receipt(
     po_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get pending items for receiving from a purchase order"""
     try:

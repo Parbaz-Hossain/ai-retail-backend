@@ -180,8 +180,8 @@ class ShipmentService:
 
     async def get_shipments(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         search: Optional[str] = None,
         status: Optional[ShipmentStatus] = None,
         from_location_id: Optional[int] = None,
@@ -198,7 +198,10 @@ class ShipmentService:
                 selectinload(Shipment.to_location),
                 selectinload(Shipment.driver)
                     .selectinload(Driver.employee)
-                    .selectinload(Employee.department),
+                    .options(
+                        selectinload(Employee.location),  
+                        selectinload(Employee.department)
+                    ),
                 selectinload(Shipment.vehicle),
                 selectinload(Shipment.items).selectinload(ShipmentItem.item)
             )
@@ -236,24 +239,33 @@ class ShipmentService:
                 conditions.append(Shipment.shipment_date <= date_to)
             
             query = query.where(and_(*conditions))
-            query = query.offset(skip).limit(limit).order_by(Shipment.created_at.desc())
             
+            # Get total count
+            total_count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.session.execute(total_count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            query = query.offset(skip).limit(page_size).order_by(Shipment.created_at.desc())
             result = await self.session.execute(query)
             shipments = result.scalars().all()
-            total_count = await self.session.execute(
-                select(func.count(Shipment.id)).where(and_(*conditions))
-            )
 
             return {
-                "data": shipments,
-                "total": total_count.scalar() or 0,
-                "skip": skip,
-                "limit": limit
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": shipments
             }
 
         except Exception as e:
             logger.error(f"Error getting shipments: {str(e)}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_shipment(self, shipment_id: int, shipment_data: ShipmentUpdate, user_id: int) -> Optional[Shipment]:
         """Update shipment"""
