@@ -31,7 +31,8 @@ async def get_inventory_counts(
     page_size: int = Query(100, ge=1, le=1000),
     location_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all inventory counts with optional filters"""
     service = InventoryCountService(db)

@@ -34,7 +34,8 @@ async def get_reorder_requests(
     location_id: Optional[int] = Query(None),
     status: Optional[ReorderRequestStatus] = Query(None),
     priority: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all reorder requests with optional filters"""
     service = ReorderRequestService(db)

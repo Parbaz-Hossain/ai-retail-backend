@@ -30,7 +30,8 @@ async def get_stock_types(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all stock types with optional search"""
     service = StockTypeService(db)
@@ -44,7 +45,8 @@ async def get_stock_types(
 @router.get("/{stock_type_id}", response_model=StockType)
 async def get_stock_type(
     stock_type_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock type by ID"""
     service = StockTypeService(db)

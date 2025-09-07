@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional, Dict
 from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.attendance_service import AttendanceService
@@ -15,7 +15,8 @@ router = APIRouter()
 @router.post("/mark", response_model=AttendanceResponse)
 async def mark_attendance(
     attendance: AttendanceCreate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Mark employee attendance (check-in/check-out)"""
     service = AttendanceService(session)
@@ -29,7 +30,8 @@ async def get_attendance(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     status: Optional[AttendanceStatus] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get attendance records with filtering and pagination"""
     service = AttendanceService(session)
@@ -47,7 +49,8 @@ async def get_employee_attendance_summary(
     employee_id: int,
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2020),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get employee attendance summary for a month"""
     service = AttendanceService(session)
@@ -57,6 +60,7 @@ async def get_employee_attendance_summary(
 async def process_daily_attendance(
     process_date: date,
     session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Process daily attendance (AI automation)"""
     service = AttendanceService(session)

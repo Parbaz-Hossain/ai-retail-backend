@@ -38,7 +38,8 @@ async def get_suppliers(
     page_size: int = Query(100, ge=1, le=1000),
     search: str = Query(None),
     is_active: bool = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get suppliers with pagination and filters"""
     try:

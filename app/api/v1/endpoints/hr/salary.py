@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Dict
 from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.salary_service import SalaryService
@@ -17,7 +17,7 @@ async def generate_employee_salary(
     employee_id: int,
     salary_month: date,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Generate salary for a specific employee"""
     service = SalaryService(session)
@@ -30,7 +30,7 @@ async def generate_bulk_salary(
     location_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Generate salary for multiple employees (background task)"""
     service = SalaryService(session)
@@ -47,7 +47,7 @@ async def mark_salary_paid(
     salary_id: int,
     payment_data: SalaryPaymentUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Mark salary as paid"""
     service = SalaryService(session)
@@ -65,7 +65,8 @@ async def get_employee_salaries(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(12, ge=1, le=50),
     year: Optional[int] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get employee salary history with pagination"""
     service = SalaryService(session)
@@ -82,7 +83,8 @@ async def get_salary_reports(
     year: int = Query(..., ge=2020),
     location_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get salary reports for management"""
     service = SalaryService(session)

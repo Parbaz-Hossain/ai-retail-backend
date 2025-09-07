@@ -30,7 +30,8 @@ async def get_categories(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
     search: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all categories with optional search"""
     service = CategoryService(db)
@@ -43,7 +44,8 @@ async def get_categories(
 
 @router.get("/root", response_model=List[Category])
 async def get_root_categories(
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get root level categories (no parent)"""
     service = CategoryService(db)
@@ -53,7 +55,8 @@ async def get_root_categories(
 @router.get("/{category_id}", response_model=Category)
 async def get_category(
     category_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get category by ID"""
     try:

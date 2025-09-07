@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.organization.location_service import LocationService
@@ -15,7 +15,7 @@ router = APIRouter()
 async def create_location(
     location: LocationCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new location"""
     service = LocationService(session)
@@ -29,7 +29,8 @@ async def get_locations(
     city: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get all locations with filtering"""
     service = LocationService(session)
@@ -45,7 +46,7 @@ async def get_locations(
 @router.get("/branches", response_model=List[LocationResponse])
 async def get_branches(
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get all active branches"""
     service = LocationService(session)
@@ -54,7 +55,7 @@ async def get_branches(
 @router.get("/warehouses", response_model=List[LocationResponse])
 async def get_warehouses(
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get all active warehouses"""
     service = LocationService(session)
@@ -64,7 +65,7 @@ async def get_warehouses(
 async def get_location(
     location_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get location by ID"""
     service = LocationService(session)
@@ -78,7 +79,7 @@ async def update_location(
     location_id: int,
     location: LocationUpdate,
    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update location"""
     service = LocationService(session)
@@ -88,7 +89,7 @@ async def update_location(
 async def delete_location(
     location_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete location"""
     service = LocationService(session)

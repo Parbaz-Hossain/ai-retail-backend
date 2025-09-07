@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.organization.department_service import DepartmentService
@@ -14,7 +14,7 @@ router = APIRouter()
 async def create_department(
     department: DepartmentCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new department"""
     service = DepartmentService(session)
@@ -27,7 +27,7 @@ async def get_departments(
     search: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get all departments with filtering"""
     service = DepartmentService(session)
@@ -42,7 +42,7 @@ async def get_departments(
 async def get_department(
     department_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get department by ID"""
     service = DepartmentService(session)
@@ -56,7 +56,7 @@ async def update_department(
     department_id: int,
     department: DepartmentUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update department"""
     service = DepartmentService(session)
@@ -66,7 +66,7 @@ async def update_department(
 async def delete_department(
     department_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete department"""
     service = DepartmentService(session)

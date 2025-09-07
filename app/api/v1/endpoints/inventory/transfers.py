@@ -34,7 +34,8 @@ async def get_transfers(
     from_location_id: Optional[int] = Query(None),
     to_location_id: Optional[int] = Query(None),
     status: Optional[TransferStatus] = Query(None),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all transfers with optional filters"""
     service = TransferService(db)
@@ -50,7 +51,8 @@ async def get_transfers(
 @router.get("/{transfer_id}", response_model=Transfer)
 async def get_transfer(
     transfer_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get transfer by ID"""
     service = TransferService(db)

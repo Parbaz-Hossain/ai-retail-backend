@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_active_user
+from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.employee_service import EmployeeService
@@ -14,7 +14,7 @@ router = APIRouter()
 async def create_employee(
     employee: EmployeeCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new employee"""
     service = EmployeeService(session)
@@ -29,7 +29,8 @@ async def get_employees(
     is_manager: Optional[bool] = Query(None),
     is_active: Optional[bool] = Query(None),
     search: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all employees with filtering and pagination"""
     service = EmployeeService(session)
@@ -46,7 +47,8 @@ async def get_employees(
 @router.get("/managers", response_model=List[EmployeeResponse])
 async def get_managers(
     location_id: Optional[int] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all managers"""
     service = EmployeeService(session)
@@ -55,7 +57,8 @@ async def get_managers(
 @router.get("/{employee_id}", response_model=EmployeeResponse)
 async def get_employee(
     employee_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get employee by ID"""
     service = EmployeeService(session)
@@ -69,7 +72,7 @@ async def update_employee(
     employee_id: int,
     employee: EmployeeUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update employee"""
     service = EmployeeService(session)
@@ -79,7 +82,7 @@ async def update_employee(
 async def delete_employee(
     employee_id: int,
    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Delete employee"""
     service = EmployeeService(session)

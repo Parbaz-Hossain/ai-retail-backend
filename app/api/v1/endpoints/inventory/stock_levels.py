@@ -33,7 +33,8 @@ async def get_stock_levels(
     location_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
     low_stock_only: bool = Query(False),
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all stock levels with optional filters"""
     service = StockLevelService(db)
@@ -49,7 +50,8 @@ async def get_stock_levels(
 @router.get("/summary/{location_id}", response_model=StockSummaryResponse)
 async def get_location_stock_summary(
     location_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock summary for a location"""
     service = StockLevelService(db)
@@ -60,7 +62,8 @@ async def get_location_stock_summary(
 async def get_stock_level_by_item_location(
     item_id: int,
     location_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock level for specific item and location"""
     service = StockLevelService(db)
@@ -72,7 +75,8 @@ async def get_stock_level_by_item_location(
 @router.get("/{stock_level_id}", response_model=StockLevel)
 async def get_stock_level(
     stock_level_id: int,
-    db: AsyncSession = Depends(get_async_session)
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
 ):
     """Get stock level by ID"""
     service = StockLevelService(db)

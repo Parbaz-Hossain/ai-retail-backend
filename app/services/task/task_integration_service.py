@@ -518,7 +518,7 @@ class TaskIntegrationService:
             approval_users = await self.user_service.get_users_by_roles(["INVENTORY_MANAGER", "BRANCH_MANAGER"])
             
             # Create the approval link
-            approval_link = f"https://bluemen-cafe-management-ai.vercel.app/dashboard/stock-operation/stock-transfer/{transfer.id}?task_id={task.id}"
+            approval_link = f"https://bluemen-cafe-management-ai.vercel.app/dashboard/stock-operation/stock-transfer/"
             
             for user in approval_users:
                 # Send email notification
