@@ -1,4 +1,3 @@
-# app/api/v1/endpoints/purchase/goods_receipts.py
 import logging
 from typing import Any, List, Optional
 from datetime import date
@@ -35,21 +34,22 @@ async def create_goods_receipt(
 
 @router.get("/", response_model=PaginatedResponse[GoodsReceiptResponse])
 async def get_goods_receipts(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     supplier_id: Optional[int] = Query(None),
     purchase_order_id: Optional[int] = Query(None),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     search: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get goods receipts with pagination and filters"""
     try:
         receipt_service = GoodsReceiptService(session)
         result = await receipt_service.get_goods_receipts(
-            skip=skip,
-            limit=limit,
+            page_index=page_index,
+            page_size=page_size,
             supplier_id=supplier_id,
             purchase_order_id=purchase_order_id,
             start_date=start_date,
@@ -67,7 +67,8 @@ async def get_goods_receipts(
 @router.get("/{receipt_id}", response_model=GoodsReceiptResponse)
 async def get_goods_receipt(
     receipt_id: int,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
 ):
     """Get goods receipt by ID"""
     try:

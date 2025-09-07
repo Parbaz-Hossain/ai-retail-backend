@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
 from app.api.dependencies import get_current_user
-from app.schemas.common.pagination import PaginatedResponseNew
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.reports.report_service import ReportService
 
 router = APIRouter()
 
 # =================== INVENTORY REPORTS ===================
 
-@router.get("/inventory/stock-levels", response_model=PaginatedResponseNew[Dict])
+@router.get("/inventory/stock-levels", response_model=PaginatedResponse[Dict])
 async def get_stock_levels_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -47,7 +47,7 @@ async def get_stock_levels_report(
             detail=f"Failed to generate stock levels report: {str(e)}"
         )
 
-@router.get("/inventory/stock-movements", response_model=PaginatedResponseNew[Dict])
+@router.get("/inventory/stock-movements", response_model=PaginatedResponse[Dict])
 async def get_stock_movements_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -83,7 +83,7 @@ async def get_stock_movements_report(
             detail=f"Failed to generate stock movements report: {str(e)}"
         )
 
-@router.get("/inventory/low-stock-alerts", response_model=PaginatedResponseNew[Dict])
+@router.get("/inventory/low-stock-alerts", response_model=PaginatedResponse[Dict])
 async def get_low_stock_alerts_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -115,7 +115,7 @@ async def get_low_stock_alerts_report(
 
 # =================== PURCHASE REPORTS ===================
 
-@router.get("/purchase/purchase-orders-summary", response_model=PaginatedResponseNew[Dict])
+@router.get("/purchase/purchase-orders-summary", response_model=PaginatedResponse[Dict])
 async def get_purchase_orders_summary_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -151,7 +151,7 @@ async def get_purchase_orders_summary_report(
 
 # =================== HR REPORTS ===================
 
-@router.get("/hr/attendance-summary", response_model=PaginatedResponseNew[Dict])
+@router.get("/hr/attendance-summary", response_model=PaginatedResponse[Dict])
 async def get_attendance_summary_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -185,7 +185,7 @@ async def get_attendance_summary_report(
             detail=f"Failed to generate attendance summary report: {str(e)}"
         )
 
-@router.get("/hr/salary-summary", response_model=PaginatedResponseNew[Dict])
+@router.get("/hr/salary-summary", response_model=PaginatedResponse[Dict])
 async def get_salary_summary_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -217,7 +217,7 @@ async def get_salary_summary_report(
 
 # =================== LOGISTICS REPORTS ===================
 
-@router.get("/logistics/shipment-tracking", response_model=PaginatedResponseNew[Dict])
+@router.get("/logistics/shipment-tracking", response_model=PaginatedResponse[Dict])
 async def get_shipment_tracking_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -255,7 +255,7 @@ async def get_shipment_tracking_report(
 
 # =================== ANALYTICS & INSIGHTS ===================
 
-@router.get("/analytics/demand-forecast", response_model=PaginatedResponseNew[Dict])
+@router.get("/analytics/demand-forecast", response_model=PaginatedResponse[Dict])
 async def get_demand_forecast_report(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),

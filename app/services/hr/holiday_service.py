@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from datetime import date
+from datetime import date, timedelta
 
 from app.models.hr.holiday import Holiday
 from app.schemas.hr.holiday_schema import HolidayCreate, HolidayUpdate
@@ -40,23 +41,68 @@ class HolidayService:
 
     async def get_holidays(
         self,
+        page_index: int = 1,
+        page_size: int = 100,
         year: Optional[int] = None,
         month: Optional[int] = None,
         is_active: Optional[bool] = None
-    ) -> List[Holiday]:
-        """Retrieve holidays with optional filters"""
-        stmt = select(Holiday)
+    ) -> Dict[str, Any]:
+        """Retrieve holidays with pagination and optional filters"""
+        try:
+            conditions = []
 
-        if is_active is not None:
-            stmt = stmt.where(Holiday.is_active == is_active)
+            if is_active is not None:
+                conditions.append(Holiday.is_active == is_active)
 
-        if year and month:
-            stmt = stmt.where(Holiday.date.like(f"{year}-{month:02d}-%"))
-        elif year:
-            stmt = stmt.where(Holiday.date.like(f"{year}-%"))
+            if year and month:
+                # Calculate start and end dates for the specific month
+                start_date = date(year, month, 1)
+                if month == 12:
+                    end_date = date(year, 12, 31)
+                else:
+                    next_month = date(year, month + 1, 1)
+                    end_date = next_month - timedelta(days=1)
+                conditions.append(Holiday.date >= start_date)
+                conditions.append(Holiday.date <= end_date)
+            elif year:
+                # Filter by year only
+                start_date = date(year, 1, 1)
+                end_date = date(year, 12, 31)
+                conditions.append(Holiday.date >= start_date)
+                conditions.append(Holiday.date <= end_date)
 
-        result = await self.db.execute(stmt.order_by(Holiday.date))
-        return result.scalars().all()
+            # Get total count
+            total_count = await self.db.scalar(
+                select(func.count(Holiday.id)).where(*conditions)
+            )
+
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+
+            # Get paginated data
+            holidays = await self.db.scalars(
+                select(Holiday)
+                .where(*conditions)
+                .order_by(Holiday.date.desc())
+                .offset(skip)
+                .limit(page_size)
+            )
+
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": holidays.all()
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting holidays: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
     
     async def get_holiday(self, holiday_id: int) -> Optional[Holiday]:
         try:

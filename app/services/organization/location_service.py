@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,13 +106,14 @@ class LocationService:
     # ---------- Listing & Counting ----------
     async def get_locations(
         self,
-        skip: int = 0,
-        limit: int = 100,
+        page_index: int = 1,
+        page_size: int = 100,
         location_type: Optional[str] = None,
         city: Optional[str] = None,
         is_active: Optional[bool] = None,
         search: Optional[str] = None
-    ) -> List[Location]:
+    ) -> Dict[str, Any]:
+        """Get locations with pagination"""
         try:
             query = select(Location)
             if is_active is not None:
@@ -130,12 +131,32 @@ class LocationService:
                         Location.city.ilike(like)
                     )
                 )
-            result = await self.session.execute(query.offset(skip).limit(limit))
-            return result.scalars().all()
+            
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.session.execute(count_query)
+            total = total_result.scalar() or 0
+            
+            # Calculate offset and get data
+            skip = (page_index - 1) * page_size
+            result = await self.session.execute(query.offset(skip).limit(page_size))
+            locations = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": locations
+            }
         except Exception as e:
             logger.error(f"Error getting locations: {e}")
-            return []
-
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+    
     async def count_locations(
         self,
         location_type: Optional[str] = None,

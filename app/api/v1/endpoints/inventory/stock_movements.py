@@ -4,6 +4,7 @@ from typing import List, Optional
 from datetime import date
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
+from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_movement_service import StockMovementService
 from app.schemas.inventory.stock_movement import StockMovement, StockMovementCreate
 from app.schemas.inventory.inventory_response import MovementSummaryResponse
@@ -28,10 +29,10 @@ async def create_stock_movement(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/", response_model=List[StockMovement])
+@router.get("/", response_model=PaginatedResponse[StockMovement])
 async def get_stock_movements(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     item_id: Optional[int] = Query(None),
     location_id: Optional[int] = Query(None),
     movement_type: Optional[StockMovementType] = Query(None),
@@ -43,8 +44,8 @@ async def get_stock_movements(
     """Get all stock movements with optional filters"""
     service = StockMovementService(db)
     movements = await service.get_stock_movements(
-        skip=skip, 
-        limit=limit,
+        page_index=page_index,
+        page_size=page_size,
         item_id=item_id,
         location_id=location_id,
         movement_type=movement_type,

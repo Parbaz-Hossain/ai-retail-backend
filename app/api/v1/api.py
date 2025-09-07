@@ -6,6 +6,7 @@ from app.api.v1.endpoints.engagement import chat, faq, user_history
 from app.api.v1.endpoints.hr import attendance, employees, holidays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
+from app.api.v1.endpoints.notification import notifications
 from app.api.v1.endpoints.organization import departments, locations
 from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
 from app.api.v1.endpoints.reports import reports
@@ -71,3 +72,6 @@ api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboar
 
 # Report routes
 api_router.include_router(reports.router, prefix="/reports", tags=["Reports"])
+
+# Notification routes
+api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])

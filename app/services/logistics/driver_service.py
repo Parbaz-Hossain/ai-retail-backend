@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.logistics.driver import Driver
 from app.models.hr.employee import Employee
 from app.models.logistics.shipment import Shipment
+from app.models.logistics.shipment_item import ShipmentItem
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.driver_schema import DriverCreate, DriverUpdate, DriverResponse
 
@@ -101,13 +102,13 @@ class DriverService:
             return None
 
     async def get_drivers(
-            self,
-            skip: int = 0,
-            limit: int = 100,
-            search: Optional[str] = None,
-            is_available: Optional[bool] = None,
-            is_active: Optional[bool] = None
-        ) -> PaginatedResponse[DriverResponse]:
+        self,
+        page_index: int = 1,
+        page_size: int = 100,
+        search: Optional[str] = None,
+        is_available: Optional[bool] = None,
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
         """Get list of drivers with filters"""
         try:
             conditions = [Driver.is_deleted == False]
@@ -131,6 +132,9 @@ class DriverService:
                 select(func.count()).select_from(Driver).where(and_(*conditions))
             )
 
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+
             # Build query with eager loads
             query = (
                 select(Driver)
@@ -140,7 +144,7 @@ class DriverService:
                 )
                 .where(and_(*conditions))
                 .offset(skip)
-                .limit(limit)
+                .limit(page_size)
                 .order_by(Driver.created_at.desc())
             )
 
@@ -152,16 +156,21 @@ class DriverService:
                 DriverResponse.model_validate(d, from_attributes=True) for d in drivers
             ]
 
-            return PaginatedResponse[DriverResponse](
-                data=driver_list,
-                total=total,
-                skip=skip,
-                limit=limit,
-            )
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": driver_list
+            }
 
         except Exception as e:
             logger.error(f"Error getting drivers: {str(e)}")
-            raise
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
 
     async def update_driver(self, driver_id: int, driver_data: DriverUpdate, user_id: int) -> Optional[Driver]:
         """Update driver"""
@@ -294,20 +303,55 @@ class DriverService:
             logger.error(f"Error updating driver availability: {str(e)}")
             return False
 
-    async def get_driver_shipments(self, driver_id: int, limit: int = 10) -> List[Shipment]:
-        """Get recent shipments for a driver"""
+    async def get_driver_shipments(
+        self, 
+        driver_id: int, 
+        page_index: int = 1, 
+        page_size: int = 10
+    ) -> Dict[str, Any]:
+        """Get shipments for a driver with pagination"""
         try:
-            result = await self.session.execute(
-                select(Shipment)
-                .where(Shipment.driver_id == driver_id)
-                .order_by(Shipment.created_at.desc())
-                .limit(limit)
-            )
-            return result.scalars().all()
+            # Base query
+            query = select(Shipment).options(
+                selectinload(Shipment.from_location),
+                selectinload(Shipment.to_location),
+                selectinload(Shipment.vehicle),
+                selectinload(Shipment.driver)
+                    .selectinload(Driver.employee)
+                    .options(
+                        selectinload(Employee.location),  
+                        selectinload(Employee.department)
+                    ),
+                selectinload(Shipment.items).selectinload(ShipmentItem.item)
+            ).where(Shipment.driver_id == driver_id)
+
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.session.execute(count_query)
+            total = total_result.scalar() or 0
+
+            # Calculate offset and get paginated data
+            skip = (page_index - 1) * page_size
+            query = query.order_by(Shipment.created_at.desc()).offset(skip).limit(page_size)
+            result = await self.session.execute(query)
+            shipments = result.scalars().all()
+
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": shipments
+            }
 
         except Exception as e:
             logger.error(f"Error getting driver shipments: {str(e)}")
-            return []
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+
 
     async def get_license_expiring_soon(self, days_ahead: int = 30) -> List[Driver]:
         """Return drivers with license_expiry between today and today+days_ahead (inclusive)."""
