@@ -1,24 +1,57 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.employee_service import EmployeeService
-from app.schemas.hr.employee_schema import EmployeeCreate, EmployeeUpdate, EmployeeResponse
+from app.schemas.hr.employee_schema import EmployeeCreateForm, EmployeeUpdate, EmployeeResponse
 from app.models.auth.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=EmployeeResponse)
 async def create_employee(
-    employee: EmployeeCreate,
+    employee_form: EmployeeCreateForm = Depends(),
+    profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new employee"""
-    service = EmployeeService(session)
-    return await service.create_employee(employee, current_user.id)
+    """Create a new employee with optional profile image"""
+    try:
+        # Convert form to schema
+        employee_create = employee_form.to_employee_create()
+        
+        service = EmployeeService(session)
+        
+        # Create employee first
+        new_employee = await service.create_employee(employee_create, current_user.id)
+        
+        # Handle image upload if provided
+        if profile_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with employee ID
+            image_path = await file_service.save_image(profile_image, "employees", new_employee.id)
+            
+            # Update employee with image path
+            new_employee.profile_image = image_path            
+            await session.commit()
+            await session.refresh(new_employee, attribute_names=["department", "location", "updated_at"])
+        
+        return new_employee
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create employee error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create employee"
+        )
 
 @router.get("/", response_model=PaginatedResponse[EmployeeResponse])
 async def get_employees(

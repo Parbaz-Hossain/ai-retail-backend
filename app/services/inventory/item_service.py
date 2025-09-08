@@ -48,18 +48,18 @@ class ItemService:
         )
         
         self.db.add(item)
-        await self.db.commit()
-        await self.db.refresh(item)
+        await self.db.flush()
+        
         result = await self.db.execute(
-            select(Item)
-            .options(
-                selectinload(Item.category),
-                selectinload(Item.stock_type),
-                selectinload(Item.stock_levels),
+                select(Item)
+                .options(
+                    selectinload(Item.category),
+                    selectinload(Item.stock_type),
+                    selectinload(Item.stock_levels)
+                )
+                .where(Item.id == item.id)
             )
-            .where(Item.id == item.id)
-        )
-        return result.scalars().unique().one()
+        return result.scalars().unique().one()       
 
     async def get_item_by_id(self, item_id: int) -> Optional[Item]:
         result = await self.db.execute(
