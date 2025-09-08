@@ -1,4 +1,3 @@
-# app/utils/data_exporter.py
 import csv
 import pandas as pd
 from io import StringIO, BytesIO
@@ -24,13 +23,18 @@ class DataExportService:
             row = {}
             for field_key, display_name in fields_mapping.items():
                 try:
-                    # Handle nested attributes (e.g., 'department.name')
-                    if '.' in field_key:
-                        value = item
-                        for attr in field_key.split('.'):
-                            value = getattr(value, attr, None) if value else None
+                    # Handle different data types
+                    if isinstance(item, dict):
+                        # For dictionary data (like reports)
+                        value = item.get(field_key, None)
                     else:
-                        value = getattr(item, field_key, None)
+                        # Handle nested attributes (e.g., 'department.name')
+                        if '.' in field_key:
+                            value = item
+                            for attr in field_key.split('.'):
+                                value = getattr(value, attr, None) if value else None
+                        else:
+                            value = getattr(item, field_key, None)
                     
                     # Format specific data types
                     if value is not None:
@@ -38,7 +42,7 @@ class DataExportService:
                             value = value.strftime("%Y-%m-%d %H:%M:%S")
                         elif isinstance(value, bool):
                             value = "Yes" if value else "No"
-                        elif hasattr(value, '__dict__'):  # Complex object
+                        elif hasattr(value, '__dict__') and not isinstance(value, (str, int, float)):  # Complex object
                             value = str(value)
                     else:
                         value = ""
@@ -204,7 +208,7 @@ EXPORT_FIELD_MAPPINGS = {
         "start_time": "Start Time",
         "end_time": "End Time", 
         "break_duration": "Break Duration",
-        "location.name": "Location",
+        "late_grace_minutes": "Late Grace Minutes",
         "is_active": "Active",
         "created_at": "Created Date"
     },
@@ -213,11 +217,13 @@ EXPORT_FIELD_MAPPINGS = {
         "employee.employee_id": "Employee ID",
         "employee.first_name": "First Name",
         "employee.last_name": "Last Name",
-        "date": "Date",
+        "attendance_date": "Date",
         "check_in_time": "Check In",
         "check_out_time": "Check Out", 
         "status": "Status",
         "total_hours": "Total Hours",
+        "overtime_hours": "Overtime Hours",
+        "late_minutes": "Late Minutes",
         "created_at": "Created Date"
     },
     "salaries": {
@@ -225,10 +231,12 @@ EXPORT_FIELD_MAPPINGS = {
         "employee.employee_id": "Employee ID",
         "employee.first_name": "First Name", 
         "employee.last_name": "Last Name",
-        "month": "Month",
-        "year": "Year",
+        "salary_month": "Salary Month",
         "basic_salary": "Basic Salary",
-        "total_allowances": "Total Allowances",
+        "housing_allowance": "Housing Allowance",
+        "transport_allowance": "Transport Allowance",
+        "overtime_amount": "Overtime Amount",
+        "gross_salary": "Gross Salary",
         "total_deductions": "Total Deductions",
         "net_salary": "Net Salary",
         "payment_status": "Payment Status",
@@ -264,16 +272,14 @@ EXPORT_FIELD_MAPPINGS = {
     "categories": {
         "id": "ID",
         "name": "Category Name",
-        "code": "Category Code",
         "description": "Description",
-        "parent_category.name": "Parent Category",
+        "parent.name": "Parent Category",
         "is_active": "Active",
         "created_at": "Created Date"
     },
     "stock_types": {
         "id": "ID",
         "name": "Stock Type Name",
-        "code": "Stock Type Code", 
         "description": "Description",
         "is_active": "Active",
         "created_at": "Created Date"
@@ -286,7 +292,9 @@ EXPORT_FIELD_MAPPINGS = {
         "current_stock": "Current Stock",
         "reserved_stock": "Reserved Stock",
         "available_stock": "Available Stock",
-        "last_updated": "Last Updated"
+        "par_level_min": "Min Level",
+        "par_level_max": "Max Level",
+        "updated_at": "Last Updated"
     },
     "stock_movements": {
         "id": "ID",
@@ -295,18 +303,22 @@ EXPORT_FIELD_MAPPINGS = {
         "location.name": "Location",
         "movement_type": "Movement Type",
         "quantity": "Quantity",
-        "reference_number": "Reference Number",
-        "notes": "Notes",
-        "created_at": "Created Date"
+        "unit_cost": "Unit Cost",
+        "reference_type": "Reference Type",
+        "reference_id": "Reference ID",
+        "batch_number": "Batch Number",
+        "movement_date": "Movement Date",
+        "remarks": "Remarks"
     },
     "reorder_requests": {
         "id": "ID",
         "request_number": "Request Number",
         "location.name": "Location", 
         "status": "Status",
-        "requested_by.full_name": "Requested By",
-        "approved_by.full_name": "Approved By",
-        "total_items": "Total Items",
+        "priority": "Priority",
+        "request_date": "Request Date",
+        "required_date": "Required Date",
+        "total_estimated_cost": "Estimated Cost",
         "created_at": "Created Date"
     },
     "transfers": {
@@ -315,18 +327,18 @@ EXPORT_FIELD_MAPPINGS = {
         "from_location.name": "From Location",
         "to_location.name": "To Location",
         "status": "Status",
-        "requested_by.full_name": "Requested By",
-        "total_items": "Total Items",
+        "transfer_date": "Transfer Date",
+        "expected_date": "Expected Date",
         "created_at": "Created Date"
     },
     "inventory_counts": {
         "id": "ID",
         "count_number": "Count Number",
         "location.name": "Location",
+        "count_date": "Count Date",
+        "count_type": "Count Type",
         "status": "Status", 
-        "counted_by.full_name": "Counted By",
-        "total_items": "Total Items",
-        "discrepancies": "Discrepancies",
+        "notes": "Notes",
         "created_at": "Created Date"
     },
     
@@ -338,14 +350,16 @@ EXPORT_FIELD_MAPPINGS = {
         "status": "Status",
         "order_date": "Order Date",
         "expected_delivery_date": "Expected Delivery",
+        "subtotal": "Subtotal",
+        "tax_amount": "Tax Amount",
         "total_amount": "Total Amount",
-        "created_by.full_name": "Created By",
+        "approved_date": "Approved Date",
         "created_at": "Created Date"
     },
     "suppliers": {
         "id": "ID",
         "name": "Supplier Name",
-        "code": "Supplier Code",
+        "supplier_code": "Supplier Code",
         "contact_person": "Contact Person",
         "email": "Email",
         "phone": "Phone", 
@@ -360,9 +374,9 @@ EXPORT_FIELD_MAPPINGS = {
         "receipt_number": "Receipt Number",
         "purchase_order.po_number": "PO Number",
         "supplier.name": "Supplier",
-        "received_date": "Received Date",
-        "total_items": "Total Items",
-        "received_by.full_name": "Received By",
+        "receipt_date": "Receipt Date",
+        "delivered_by": "Delivered By",
+        "notes": "Notes",
         "created_at": "Created Date"
     },
     
@@ -373,28 +387,213 @@ EXPORT_FIELD_MAPPINGS = {
         "from_location.name": "From Location",
         "to_location.name": "To Location",
         "status": "Status",
-        "driver.name": "Driver",
-        "vehicle.license_plate": "Vehicle",
-        "scheduled_date": "Scheduled Date",
+        "driver.employee.first_name": "Driver First Name",
+        "driver.employee.last_name": "Driver Last Name",
+        "vehicle.vehicle_number": "Vehicle Number",
+        "shipment_date": "Shipment Date",
+        "expected_delivery_date": "Expected Delivery",
+        "distance_km": "Distance (KM)",
         "created_at": "Created Date"
     },
     "drivers": {
         "id": "ID",
-        "name": "Driver Name",
+        "employee.first_name": "First Name",
+        "employee.last_name": "Last Name",
+        "employee.employee_id": "Employee ID",
         "license_number": "License Number",
+        "license_type": "License Type",
+        "license_expiry": "License Expiry",
         "phone": "Phone",
-        "email": "Email",
         "is_active": "Active",
+        "is_available": "Available",
         "created_at": "Created Date"
     },
     "vehicles": {
         "id": "ID", 
-        "license_plate": "License Plate",
+        "vehicle_number": "Vehicle Number",
+        "vehicle_type": "Vehicle Type",
         "make": "Make",
         "model": "Model",
         "year": "Year",
-        "capacity": "Capacity",
+        "capacity_weight": "Weight Capacity",
+        "capacity_volume": "Volume Capacity",
+        "fuel_type": "Fuel Type",
+        "current_mileage": "Current Mileage",
         "is_active": "Active",
+        "is_available": "Available",
         "created_at": "Created Date"
+    },
+
+    # Reports
+    "stock_levels_report": {
+        "sl": "SL",
+        "sku": "SKU",
+        "item_name": "Item Name",
+        "category": "Category",
+        "location": "Location",
+        "current_stock": "Current Stock",
+        "available_stock": "Available Stock",
+        "reserved_stock": "Reserved Stock",
+        "minimum_stock": "Min Stock",
+        "maximum_stock": "Max Stock",
+        "reorder_point": "Reorder Point",
+        "unit_cost": "Unit Cost",
+        "stock_value": "Stock Value",
+        "stock_status": "Stock Status",
+        "priority": "Priority",
+        "unit": "Unit"
+    },
+    "stock_movements_report": {
+        "sl": "SL",
+        "sku": "SKU",
+        "item_name": "Item Name",
+        "location": "Location",
+        "movement_type": "Movement Type",
+        "quantity": "Quantity",
+        "unit_cost": "Unit Cost",
+        "total_value": "Total Value",
+        "reference_type": "Reference Type",
+        "reference_id": "Reference ID",
+        "batch_number": "Batch Number",
+        "expiry_date": "Expiry Date",
+        "remarks": "Remarks",
+        "movement_date": "Movement Date",
+        "transaction_direction": "Direction"
+    },
+    "low_stock_alerts_report": {
+        "sl": "SL",
+        "sku": "SKU",
+        "item_name": "Item Name",
+        "category": "Category",
+        "location": "Location",
+        "current_stock": "Current Stock",
+        "reorder_point": "Reorder Point",
+        "minimum_stock": "Min Stock",
+        "shortage_quantity": "Shortage Qty",
+        "priority": "Priority",
+        "unit": "Unit",
+        "unit_cost": "Unit Cost",
+        "estimated_reorder_cost": "Estimated Cost",
+        "days_out_of_stock": "Days Until Out"
+    },
+    "purchase_orders_summary_report": {
+        "sl": "SL",
+        "po_number": "PO Number",
+        "supplier_name": "Supplier",
+        "order_date": "Order Date",
+        "expected_delivery_date": "Expected Delivery",
+        "status": "Status",
+        "total_amount": "Total Amount",
+        "total_items": "Total Items",
+        "total_quantity": "Total Quantity",
+        "total_received": "Total Received",
+        "receipt_status": "Receipt Status",
+        "completion_percentage": "Completion %",
+        "approved_date": "Approved Date",
+        "days_pending": "Days Pending"
+    },
+    "demand_forecast_report": {
+        "sl": "SL",
+        "sku": "SKU",
+        "productName": "Product Name",
+        "category": "Category",
+        "location": "Location",
+        "forecastPeriod": "Forecast Period",
+        "currentSalesData": "Current Sales",
+        "plannedSalesTarget": "Sales Target",
+        "demandVariationPercentage": "Demand Variation %",
+        "averageDailyDemand": "Avg Daily Demand",
+        "transactionCount": "Transaction Count",
+        "forecastAccuracy": "Forecast Accuracy %"
+    },
+    "attendance_summary_report": {
+        "sl": "SL",
+        "employee_id": "Employee ID",
+        "employee_code": "Employee Code",
+        "employee_name": "Employee Name",
+        "department": "Department",
+        "location": "Location",
+        "total_working_days": "Working Days",
+        "present_days": "Present Days",
+        "absent_days": "Absent Days",
+        "late_days": "Late Days",
+        "early_leave_days": "Early Leave Days",
+        "attendance_percentage": "Attendance %",
+        "punctuality_percentage": "Punctuality %",
+        "total_hours_worked": "Total Hours",
+        "overtime_hours": "Overtime Hours",
+        "average_daily_hours": "Avg Daily Hours",
+        "total_late_minutes": "Late Minutes",
+        "total_early_leave_minutes": "Early Leave Minutes",
+        "overall_status": "Status",
+        "productivity_score": "Productivity Score"
+    },
+    "salary_summary_report": {
+        "sl": "SL",
+        "employee_id": "Employee Code",
+        "employee_name": "Employee Name",
+        "department": "Department",
+        "location": "Location",
+        "designation": "Designation",
+        "salary_month": "Salary Month",
+        "basic_salary": "Basic Salary",
+        "housing_allowance": "Housing Allowance",
+        "transport_allowance": "Transport Allowance",
+        "overtime_amount": "Overtime Amount",
+        "bonus": "Bonus",
+        "gross_salary": "Gross Salary",
+        "total_deductions": "Total Deductions",
+        "late_deductions": "Late Deductions",
+        "absent_deductions": "Absent Deductions",
+        "other_deductions": "Other Deductions",
+        "deduction_percentage": "Deduction %",
+        "net_salary": "Net Salary",
+        "working_days": "Working Days",
+        "present_days": "Present Days",
+        "absent_days": "Absent Days",
+        "late_days": "Late Days",
+        "attendance_efficiency": "Attendance Efficiency %",
+        "payment_status": "Payment Status",
+        "salary_status": "Status",
+        "payment_date": "Payment Date",
+        "payment_method": "Payment Method",
+        "generated_date": "Generated Date",
+        "salary_efficiency_score": "Efficiency Score",
+        "cost_per_day": "Cost Per Day"
+    },
+    "shipment_tracking_report": {
+        "sl": "SL",
+        "shipment_number": "Shipment Number",
+        "from_location": "From Location",
+        "to_location": "To Location",
+        "driver_name": "Driver Name",
+        "driver_phone": "Driver Phone",
+        "vehicle_number": "Vehicle Number",
+        "vehicle_type": "Vehicle Type",
+        "shipment_date": "Shipment Date",
+        "expected_delivery": "Expected Delivery",
+        "actual_delivery": "Actual Delivery",
+        "pickup_time": "Pickup Time",
+        "delivery_time": "Delivery Time",
+        "status": "Status",
+        "delivery_performance": "Delivery Performance",
+        "delay_days": "Delay Days",
+        "urgency": "Urgency",
+        "transit_time_hours": "Transit Time (Hours)",
+        "total_items": "Total Items",
+        "total_quantity": "Total Quantity",
+        "total_delivered": "Total Delivered",
+        "completion_percentage": "Completion %",
+        "distance_km": "Distance (KM)",
+        "total_weight": "Total Weight",
+        "total_volume": "Total Volume",
+        "fuel_cost": "Fuel Cost",
+        "pickup_verified": "Pickup Verified",
+        "delivery_verified": "Delivery Verified",
+        "reference_type": "Reference Type",
+        "reference_id": "Reference ID",
+        "notes": "Notes",
+        "cost_per_km": "Cost Per KM",
+        "efficiency_score": "Efficiency Score"
     }
 }

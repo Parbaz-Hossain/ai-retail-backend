@@ -1,5 +1,3 @@
-# app/api/v1/endpoints/common/export.py - Single Dynamic Export Endpoint
-
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
@@ -7,7 +5,7 @@ from app.api.dependencies import get_current_user
 from app.models.auth.user import User
 from app.utils.data_exporter import DataExportService, EXPORT_FIELD_MAPPINGS
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 import logging
 
 router = APIRouter()
@@ -46,24 +44,24 @@ SERVICE_MAPPING = {
         "params": ["search", "department_id", "location_id", "is_manager", "is_active"]
     },
     "shifts": {
-        "service": "app.services.hr.employee_service.EmployeeService", 
-        "method": "get_employees",
-        "params": ["search", "department_id", "location_id", "is_manager", "is_active"]
+        "service": "app.services.hr.shift_service.ShiftService", 
+        "method": "get_shift_types",
+        "params": ["is_active"]
     },
     "attendance": {
-        "service": "app.services.hr.employee_service.EmployeeService", 
-        "method": "get_employees",
-        "params": ["search", "department_id", "location_id", "is_manager", "is_active"]
+        "service": "app.services.hr.attendance_service.AttendanceService", 
+        "method": "get_attendance",
+        "params": ["employee_id", "start_date", "end_date", "status"]
     },
     "salaries": {
-        "service": "app.services.hr.employee_service.EmployeeService", 
-        "method": "get_employees",
-        "params": ["search", "department_id", "location_id", "is_manager", "is_active"]
+        "service": "app.services.hr.salary_service.SalaryService", 
+        "method": "get_employee_salaries",
+        "params": ["employee_id", "year"]
     },
     "holidays": {
-        "service": "app.services.hr.employee_service.EmployeeService", 
-        "method": "get_employees",
-        "params": ["search", "department_id", "location_id", "is_manager", "is_active"]
+        "service": "app.services.hr.holiday_service.HolidayService", 
+        "method": "get_holidays",
+        "params": ["year", "month", "is_active"]
     },
 
     # Inventory Management
@@ -75,45 +73,44 @@ SERVICE_MAPPING = {
     "categories": {
         "service": "app.services.inventory.category_service.CategoryService",
         "method": "get_categories", 
-        "params": ["search", "is_active"]
+        "params": ["search"]
     },
-     "stock_types": {
-        "service": "app.services.inventory.stock_level_service.StockLevelService",
-        "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+    "stock_types": {
+        "service": "app.services.inventory.stock_type_service.StockTypeService",
+        "method": "get_stock_types",
+        "params": ["search"]
     },
     "stock_levels": {
         "service": "app.services.inventory.stock_level_service.StockLevelService",
         "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+        "params": ["location_id", "item_id", "low_stock_only"]
     },
-     "stock_movements": {
-        "service": "app.services.inventory.stock_level_service.StockLevelService",
-        "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+    "stock_movements": {
+        "service": "app.services.inventory.stock_movement_service.StockMovementService",
+        "method": "get_stock_movements",
+        "params": ["item_id", "location_id", "movement_type", "start_date", "end_date"]
     },
-     "reorder_requests": {
-        "service": "app.services.inventory.stock_level_service.StockLevelService",
-        "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+    "reorder_requests": {
+        "service": "app.services.inventory.reorder_request_service.ReorderRequestService",
+        "method": "get_reorder_requests",
+        "params": ["location_id", "status", "priority"]
     },
-    
-     "transfers": {
-        "service": "app.services.inventory.stock_level_service.StockLevelService",
-        "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+    "transfers": {
+        "service": "app.services.inventory.transfer_service.TransferService",
+        "method": "get_transfers",
+        "params": ["from_location_id", "to_location_id", "status"]
     },
-     "inventory_counts": {
-        "service": "app.services.inventory.stock_level_service.StockLevelService",
-        "method": "get_stock_levels",
-        "params": ["location_id", "item_id", "search"]
+    "inventory_counts": {
+        "service": "app.services.inventory.inventory_count_service.InventoryCountService",
+        "method": "get_inventory_counts",
+        "params": ["location_id", "status"]
     },
 
     # Purchase Management   
     "purchase_orders": {
         "service": "app.services.purchase.purchase_order_service.PurchaseOrderService",
         "method": "get_purchase_orders",
-        "params": ["search", "status", "supplier_id"]
+        "params": ["status", "supplier_id", "start_date", "end_date", "search"]
     },
     "suppliers": {
         "service": "app.services.purchase.supplier_service.SupplierService",
@@ -121,31 +118,68 @@ SERVICE_MAPPING = {
         "params": ["search", "is_active"]
     },
     "goods_receipts": {
-        "service": "app.services.purchase.supplier_service.SupplierService",
-        "method": "get_suppliers", 
-        "params": ["search", "is_active"]
+        "service": "app.services.purchase.goods_receipt_service.GoodsReceiptService",
+        "method": "get_goods_receipts", 
+        "params": ["supplier_id", "purchase_order_id", "start_date", "end_date", "search"]
     },
 
     # Logistics Management
     "shipments": {
         "service": "app.services.logistics.shipment_service.ShipmentService",
         "method": "get_shipments",
-        "params": ["search", "status"]
+        "params": ["search", "status", "from_location_id", "to_location_id", "driver_id", "vehicle_id", "date_from", "date_to"]
     },
-     "shipments": {
-        "service": "app.services.logistics.shipment_service.ShipmentService",
-        "method": "get_shipments",
-        "params": ["search", "status"]
+    "drivers": {
+        "service": "app.services.logistics.driver_service.DriverService",
+        "method": "get_drivers",
+        "params": ["search", "is_available", "is_active"]
     },
-     "drivers": {
-        "service": "app.services.logistics.shipment_service.ShipmentService",
-        "method": "get_shipments",
-        "params": ["search", "status"]
+    "vehicles": {
+        "service": "app.services.logistics.vehicle_service.VehicleService",
+        "method": "get_vehicles",
+        "params": ["search", "vehicle_type", "is_available", "is_active"]
     },
-     "vehicles": {
-        "service": "app.services.logistics.shipment_service.ShipmentService",
-        "method": "get_shipments",
-        "params": ["search", "status"]
+
+    # Reports
+    "stock_levels_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_stock_levels_report",
+        "params": ["location_id", "category_id", "stock_status", "search", "sort_by", "sort_order"]
+    },
+    "stock_movements_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_stock_movements_report",
+        "params": ["from_date", "to_date", "location_id", "item_id", "movement_type", "search"]
+    },
+    "low_stock_alerts_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_low_stock_alerts_report",
+        "params": ["location_id", "category_id", "priority"]
+    },
+    "purchase_orders_summary_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_purchase_orders_summary_report",
+        "params": ["from_date", "to_date", "supplier_id", "status", "search"]
+    },
+    "demand_forecast_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_demand_forecast_report",
+        "params": ["item_id", "location_id", "forecast_period", "category_id"]
+    },
+    "attendance_summary_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_attendance_summary_report",
+        "params": ["from_date", "to_date", "department_id", "employee_id", "attendance_status"]
+    },
+    "salary_summary_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_salary_summary_report",
+        "params": ["salary_month", "department_id", "payment_status"]
+    },
+    "shipment_tracking_report": {
+        "service": "app.services.reports.report_service.ReportService",
+        "method": "get_shipment_tracking_report",
+        "params": ["from_date", "to_date", "shipment_status", "driver_id", "from_location_id", "to_location_id"]
     }
 }
 
@@ -169,33 +203,65 @@ async def export_data(
     format: str = Query("csv", regex="^(csv|excel)$", description="Export format: csv or excel"),
     filename: Optional[str] = Query(None, description="Custom filename (without extension)"),
     
+    # region Filters (all optional)
     # Common filters
-    search: Optional[str] = Query(None, description="Search term"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    # search: Optional[str] = Query(None, description="Search term"),
+    # is_active: Optional[bool] = Query(None, description="Filter by active status"),
     
     # Entity-specific filters
-    department_id: Optional[int] = Query(None, description="Filter by department ID"),
-    location_id: Optional[int] = Query(None, description="Filter by location ID"),
-    category_id: Optional[int] = Query(None, description="Filter by category ID"),
-    supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
-    item_id: Optional[int] = Query(None, description="Filter by item ID"),
-    stock_type_id: Optional[int] = Query(None, description="Filter by stock type ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    priority: Optional[str] = Query(None, description="Filter by priority"),
-    category: Optional[str] = Query(None, description="Filter by category"),
-    is_manager: Optional[bool] = Query(None, description="Filter by manager status"),
-    low_stock_only: Optional[bool] = Query(None, description="Show only low stock items"),
+    # department_id: Optional[int] = Query(None, description="Filter by department ID"),
+    # location_id: Optional[int] = Query(None, description="Filter by location ID"),
+    # category_id: Optional[int] = Query(None, description="Filter by category ID"),
+    # supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
+    # item_id: Optional[int] = Query(None, description="Filter by item ID"),
+    # stock_type_id: Optional[int] = Query(None, description="Filter by stock type ID"),
+    # status: Optional[str] = Query(None, description="Filter by status"),
+    # priority: Optional[str] = Query(None, description="Filter by priority"),
+    # category: Optional[str] = Query(None, description="Filter by category"),
+    # is_manager: Optional[bool] = Query(None, description="Filter by manager status"),
+    # low_stock_only: Optional[bool] = Query(None, description="Show only low stock items"),
+    # employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
+    # vehicle_id: Optional[int] = Query(None, description="Filter by vehicle ID"),
+    # driver_id: Optional[int] = Query(None, description="Filter by driver ID"),
     
+    # Date filters
+    # start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    # end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    # from_date: Optional[str] = Query(None, description="From date (YYYY-MM-DD)"),
+    # to_date: Optional[str] = Query(None, description="To date (YYYY-MM-DD)"),
+    # salary_month: Optional[str] = Query(None, description="Salary month (YYYY-MM-DD)"),
+    
+    # Report specific filters
+    # stock_status: Optional[str] = Query(None, description="Stock status filter"),
+    # sort_by: Optional[str] = Query("item_name", description="Sort by field"),
+    # sort_order: Optional[str] = Query("asc", description="Sort order (asc/desc)"),
+    # movement_type: Optional[str] = Query(None, description="Movement type filter"),
+    # forecast_period: Optional[str] = Query("monthly", description="Forecast period"),
+    # attendance_status: Optional[str] = Query(None, description="Attendance status filter"),
+    # payment_status: Optional[str] = Query(None, description="Payment status filter"),
+    # shipment_status: Optional[str] = Query(None, description="Shipment status filter"),
+    # from_location_id: Optional[int] = Query(None, description="From location ID"),
+    # to_location_id: Optional[int] = Query(None, description="To location ID"),
+    # vehicle_type: Optional[str] = Query(None, description="Vehicle type filter"),
+    # is_available: Optional[bool] = Query(None, description="Availability filter"),
+    # year: Optional[int] = Query(None, description="Year filter"),
+    # month: Optional[int] = Query(None, description="Month filter"),
+    # purchase_order_id: Optional[int] = Query(None, description="Purchase order ID"),
+    # date_from: Optional[str] = Query(None, description="Date from filter"),
+    # date_to: Optional[str] = Query(None, description="Date to filter"),
+    # endregion
+
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Dynamic export endpoint that handles all entity types
+    Dynamic export endpoint that handles all entity types including reports
     
     Supported entity types:
     - users, employees, items, roles, departments, locations
     - categories, stock_levels, purchase_orders, suppliers
     - shipments, tasks, and more...
+    - Reports: stock_levels_report, stock_movements_report, etc.
     """
     try:
         # Check if entity type is supported
@@ -229,7 +295,18 @@ async def export_data(
         local_vars = locals()
         for param in service_config["params"]:
             if param in local_vars and local_vars[param] is not None:
-                params[param] = local_vars[param]
+                # Convert date strings to date objects
+                if param in ["start_date", "end_date", "from_date", "to_date", "salary_month"]:
+                    try:
+                        if local_vars[param]:
+                            params[param] = datetime.strptime(local_vars[param], "%Y-%m-%d").date()
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Invalid date format for {param}. Use YYYY-MM-DD"
+                        )
+                else:
+                    params[param] = local_vars[param]
         
         # Get data using the service method
         method = getattr(service, service_config["method"])
@@ -238,6 +315,8 @@ async def export_data(
         # Extract data from result
         if isinstance(result, dict) and "data" in result:
             data = result["data"]
+        elif hasattr(result, 'data'):  # PaginatedResponse object
+            data = result.data
         else:
             data = result if isinstance(result, list) else []
         
@@ -255,7 +334,7 @@ async def export_data(
         
         # Export based on format
         if format.lower() == "excel":
-            return exporter.export_to_excel(export_data, filename, entity_type.title())
+            return exporter.export_to_excel(export_data, filename, entity_type.replace("_", " ").title())
         else:
             return exporter.export_to_csv(export_data, filename)
             
