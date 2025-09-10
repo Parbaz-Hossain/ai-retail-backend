@@ -1,3 +1,4 @@
+from fastapi import Form
 from pydantic import BaseModel, validator
 from typing import List, Optional
 from datetime import datetime
@@ -44,6 +45,58 @@ class ItemBase(BaseModel):
 
 class ItemCreate(ItemBase):
     qr_code: Optional[str] = None
+
+class ItemCreateForm:
+    def __init__(
+        self,
+        item_code: str = Form(...),
+        name: str = Form(...),
+        description: Optional[str] = Form(None),
+        category_id: Optional[int] = Form(None),
+        stock_type_id: Optional[int] = Form(None),
+        unit_type: UnitType = Form(...),
+        unit_cost: Optional[Decimal] = Form(None),
+        selling_price: Optional[Decimal] = Form(None),
+        barcode: Optional[str] = Form(None),
+        is_perishable: bool = Form(False),
+        shelf_life_days: Optional[int] = Form(None),
+        minimum_stock_level: Decimal = Form(0),
+        maximum_stock_level: Decimal = Form(0),
+        reorder_point: Decimal = Form(0)
+    ):
+        self.item_code = item_code
+        self.name = name
+        self.description = description
+        self.category_id = category_id
+        self.stock_type_id = stock_type_id
+        self.unit_type = unit_type
+        self.unit_cost = unit_cost
+        self.selling_price = selling_price
+        self.barcode = barcode
+        self.is_perishable = is_perishable
+        self.shelf_life_days = shelf_life_days
+        self.minimum_stock_level = minimum_stock_level
+        self.maximum_stock_level = maximum_stock_level
+        self.reorder_point = reorder_point
+    
+    def to_item_create(self) -> ItemCreate:
+        """Convert form data to ItemCreate schema"""
+        return ItemCreate(
+            item_code=self.item_code,
+            name=self.name,
+            description=self.description,
+            category_id=self.category_id,
+            stock_type_id=self.stock_type_id,
+            unit_type=self.unit_type,
+            unit_cost=self.unit_cost,
+            selling_price=self.selling_price,
+            barcode=self.barcode,
+            is_perishable=self.is_perishable,
+            shelf_life_days=self.shelf_life_days,
+            minimum_stock_level=self.minimum_stock_level,
+            maximum_stock_level=self.maximum_stock_level,
+            reorder_point=self.reorder_point
+        )
 
 class ItemUpdate(BaseModel):
     item_code: Optional[str] = None

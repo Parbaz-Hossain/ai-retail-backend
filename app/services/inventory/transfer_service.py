@@ -157,6 +157,7 @@ class TransferService:
                     selectinload(Transfer.items).selectinload(TransferItem.item).options(
                         selectinload(Item.category),
                         selectinload(Item.stock_levels),
+                        selectinload(Item.stock_type)
                     )
                 )
                 .order_by(desc(Transfer.transfer_date))
@@ -191,7 +192,6 @@ class TransferService:
                 "data": transfers
             }
         except Exception as e:
-            logger.error(f"Error getting transfers: {e}")
             return {
                 "page_index": page_index,
                 "page_size": page_size,

@@ -1,30 +1,80 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import logging
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.item_service import ItemService
-from app.schemas.inventory.item import Item, ItemCreate, ItemUpdate
+from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdate
 from app.schemas.inventory.stock_level import LowStockItem
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=Item, status_code=status.HTTP_201_CREATED)
 async def create_item(
-    item_data: ItemCreate,
+    item_form: ItemCreateForm = Depends(),
+    item_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new item"""
+    """Create a new item with optional image and auto-generated QR code"""
     try:
+        # Convert form to schema
+        item_create = item_form.to_item_create()
+        
         service = ItemService(db)
-        item = await service.create_item(item_data, current_user.id)
+        
+        # Create item first
+        item = await service.create_item(item_create, current_user.id)
+        
+        # Handle image upload if provided
+        if item_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with item ID
+            image_path = await file_service.save_image(item_image, "items", item.id)
+            
+            # Update item with image path
+            item.image_url = image_path
+        
+        # Generate QR code for the item
+        from app.utils.qr_generator import QRCodeService
+        qr_service = QRCodeService(db)
+        
+        item_data_for_qr = {
+            "item_code": item.item_code,
+            "name": item.name,
+            "category": item.category.name if item.category else None
+        }
+        
+        qr_code_record = await qr_service.create_item_qr_code(
+            item.id, 
+            item_data_for_qr, 
+            current_user.id
+        )
+        
+        # Update item with QR code
+        item.qr_code = qr_code_record.qr_code
+
+        await db.commit()
+        await db.refresh(item, ["category", "stock_type", "stock_levels", "updated_at"])
         return item
+        
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Create item error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create item"
+        )
 
 @router.get("/", response_model=PaginatedResponse[Item])
 async def get_items(

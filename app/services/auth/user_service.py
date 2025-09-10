@@ -116,9 +116,8 @@ class UserService:
             # Assign default role (employee)
             await self.assign_role_to_user(db_user.id, "employee", created_by)
             
-            await self.session.commit()
             logger.info(f"User created: {user_create.email}")
-            
+
             return db_user
             
         except HTTPException:

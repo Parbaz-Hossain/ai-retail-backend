@@ -1,4 +1,5 @@
 from typing import Optional, List
+from fastapi import Form
 from pydantic import BaseModel, EmailStr, validator
 from datetime import datetime
 
@@ -40,6 +41,37 @@ class UserCreate(UserBase):
         if 'password' in values and v != values['password']:
             raise ValueError('Passwords do not match')
         return v
+    
+class UserCreateForm:
+    def __init__(
+        self,
+        email: str = Form(...),
+        username: str = Form(...),
+        full_name: str = Form(...),
+        password: str = Form(...),
+        confirm_password: str = Form(...),
+        phone: Optional[str] = Form(None),
+        address: Optional[str] = Form(None)
+    ):
+        self.email = email
+        self.username = username
+        self.full_name = full_name
+        self.password = password
+        self.confirm_password = confirm_password
+        self.phone = phone
+        self.address = address
+    
+    def to_user_create(self) -> UserCreate:
+        """Convert form data to UserCreate schema"""
+        return UserCreate(
+            email=self.email,
+            username=self.username,
+            full_name=self.full_name,
+            password=self.password,
+            confirm_password=self.confirm_password,
+            phone=self.phone,
+            address=self.address
+        )
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -49,12 +81,13 @@ class UserUpdate(BaseModel):
 
 class UserInDBBase(UserBase):
     id: int
-    is_active: bool
-    is_verified: bool
-    is_superuser: bool
-    created_at: datetime
-    updated_at: datetime | None = None
-    last_login: datetime | None = None
+    profile_image: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True

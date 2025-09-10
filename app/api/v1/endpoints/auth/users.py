@@ -1,9 +1,9 @@
 import logging
 from typing import List, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
-from app.schemas.auth.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.auth.user import UserCreateForm, UserUpdate, UserResponse
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.auth.user_service import UserService
 from app.api.dependencies import get_current_user, get_current_superuser
@@ -13,18 +13,36 @@ logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=UserResponse)
 async def create_user(
-    user_create: UserCreate,
+    user_form: UserCreateForm = Depends(),
+    profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_superuser)
 ):
-    """Create new user (admin only)"""
+    """Create new user (admin only) with optional profile image"""
     try:
+        # Convert form to schema
+        user_create = user_form.to_user_create()
+        
         user_service = UserService(session)
         
+        # Create user first
         new_user = await user_service.create_user(
             user_create=user_create,
             created_by=current_user.id
         )
+        
+        # Handle image upload if provided
+        if profile_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with user ID
+            image_path = await file_service.save_image(profile_image, "users", new_user.id)
+            
+            # Update user with image path
+            new_user.profile_image = image_path
+            await session.commit()
+            await session.refresh(new_user, attribute_names=["created_at", "updated_at"])
         
         # Get user with roles
         roles = await user_service.get_user_roles(new_user.id)
@@ -44,7 +62,7 @@ async def create_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user"
         )
-
+    
 @router.get("/", response_model=PaginatedResponse[UserResponse])
 async def get_users(
     page_index: int = Query(1, ge=1),

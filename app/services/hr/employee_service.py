@@ -71,8 +71,6 @@ class EmployeeService:
 
             self.session.add(employee)
             await self.session.flush()
-            await self.session.commit()
-            await self.session.refresh(employee, attribute_names=["department", "location"])
 
             logger.info(f"Employee created: {employee.employee_id} - {employee.first_name} {employee.last_name} by user {current_user_id}")
             return employee
