@@ -64,9 +64,17 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "app.main:app",
+        "main:app",
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower()
     )
+
+    # uvicorn.run(
+    #     "main:app", 
+    #     host="0.0.0.0", 
+    #     port=9105, reload=False,  
+    #     ssl_certfile=r"D:\ai-retail-backend\cert.pem", 
+    #     ssl_keyfile=r"D:\ai-retail-backend\key.pem")
+    
