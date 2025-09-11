@@ -56,7 +56,7 @@ async def auto_generate_reorder_requests(
 ):
     """Auto-generate reorder requests for items below reorder point"""
     service = ReorderRequestService(db)
-    requests = await service.auto_generate_reorder_requests(location_id, user_id=current_user.id)
+    requests = await service.auto_generate_reorder_requests(user_id=current_user.id, location_id = location_id)
     return requests
 
 @router.get("/{request_id}", response_model=ReorderRequest)
