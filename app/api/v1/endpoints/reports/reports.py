@@ -90,6 +90,9 @@ async def get_low_stock_alerts_report(
     location_id: Optional[int] = Query(None),
     category_id: Optional[int] = Query(None),
     priority: Optional[str] = Query(None),  # CRITICAL, HIGH, MEDIUM, LOW
+    search: Optional[str] = Query(None),  
+    sort_by: Optional[str] = Query("priority"),  
+    sort_order: Optional[str] = Query("asc"),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
@@ -104,7 +107,10 @@ async def get_low_stock_alerts_report(
             page_size=page_size,
             location_id=location_id,
             category_id=category_id,
-            priority=priority
+            priority=priority,
+             search=search,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         return result
     except Exception as e:
@@ -160,6 +166,7 @@ async def get_attendance_summary_report(
     department_id: Optional[int] = Query(None),
     employee_id: Optional[int] = Query(None),
     attendance_status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
@@ -176,7 +183,8 @@ async def get_attendance_summary_report(
             to_date=to_date,
             department_id=department_id,
             employee_id=employee_id,
-            attendance_status=attendance_status
+            attendance_status=attendance_status,
+            search=search
         )
         return result
     except Exception as e:
@@ -192,6 +200,7 @@ async def get_salary_summary_report(
     salary_month: Optional[date] = Query(None),
     department_id: Optional[int] = Query(None),
     payment_status: Optional[str] = Query(None),  # PAID, UNPAID
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
@@ -206,7 +215,8 @@ async def get_salary_summary_report(
             page_size=page_size,
             salary_month=salary_month,
             department_id=department_id,
-            payment_status=payment_status
+            payment_status=payment_status,
+            search=search
         )
         return result
     except Exception as e:
@@ -227,6 +237,7 @@ async def get_shipment_tracking_report(
     driver_id: Optional[int] = Query(None),
     from_location_id: Optional[int] = Query(None),
     to_location_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
@@ -244,7 +255,8 @@ async def get_shipment_tracking_report(
             shipment_status=shipment_status,
             driver_id=driver_id,
             from_location_id=from_location_id,
-            to_location_id=to_location_id
+            to_location_id=to_location_id,
+            search=search
         )
         return result
     except Exception as e:
@@ -263,6 +275,7 @@ async def get_demand_forecast_report(
     location_id: Optional[int] = Query(None),
     forecast_period: Optional[str] = Query("monthly"),  # weekly, monthly, quarterly
     category_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
@@ -278,7 +291,8 @@ async def get_demand_forecast_report(
             item_id=item_id,
             location_id=location_id,
             forecast_period=forecast_period,
-            category_id=category_id
+            category_id=category_id,
+            search=search
         )
         return result
     except Exception as e:

@@ -63,18 +63,14 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
-    )
+    import sys
 
-    # uvicorn.run(
-    #     "main:app", 
-    #     host="0.0.0.0", 
-    #     port=9105, reload=False,  
-    #     ssl_certfile=r"D:\ai-retail-backend\cert.pem", 
-    #     ssl_keyfile=r"D:\ai-retail-backend\key.pem")
+    # Check if --http flag is provided for development
+    if "--http" in sys.argv:
+        print("🚀 Starting server in HTTP mode for development...")
+        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    else:
+        print("🔒 Starting server in HTTPS mode...")
+        uvicorn.run("main:app", host="0.0.0.0", port=9105, reload=False, ssl_certfile="cert.pem", ssl_keyfile="key.pem")
+    
     
