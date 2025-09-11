@@ -122,3 +122,11 @@ class NotificationService:
             await self.db.commit()
             return True
         return False
+    
+notification_manager = None
+
+def get_notification_service(db: AsyncSession) -> NotificationService:
+    global notification_manager
+    if notification_manager is None:
+        notification_manager = NotificationService(db)
+    return notification_manager
