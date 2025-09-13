@@ -7,6 +7,10 @@ database_url = settings.DATABASE_URL
 
 engine = create_async_engine(
     database_url,
+    pool_size=20,           # Increase from 5
+    max_overflow=30,        # Increase from 10
+    pool_timeout=60,        # Increase timeout
+    pool_recycle=3600,      # Recycle connections every hour
     echo=False,
     future=True,
     pool_pre_ping=True,
