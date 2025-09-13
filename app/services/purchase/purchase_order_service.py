@@ -162,12 +162,12 @@ class PurchaseOrderService:
             )
 
     async def get_purchase_order(self, po_id: int) -> Optional[PurchaseOrder]:
-        """Get purchase order by ID with items"""
+        """Get purchase order by ID with only non-deleted items"""
         try:
             result = await self.session.execute(
                 select(PurchaseOrder)
                 .options(
-                    selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.item),
+                    selectinload(PurchaseOrder.items.and_(PurchaseOrderItem.is_deleted == False)).selectinload(PurchaseOrderItem.item),
                     selectinload(PurchaseOrder.supplier)
                 )
                 .where(

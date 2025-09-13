@@ -108,6 +108,7 @@ class ReportService:
                     or_(
                         Item.name.ilike(f"%{search}%"),
                         Item.item_code.ilike(f"%{search}%"),
+                        Category.name.ilike(f"%{search}%"),
                         Location.name.ilike(f"%{search}%")
                     )
                 )
@@ -234,7 +235,9 @@ class ReportService:
                     or_(
                         Item.name.ilike(f"%{search}%"),
                         Item.item_code.ilike(f"%{search}%"),
-                        StockMovement.remarks.ilike(f"%{search}%")
+                        Location.name.ilike(f"%{search}%"),
+                        StockMovement.remarks.ilike(f"%{search}%"),
+                        StockMovement.batch_number.ilike(f"%{search}%")
                     )
                 )
 
@@ -289,7 +292,10 @@ class ReportService:
         page_size: int = 10,
         location_id: Optional[int] = None,
         category_id: Optional[int] = None,
-        priority: Optional[str] = None
+        priority: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "priority",
+        sort_order: str = "asc"
     ) -> PaginatedResponse[Dict]:
         """Generate low stock alerts report"""
         try:
@@ -342,6 +348,16 @@ class ReportService:
                             StockLevel.current_stock <= (Item.reorder_point * 0.5)
                         )
                     )
+
+             # Enhanced search functionality
+            if search:
+                search_filter = or_(
+                    Item.name.ilike(f"%{search}%"),
+                    Item.item_code.ilike(f"%{search}%"),
+                    Category.name.ilike(f"%{search}%"),
+                    Location.name.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -471,7 +487,8 @@ class ReportService:
                 query = query.where(
                     or_(
                         PurchaseOrder.po_number.ilike(f"%{search}%"),
-                        Supplier.name.ilike(f"%{search}%")
+                        Supplier.name.ilike(f"%{search}%"),
+                        Supplier.supplier_code.ilike(f"%{search}%")
                     )
                 )
 
@@ -532,7 +549,10 @@ class ReportService:
         item_id: Optional[int] = None,
         location_id: Optional[int] = None,
         forecast_period: str = "monthly",
-        category_id: Optional[int] = None
+        category_id: Optional[int] = None,
+        search: Optional[str] = None,
+        sort_by: str = "historical_demand",
+        sort_order: str = "desc"
     ) -> PaginatedResponse[Dict]:
         """Generate AI-powered demand forecast report"""
         try:
@@ -589,6 +609,16 @@ class ReportService:
             
             if category_id:
                 query = query.where(Item.category_id == category_id)
+
+            # Enhanced search functionality
+            if search:
+                search_filter = or_(
+                    Item.name.ilike(f"%{search}%"),
+                    Item.item_code.ilike(f"%{search}%"),
+                    Category.name.ilike(f"%{search}%"),
+                    Location.name.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -663,7 +693,10 @@ class ReportService:
         to_date: Optional[date] = None,
         department_id: Optional[int] = None,
         employee_id: Optional[int] = None,
-        attendance_status: Optional[str] = None
+        attendance_status: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "employee_name",
+        sort_order: str = "asc"
     ) -> PaginatedResponse[Dict]:
         """Generate comprehensive attendance summary report"""
         try:
@@ -755,6 +788,17 @@ class ReportService:
                         (func.count(case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=None)) / 
                         func.count(Attendance.id) * 100) >= 95
                     )
+
+             # Enhanced search functionality
+            if search:
+                search_filter = or_(
+                    Employee.first_name.ilike(f"%{search}%"),
+                    Employee.last_name.ilike(f"%{search}%"),
+                    (Employee.first_name + ' ' + Employee.last_name).ilike(f"%{search}%"),
+                    Employee.employee_id.ilike(f"%{search}%"),
+                    Department.name.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -853,13 +897,20 @@ class ReportService:
         page_size: int = 10,
         salary_month: Optional[date] = None,
         department_id: Optional[int] = None,
-        payment_status: Optional[str] = None
+        payment_status: Optional[str] = None,
+        search: Optional[str] = None,
+        sort_by: str = "employee_name",
+        sort_order: str = "asc"
     ) -> PaginatedResponse[Dict]:
-        """Generate comprehensive salary summary report"""
+        """Generate comprehensive salary summary report with search - Modified for month/year matching"""
         try:
             # Default to current month if not specified
             if not salary_month:
                 salary_month = datetime.now().date().replace(day=1)
+
+            # Extract year and month from the provided date for matching
+            target_year = salary_month.year
+            target_month = salary_month.month
 
             # Build comprehensive salary query
             query = select(
@@ -907,7 +958,9 @@ class ReportService:
                 and_(
                     Salary.is_deleted == False,
                     Employee.is_deleted == False,
-                    Salary.salary_month == salary_month
+                    # Modified condition: Match only year and month, ignore day
+                    func.extract('year', Salary.salary_month) == target_year,
+                    func.extract('month', Salary.salary_month) == target_month
                 )
             )
 
@@ -918,12 +971,40 @@ class ReportService:
             if payment_status:
                 query = query.where(Salary.payment_status == payment_status)
 
+            # Enhanced search functionality
+            if search:
+                search_filter = or_(
+                    Employee.first_name.ilike(f"%{search}%"),
+                    Employee.last_name.ilike(f"%{search}%"),
+                    (Employee.first_name + ' ' + Employee.last_name).ilike(f"%{search}%"),
+                    Employee.employee_id.ilike(f"%{search}%"),
+                    Department.name.ilike(f"%{search}%"),
+                    Employee.position.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
+
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.session.execute(count_query)
             total_count = total_result.scalar()
 
-            # Apply pagination and sorting
+            # Apply sorting
+            sort_column = {
+                "employee_name": Employee.first_name,
+                "net_salary": Salary.net_salary,
+                "department": Department.name,
+                "payment_status": Salary.payment_status,
+                "designation": Employee.position,
+                "gross_salary": Salary.gross_salary,
+                "employee_code": Employee.employee_id
+            }.get(sort_by, Employee.first_name)
+
+            if sort_order == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(asc(sort_column))
+
+            # Apply pagination
             offset = (page_index - 1) * page_size
             query = query.order_by(
                 Employee.department_id,
@@ -953,7 +1034,9 @@ class ReportService:
                     status_color = "success"
                 else:
                     # Check if overdue (more than 5 days after month end)
-                    month_end = (salary_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+                    # Use the actual salary_month from database, not the input parameter
+                    actual_month = row.salary_month
+                    month_end = (actual_month.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
                     if datetime.now().date() > month_end + timedelta(days=5):
                         salary_status = "OVERDUE"
                         status_color = "danger"
@@ -968,7 +1051,7 @@ class ReportService:
                     "department": row.department_name or "Not Assigned",
                     "location": row.location_name or "Not Assigned",
                     "designation": row.designation or "Not Specified",
-                    "salary_month": row.salary_month.strftime("%B %Y"),
+                    "salary_month": row.salary_month.strftime("%B %Y"),  # This will show the actual month from DB
                     
                     # Salary breakdown
                     "basic_salary": float(row.basic_salary),
@@ -1031,7 +1114,10 @@ class ReportService:
         shipment_status: Optional[str] = None,
         driver_id: Optional[int] = None,
         from_location_id: Optional[int] = None,
-        to_location_id: Optional[int] = None
+        to_location_id: Optional[int] = None,
+        search: Optional[str] = None,
+        sort_by: str = "shipment_date",
+        sort_order: str = "desc"
     ) -> PaginatedResponse[Dict]:
         """Generate comprehensive shipment tracking report"""
         try:
@@ -1119,6 +1205,20 @@ class ReportService:
             
             if to_location_id:
                 query = query.where(Shipment.to_location_id == to_location_id)
+
+            # Enhanced search functionality
+            if search:
+                search_filter = or_(
+                    Shipment.shipment_number.ilike(f"%{search}%"),
+                    (Employee.first_name + ' ' + Employee.last_name).ilike(f"%{search}%"),
+                    Employee.first_name.ilike(f"%{search}%"),
+                    Employee.last_name.ilike(f"%{search}%"),
+                    Vehicle.vehicle_number.ilike(f"%{search}%"),
+                    Location.name.ilike(f"%{search}%"),
+                    ToLocation.name.ilike(f"%{search}%"),
+                    Shipment.notes.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())

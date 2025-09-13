@@ -162,7 +162,7 @@ class GoodsReceiptService:
             self.session.add_all(receipt_items)
 
             # Check if PO is fully received
-            await self._check_po_completion(purchase_order)
+            await self._check_po_completion(purchase_order.id)
 
             await self.session.commit()
 
@@ -180,7 +180,12 @@ class GoodsReceiptService:
              # Reload PO with items eagerly
             result = await self.session.execute(
                 select(GoodsReceipt)
-                .options(selectinload(GoodsReceipt.items))
+                .options(
+                    selectinload(GoodsReceipt.supplier),
+                    selectinload(GoodsReceipt.purchase_order),
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
+                )
                 .where(GoodsReceipt.id == goods_receipt.id)
             )
 
@@ -204,9 +209,10 @@ class GoodsReceiptService:
             result = await self.session.execute(
                 select(GoodsReceipt)
                 .options(
-                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
+                    selectinload(GoodsReceipt.supplier),
                     selectinload(GoodsReceipt.purchase_order),
-                    selectinload(GoodsReceipt.supplier)
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
                 )
                 .where(
                     and_(
@@ -234,12 +240,13 @@ class GoodsReceiptService:
         """Get goods receipts with pagination and filters"""
         try:
             # Base query
-            query = select(GoodsReceipt).options(
+            query = (select(GoodsReceipt)
+            .options(
                 selectinload(GoodsReceipt.supplier),
                 selectinload(GoodsReceipt.purchase_order),
                 selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
                 selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
-            ).where(GoodsReceipt.is_deleted == False)
+            )).where(GoodsReceipt.is_deleted == False)
 
             # Apply filters
             if supplier_id:
@@ -362,7 +369,7 @@ class GoodsReceiptService:
             receipt.is_deleted = True
             
             # Check PO status again
-            await self._check_po_completion(receipt.purchase_order)
+            await self._check_po_completion(receipt.purchase_order.id)
             
             await self.session.commit()
 
@@ -493,9 +500,21 @@ class GoodsReceiptService:
             logger.error(f"Error reversing stock levels: {str(e)}")
             raise
 
-    async def _check_po_completion(self, purchase_order: PurchaseOrder):
+    async def _check_po_completion(self, purchase_order_id: int):
         """Check if purchase order is fully received"""
         try:
+            # Explicitly load the purchase order with its items
+            po_result = await self.session.execute(
+                select(PurchaseOrder)
+                .options(selectinload(PurchaseOrder.items))
+                .where(PurchaseOrder.id == purchase_order_id)
+            )
+            purchase_order = po_result.scalar_one_or_none()
+            
+            if not purchase_order:
+                logger.warning(f"Purchase order {purchase_order_id} not found")
+                return
+        
             # Check if all items are fully received
             all_received = all(
                 item.received_quantity >= item.quantity

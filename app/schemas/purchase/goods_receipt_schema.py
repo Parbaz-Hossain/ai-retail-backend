@@ -19,12 +19,10 @@ class LocationInfo(BaseModel):
 
 class GoodsReceiptItemBase(BaseModel):
     purchase_order_item_id: int
-    item : Optional[ItemInfo] = None
     received_quantity: Decimal
     batch_number: Optional[str] = None
     expiry_date: Optional[date] = None
     location_id: int
-    location : Optional[LocationInfo] = None
 
     @validator('received_quantity')
     def validate_positive_quantity(cls, v):
@@ -38,9 +36,11 @@ class GoodsReceiptItemCreate(GoodsReceiptItemBase):
 class GoodsReceiptItemResponse(GoodsReceiptItemBase):
     id: int
     goods_receipt_id: int
-    item_id: int
+    item_id: int    
+    item : Optional[ItemInfo] = None
     ordered_quantity: Decimal
-    unit_cost: Decimal
+    unit_cost: Decimal    
+    location : Optional[LocationInfo] = None
 
     class Config:
         from_attributes = True
@@ -71,6 +71,14 @@ class SupplierInfo(BaseModel):
     class Config:
         from_attributes = True
 
+class PurchaseOrderInfo(BaseModel):
+    po_number: str
+    order_date: date
+    total_amount: Decimal
+
+    class Config:
+        from_attributes = True
+
 class GoodsReceiptResponse(GoodsReceiptBase):
     id: int
     receipt_number: str
@@ -80,7 +88,7 @@ class GoodsReceiptResponse(GoodsReceiptBase):
     created_at: datetime
     updated_at: Optional[datetime]
     items: List[GoodsReceiptItemResponse] = []
-    po_number: Optional[str] = None
+    purchase_order: Optional[PurchaseOrderInfo] = None
     received_by_name: Optional[str] = None
 
     class Config:

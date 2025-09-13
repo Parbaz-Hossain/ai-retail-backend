@@ -27,7 +27,19 @@ class StockMovementBase(BaseModel):
 class StockMovementCreate(StockMovementBase):
     total_cost: Optional[Decimal] = None
 
-class StockMovementInDB(StockMovementBase):
+class StockMovementBaseResponse(BaseModel):
+    item_id: int
+    location_id: int
+    movement_type: StockMovementType
+    quantity: Decimal
+    unit_cost: Optional[Decimal] = None
+    reference_type: Optional[str] = None
+    reference_id: Optional[int] = None
+    batch_number: Optional[str] = None
+    expiry_date: Optional[date] = None
+    remarks: Optional[str] = None
+
+class StockMovementInDB(StockMovementBaseResponse):
     id: int
     total_cost: Optional[Decimal]
     performed_by: Optional[int] = None
