@@ -22,6 +22,7 @@ class Attendance(BaseModel):
     longitude = Column(Numeric(11, 8))
     remarks = Column(Text)
     is_holiday = Column(Boolean, default=False)
+    is_weekend = Column(Boolean, default=False)
     
     # Relationships
     employee = relationship("Employee", back_populates="attendances")

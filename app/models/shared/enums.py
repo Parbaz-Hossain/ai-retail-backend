@@ -49,7 +49,9 @@ class AttendanceStatus(str, Enum):
     LATE = "LATE"
     LEFT_EARLY = "LEFT_EARLY"
     CHECKED_IN = "CHECKED_IN"
-    CHECKED_OUT = "CHECKED_OUT"
+    CHECKED_OUT = "CHECKED_OUT" 
+    WEEKEND = "WEEKEND"  
+    HOLIDAY = "HOLIDAY"
 
 class SalaryPaymentStatus(str, Enum):
     PAID = "PAID"
@@ -143,3 +145,8 @@ class MessageRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
+
+class OffdayType(str, Enum):
+    WEEKEND = "WEEKEND"
+    PERSONAL_OFFDAY = "PERSONAL_OFFDAY"
+    COMPENSATORY_OFF = "COMPENSATORY_OFF"

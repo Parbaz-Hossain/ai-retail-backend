@@ -7,6 +7,7 @@ from app.models.auth.user import User
 from app.models.hr.attendance import Attendance
 from app.models.hr.employee import Employee
 from app.models.hr.holiday import Holiday
+from app.models.hr.offday import Offday
 from app.models.hr.salary import Salary
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.user_shift import UserShift
@@ -56,6 +57,7 @@ __all__ = [
     "Attendance",
     "Employee",
     "Holiday",
+    "Offday",
     "Salary",
     "ShiftType",
     "UserShift",
