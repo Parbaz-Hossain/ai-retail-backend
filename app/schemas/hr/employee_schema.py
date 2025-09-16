@@ -118,6 +118,64 @@ class EmployeeUpdate(BaseModel):
     address: Optional[str] = None
     is_active: Optional[bool] = None
 
+class EmployeeUpdateForm:
+    def __init__(
+        self,
+        first_name: Optional[str] = Form(None),
+        last_name: Optional[str] = Form(None),
+        email: Optional[str] = Form(None),
+        phone: Optional[str] = Form(None),
+        date_of_birth: Optional[date] = Form(None),
+        department_id: Optional[int] = Form(None),
+        location_id: Optional[int] = Form(None),
+        position: Optional[str] = Form(None),
+        basic_salary: Optional[Decimal] = Form(None),
+        housing_allowance: Optional[Decimal] = Form(None),
+        transport_allowance: Optional[Decimal] = Form(None),
+        is_manager: Optional[bool] = Form(None),
+        emergency_contact: Optional[str] = Form(None),
+        emergency_phone: Optional[str] = Form(None),
+        address: Optional[str] = Form(None),
+        is_active: Optional[bool] = Form(None)
+    ):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.email = email
+        self.phone = phone
+        self.date_of_birth = date_of_birth
+        self.department_id = department_id
+        self.location_id = location_id
+        self.position = position
+        self.basic_salary = basic_salary
+        self.housing_allowance = housing_allowance
+        self.transport_allowance = transport_allowance
+        self.is_manager = is_manager
+        self.emergency_contact = emergency_contact
+        self.emergency_phone = emergency_phone
+        self.address = address
+        self.is_active = is_active
+    
+    def to_employee_update(self) -> EmployeeUpdate:
+        """Convert form data to EmployeeUpdate schema"""
+        return EmployeeUpdate(
+            first_name=self.first_name,
+            last_name=self.last_name,
+            email=self.email,
+            phone=self.phone,
+            date_of_birth=self.date_of_birth,
+            department_id=self.department_id,
+            location_id=self.location_id,
+            position=self.position,
+            basic_salary=self.basic_salary,
+            housing_allowance=self.housing_allowance,
+            transport_allowance=self.transport_allowance,
+            is_manager=self.is_manager,
+            emergency_contact=self.emergency_contact,
+            emergency_phone=self.emergency_phone,
+            address=self.address,
+            is_active=self.is_active
+        )
+
 class DepartmentInfo(BaseModel):
     id: int
     name: str
