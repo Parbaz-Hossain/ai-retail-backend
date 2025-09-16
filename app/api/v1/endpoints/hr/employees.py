@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.employee_service import EmployeeService
-from app.schemas.hr.employee_schema import EmployeeCreateForm, EmployeeUpdate, EmployeeResponse
+from app.schemas.hr.employee_schema import EmployeeCreateForm, EmployeeUpdateForm, EmployeeResponse
 from app.models.auth.user import User
 
 router = APIRouter()
@@ -103,14 +103,45 @@ async def get_employee(
 @router.put("/{employee_id}", response_model=EmployeeResponse)
 async def update_employee(
     employee_id: int,
-    employee: EmployeeUpdate,
+    employee_form: EmployeeUpdateForm = Depends(),
+    profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Update employee"""
-    service = EmployeeService(session)
-    return await service.update_employee(employee_id, employee, current_user.id)
-
+    """Update employee with optional profile image"""
+    try:
+        service = EmployeeService(session)
+        
+        # Convert form to schema
+        employee_update = employee_form.to_employee_update()
+        
+        # Update employee first
+        updated_employee = await service.update_employee(employee_id, employee_update, current_user.id)
+        
+        # Handle image upload if provided
+        if profile_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with employee ID
+            image_path = await file_service.save_image(profile_image, "employees", updated_employee.id)
+            
+            # Update employee with image path
+            updated_employee.profile_image = image_path
+            await session.commit()
+            await session.refresh(updated_employee, attribute_names=["department", "location", "updated_at"])
+        
+        return updated_employee
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update employee error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update employee"
+        )
+    
 @router.delete("/{employee_id}")
 async def delete_employee(
     employee_id: int,

@@ -79,6 +79,25 @@ class UserUpdate(BaseModel):
     address: Optional[str] = None
     profile_image: Optional[str] = None
 
+class UserUpdateForm:
+    def __init__(
+        self,
+        full_name: Optional[str] = Form(None),
+        phone: Optional[str] = Form(None),
+        address: Optional[str] = Form(None)
+    ):
+        self.full_name = full_name
+        self.phone = phone
+        self.address = address
+    
+    def to_user_update(self) -> UserUpdate:
+        """Convert form data to UserUpdate schema"""
+        return UserUpdate(
+            full_name=self.full_name,
+            phone=self.phone,
+            address=self.address
+        )
+
 class UserInDBBase(UserBase):
     id: int
     profile_image: Optional[str] = None

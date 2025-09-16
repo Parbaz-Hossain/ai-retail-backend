@@ -8,7 +8,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.item_service import ItemService
-from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdate
+from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdateForm
 from app.schemas.inventory.stock_level import LowStockItem
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
@@ -150,19 +150,46 @@ async def get_item(
 @router.put("/{item_id}", response_model=Item)
 async def update_item(
     item_id: int,
-    item_data: ItemUpdate,
+    item_form: ItemUpdateForm = Depends(),
+    item_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Update item"""
+    """Update item with optional image"""
     try:
         service = ItemService(db)
-        item = await service.update_item(item_id, item_data, current_user.id)
-        return item
+        
+        # Convert form to schema
+        item_update = item_form.to_item_update()
+        
+        # Update item first
+        updated_item = await service.update_item(item_id, item_update, current_user.id)
+        
+        # Handle image upload if provided
+        if item_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with item ID
+            image_path = await file_service.save_image(item_image, "items", updated_item.id)
+            
+            # Update item with image path
+            updated_item.image_url = image_path
+            await db.commit()
+            await db.refresh(updated_item, ["category", "stock_type", "stock_levels", "updated_at"])
+        
+        return updated_item
+        
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Item not found")
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Update item error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update item"
+        )
 
 @router.delete("/{item_id}")
 async def delete_item(

@@ -343,7 +343,7 @@ class TaskIntegrationService:
             user_id=user_id
         )
 
-        # region Send detailed HTML email to each approver
+        # region Send detailed HTML email to each approver & send real time ui notification
         if task:
             # Send email notification
             
