@@ -82,6 +82,23 @@ class Settings(BaseSettings):
     LATE_GRACE_MINUTES: int = 15
     OVERTIME_RATE_MULTIPLIER: float = 1.5
 
+
+    OTP_COOKIE_SECRET="change-me"
+    OTP_COOKIE_NAME="otpData"
+    OTP_COOKIE_TTL_MINUTES=5
+    OTP_RESEND_COOLDOWN_SECONDS=60
+
+    ACCESS_TOKEN_COOKIE="access_token"
+    REFRESH_TOKEN_COOKIE="refresh_token"
+    COOKIE_SECURE=True
+    COOKIE_SAMESITE="lax"   # 'lax' | 'strict' | 'none'
+    COOKIE_DOMAIN=None      # or your domain
+
+    WHATSAPP_ENABLED=True
+    WHATSAPP_SENDER_MOBILE="966538748591"
+    WHATSAPP_INSTANCE_ID="234909"
+    WHATSAPP_PASSWORD="Ee@@19801980"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
