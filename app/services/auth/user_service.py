@@ -440,6 +440,8 @@ class UserService:
             return False
 
                 # ---------- Excel export helpers ----------
+    
+    # ----------------------- User Excel Export -----------------------
     @staticmethod
     def _write_users_sheet(ws, users):
         ws.append(["ID", "Email", "Username", "Full Name", "Phone", "Is Active", "Is Verified", "Created At"])

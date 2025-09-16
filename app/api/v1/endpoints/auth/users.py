@@ -110,6 +110,35 @@ async def get_users_count(
             detail="Failed to get users count"
         )
 
+# Export users to Excel
+@router.get("/export", response_class=StreamingResponse)
+async def export_users(
+    deleted: bool = Query(False, description="Set true to export soft-deleted users"),
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)  
+):
+    """
+    Export users to Excel.
+    - deleted = False (default) → export active users
+    - deleted = True  → export soft-deleted users
+    """
+    try:
+        user_svc = UserService(session)
+        file_bytes, filename = await user_svc.export_users_excel(deleted=deleted)
+
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+        return StreamingResponse(
+            file_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except Exception as e:
+        logger.error(f"Error exporting users: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to export users"
+        )
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
@@ -308,32 +337,4 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to remove role"
-        )
-
-@router.get("/export", response_class=StreamingResponse)
-async def export_users(
-    deleted: bool = Query(False, description="Set true to export soft-deleted users"),
-    session: AsyncSession = Depends(get_async_session),
-    # current_user = Depends(get_current_superuser)  # ← enable if you want to restrict to admins
-):
-    """
-    Export users to Excel.
-    - deleted = False (default) → export active users
-    - deleted = True  → export soft-deleted users
-    """
-    try:
-        user_svc = UserService(session)
-        file_bytes, filename = await user_svc.export_users_excel(deleted=deleted)
-
-        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-        return StreamingResponse(
-            file_bytes,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers,
-        )
-    except Exception as e:
-        logger.error(f"Error exporting users: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to export users"
         )

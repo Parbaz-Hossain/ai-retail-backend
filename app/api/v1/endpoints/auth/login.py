@@ -1,13 +1,13 @@
 # app/routers/login.py  (merged classic + OTP flows)
 import logging
 import random
+import time
 from typing import Any, Optional
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import jwt, JWTError
-from pydantic import BaseModel, EmailStr
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Make sure these imports match your project structure
@@ -19,9 +19,10 @@ from app.schemas.auth.token import Token, RefreshTokenRequest
 from app.schemas.auth.user import UserResponse
 from app.services.auth.auth_service import AuthService
 from app.services.auth.user_service import UserService
+from app.services.communication.email_service import EmailService
 from app.utils.rate_limiter import check_login_rate_limit
 from app.core.config import settings
-from app.helper.whatsapp_service import WhatsAppClient
+from app.services.communication.whatsapp_service import WhatsAppClient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 # OTP / Cookie configuration
 # ==============================
 OTP_COOKIE_NAME = getattr(settings, "OTP_COOKIE_NAME", "otpData")
-OTP_COOKIE_TTL_MINUTES = int(getattr(settings, "OTP_COOKIE_TTL_MINUTES", 5))
+OTP_COOKIE_TTL_MINUTES = int(getattr(settings, "OTP_COOKIE_TTL_MINUTES", 300))
 OTP_RESEND_COOLDOWN_SECONDS = int(getattr(settings, "OTP_RESEND_COOLDOWN_SECONDS", 60))
 OTP_COOKIE_SECRET = getattr(settings, "OTP_COOKIE_SECRET", getattr(settings, "SECRET_KEY", "change-me"))
 ACCESS_TOKEN_COOKIE = getattr(settings, "ACCESS_TOKEN_COOKIE", "access_token")
@@ -45,18 +46,48 @@ def _now() -> datetime:
 def _make_otp() -> str:
     return f"{random.randint(1000, 9999)}"
 
+def _make_timestamp() -> int:
+    """Generate consistent Unix timestamp"""
+    return int(time.time())
+
 def _encode_cookie(payload: dict) -> str:
-    exp = int(payload.get("exp", (_now() + timedelta(minutes=OTP_COOKIE_TTL_MINUTES)).timestamp()))
-    data = {**payload, "exp": exp, "iat": int(_now().timestamp())}
+    """Use consistent timestamp generation"""
+    current_time = _make_timestamp()
+    exp_time = current_time + (OTP_COOKIE_TTL_MINUTES * 60)
+    
+    data = {
+        **payload, 
+        "exp": exp_time,
+        "iat": current_time
+    }
+    
+    logger.info(f"Creating JWT with iat={current_time}, exp={exp_time}, ttl={OTP_COOKIE_TTL_MINUTES} minutes")
+    
     return jwt.encode(data, OTP_COOKIE_SECRET, algorithm="HS256")
 
 def _decode_cookie(token: str) -> Optional[dict]:
+    """Decode with detailed logging"""
     try:
-        return jwt.decode(token, OTP_COOKIE_SECRET, algorithms=["HS256"])
-    except JWTError:
-        return None
-
+        current_time = _make_timestamp()
+        logger.info(f"Attempting to decode JWT at timestamp: {current_time}")
+        
+        decoded = jwt.decode(token, OTP_COOKIE_SECRET, algorithms=["HS256"])
+        logger.info(f"JWT decoded successfully at {current_time}")
+        return decoded
+        
+    except jwt.ExpiredSignatureError:
+        current_time = _make_timestamp()
+        logger.error(f"JWT expired at timestamp: {current_time}")
+        return {"error": "expired"}
+    except jwt.InvalidTokenError as e:
+        logger.error(f"Invalid JWT: {e}")
+        return {"error": "invalid"}
+    except Exception as e:
+        logger.error(f"JWT decode error: {e}")
+        return {"error": "decode_failed"}
+    
 def _set_cookie(resp: Response, name: str, value: str, ttl_minutes: int):
+    """Set cookie with proper configuration"""
     resp.set_cookie(
         key=name,
         value=value,
@@ -65,18 +96,136 @@ def _set_cookie(resp: Response, name: str, value: str, ttl_minutes: int):
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
         domain=COOKIE_DOMAIN,
+        path="/",
     )
 
 def _clear_cookie(resp: Response, name: str):
-    resp.delete_cookie(name=name, domain=COOKIE_DOMAIN)
+    """Clear cookie - Fixed FastAPI signature"""
+    resp.delete_cookie(key=name, path="/")
+    # Also clear with domain if set (for cross-subdomain cookies)
+    if COOKIE_DOMAIN:
+        resp.delete_cookie(key=name, path="/", domain=COOKIE_DOMAIN)
 
 async def _send_otp(email: str, phone: Optional[str], code: str):
-    # Email stub — replace with your real mailer if available
-    logger.info("Sending OTP %s to email %s", code, email)
-    # WhatsApp
+    if email:
+        email_service = EmailService()
+        
+        #region Modern OTP email template
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Your OTP Code</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background-color: #f5f5f5;">
+            <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); overflow: hidden;">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">Verification Code</h1>
+                <p style="color: #e8f0fe; margin: 8px 0 0 0; font-size: 16px;">Secure access to your account</p>
+            </div>
+            
+            <!-- Content -->
+            <div style="padding: 40px 30px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                <p style="font-size: 18px; color: #333333; margin: 0 0 20px 0; line-height: 1.4;">
+                    Hi there! 👋
+                </p>
+                <p style="font-size: 16px; color: #666666; margin: 0 0 30px 0; line-height: 1.6;">
+                    Use this verification code to complete your login or password reset:
+                </p>
+                
+                <!-- OTP Code Box -->
+                <div style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border: 2px solid #e2e8f0; border-radius: 12px; padding: 25px; margin: 30px 0; display: inline-block;">
+                    <div style="font-size: 36px; font-weight: 700; color: #1a202c; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                    {code}
+                    </div>
+                </div>
+                
+                <div style="background-color: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 25px 0; border-radius: 4px;">
+                    <p style="margin: 0; font-size: 14px; color: #8b6914;">
+                    <strong>⏰ This code expires in {OTP_COOKIE_TTL_MINUTES} minutes</strong>
+                    </p>
+                </div>
+                </div>
+                
+                <!-- Security Notice -->
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 25px 0;">
+                <p style="margin: 0 0 10px 0; font-size: 14px; color: #495057; font-weight: 600;">
+                    🔐 Security Notice:
+                </p>
+                <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #6c757d; line-height: 1.5;">
+                    <li>Never share this code with anyone</li>
+                    <li>We'll never ask for your code via phone or email</li>
+                    <li>If you didn't request this, please ignore this email</li>
+                </ul>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background-color: #f8f9fa; padding: 25px 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                <p style="margin: 0; font-size: 14px; color: #6c757d;">
+                Best regards,<br>
+                <strong>The Support Team</strong>
+                </p>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                <p style="margin: 0; font-size: 12px; color: #adb5bd;">
+                    This is an automated message. Please do not reply to this email.
+                </p>
+                </div>
+            </div>
+            </div>
+            
+            <!-- Footer outside card -->
+            <div style="text-align: center; padding: 20px;">
+            <p style="margin: 0; font-size: 12px; color: #adb5bd;">
+                © {datetime.utcnow().year} ESAP AI. All rights reserved.
+            </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Clean text version
+        text_content = f"""
+        VERIFICATION CODE
+        
+        Hi there!
+        
+        Use this verification code to complete your login or password reset:
+        
+        {code}
+        
+        ⏰ This code expires in {OTP_COOKIE_TTL_MINUTES} minutes
+        
+        SECURITY NOTICE:
+        • Never share this code with anyone
+        • We'll never ask for your code via phone or email
+        • If you didn't request this, please ignore this email
+        
+        Best regards,
+        The Support Team
+        
+        ---
+        This is an automated message. Please do not reply to this email.
+        """
+        #endregion
+
+        await email_service.send_email(
+            to_email=email,
+            subject="🔐 Your verification code",
+            html_content=html_content,
+            text_content=text_content
+        )
+        logger.info("Sending OTP %s to email %s", code, email)
+
+    # WhatsApp OTP notification
     if phone:
         client = WhatsAppClient()
-        msg = f"Your verification code is: {code}"
+        msg = f"🔐 Your verification code: {code}\n\n⏰ Valid for {OTP_COOKIE_TTL_MINUTES} minutes\n\nNever share this code with anyone."
         await client.send(phone, msg)
 
 # ==============================
@@ -204,21 +353,6 @@ async def logout(
         logger.error(f"Logout error: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Logout failed")
 
-@router.post("/logout")
-async def logout(
-    token_data: RefreshTokenRequest,
-    session: AsyncSession = Depends(get_async_session),
-    current_user=Depends(get_current_user),
-):
-    """Logout user by revoking refresh token."""
-    try:
-        auth_service = AuthService(session)
-        await auth_service.revoke_refresh_token(token_data.refresh_token)
-        return {"message": "Successfully logged out"}
-    except Exception as e:
-        logger.error(f"Logout error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Logout failed")
-
 @router.post("/logout-all")
 async def logout_all_sessions(
     session: AsyncSession = Depends(get_async_session),
@@ -292,8 +426,9 @@ async def login_otp_init(
     session: AsyncSession = Depends(get_async_session),
     _: None = Depends(check_login_rate_limit),
 ):
+        
+        """Step 1: Verify credentials then send OTP via email/WhatsApp and set httpOnly cookie 'otpData'."""
         try:
-            """Step 1: Verify credentials then send OTP via email/WhatsApp and set httpOnly cookie 'otpData'."""
             auth = AuthService(session)
             req_ctx = get_request_context(request)
 
@@ -325,13 +460,14 @@ async def login_otp_init(
             await _send_otp(user.email, user.phone, code)
             return {"message": "OTP sent to your email/WhatsApp (if configured).", "expires_in_minutes": OTP_COOKIE_TTL_MINUTES}
         
+        except HTTPException:
+            raise
         except Exception as e:
-                logger.error(f"Error exporting users: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to login"
-                )
-
+            logger.error(f"Error in login OTP init: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to initiate OTP login"
+            )
 
 @router.post("/login-otp-check", status_code=200)
 async def login_otp_check(
@@ -340,62 +476,126 @@ async def login_otp_check(
     data: OtpInput,
     session: AsyncSession = Depends(get_async_session),
 ):
+    """Step 2: Verify OTP from cookie, create auth tokens, set auth cookies, clear OTP cookie."""
+    try:
+        # Debug: Log all cookies
+        logger.info(f"All cookies received: {dict(request.cookies)}")
+        logger.info(f"Looking for cookie: {OTP_COOKIE_NAME}")
+        
+        # Get and decode cookie
+        cookie = request.cookies.get(OTP_COOKIE_NAME)
+        logger.info(f"OTP cookie found: {bool(cookie)}")
+        
+        if not cookie:
+            logger.warning("No OTP cookie found in request")
+            raise HTTPException(status_code=400, detail="OTP session not found")
+        
+        logger.info(f"Cookie value (first 20 chars): {cookie[:20]}...")
+        
         try:
-            """Step 2: Verify OTP from cookie then mint tokens. Also sets auth cookies for parity with Node UX."""
-            cookie = request.cookies.get(OTP_COOKIE_NAME)
-            payload = _decode_cookie(cookie) if cookie else None
-            if not payload or payload.get("purpose") != "login":
-                raise HTTPException(status_code=400, detail="OTP session not found or expired.")
-            if payload.get("otp") != data.otp:
-                raise HTTPException(status_code=400, detail="Invalid OTP.")
-
-            user_svc = UserService(session)
-            user = await user_svc.get_user(int(payload["user_id"]))
-            if not user or not user.is_active:
-                raise HTTPException(status_code=401, detail="User not found or inactive.")
-
-            auth = AuthService(session)
-            req_ctx = get_request_context(request)
-            tokens = await auth.create_tokens(user=user, device_info="", ip_address=req_ctx["ip_address"])
-
-            _clear_cookie(response, OTP_COOKIE_NAME)
-
-            # Optional cookie delivery for SPA parity (keep if your frontend expects cookies)
-            response.set_cookie(
-                key=ACCESS_TOKEN_COOKIE,
-                value=tokens["access_token"],
-                httponly=True,
-                secure=COOKIE_SECURE,
-                samesite=COOKIE_SAMESITE,
-                domain=COOKIE_DOMAIN,
-                max_age=int(tokens["expires_in"]),
-            )
-            response.set_cookie(
-                key=REFRESH_TOKEN_COOKIE,
-                value=tokens["refresh_token"],
-                httponly=True,
-                secure=COOKIE_SECURE,
-                samesite=COOKIE_SAMESITE,
-                domain=COOKIE_DOMAIN,
-                max_age=int(getattr(settings, "REFRESH_TOKEN_EXPIRE_MINUTES", 10080)) * 60,
-            )
-
-            return {"message": "Login successful.", **tokens}
+            payload = _decode_cookie(cookie)
+            logger.info(f"Payload decoded successfully: {bool(payload)}")
+            if payload:
+                logger.info(f"Payload purpose: {payload.get('purpose')}")
+                logger.info(f"Payload user_id: {payload.get('user_id')}")
+                logger.info(f"Payload exp: {payload.get('exp')}")
         except Exception as e:
-            logger.error(f"Error exporting users: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to check OTP"
-            )
+            logger.error(f"Failed to decode OTP cookie: {e}")
+            logger.error(f"Cookie content: {cookie}")
+            raise HTTPException(status_code=400, detail="Invalid OTP session")
+        
+        # Validate payload
+        if not payload:
+            logger.error("Payload is None after decoding")
+            raise HTTPException(status_code=400, detail="OTP session not found or expired.")
+            
+        if payload.get("purpose") != "login":
+            logger.error(f"Wrong purpose: {payload.get('purpose')} (expected: login)")
+            raise HTTPException(status_code=400, detail="OTP session not found or expired.")
+        
+        # Check expiration manually
+        exp_timestamp = payload.get("exp")
+        current_timestamp = int(_now().timestamp())
+        logger.info(f"Token exp: {exp_timestamp}, Current: {current_timestamp}")
+        
+        if exp_timestamp and current_timestamp > exp_timestamp:
+            logger.error("Token has expired")
+            raise HTTPException(status_code=400, detail="OTP session expired.")
+        
+        if payload.get("otp") != data.otp:
+            logger.error(f"OTP mismatch. Expected: {payload.get('otp')}, Got: {data.otp}")
+            raise HTTPException(status_code=400, detail="Invalid OTP.")
 
+        # Get user ID safely
+        try:
+            user_id = int(payload["user_id"])
+            logger.info(f"User ID: {user_id}")
+        except (ValueError, KeyError, TypeError) as e:
+            logger.error(f"Invalid user_id in payload: {e}")
+            raise HTTPException(status_code=400, detail="Invalid OTP session")
 
+        # Get user
+        user_svc = UserService(session)
+        user = await user_svc.get_user(user_id)
+        if not user or not user.is_active:
+            logger.error(f"User not found or inactive: {user_id}")
+            raise HTTPException(status_code=401, detail="User not found or inactive.")
+
+        logger.info("Creating tokens...")
+        
+        # Create tokens
+        auth = AuthService(session)
+        req_ctx = get_request_context(request)
+        tokens = await auth.create_tokens(
+            user=user, 
+            device_info="", 
+            ip_address=req_ctx["ip_address"]
+        )
+
+        logger.info("Tokens created successfully")
+
+        # Clear OTP cookie and set auth cookies
+        _clear_cookie(response, OTP_COOKIE_NAME)
+        
+        response.set_cookie(
+            key=ACCESS_TOKEN_COOKIE,
+            value=tokens["access_token"],
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+            domain=COOKIE_DOMAIN,
+            max_age=int(tokens["expires_in"]),
+        )
+        response.set_cookie(
+            key=REFRESH_TOKEN_COOKIE,
+            value=tokens["refresh_token"],
+            httponly=True,
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+            domain=COOKIE_DOMAIN,
+            max_age=int(getattr(settings, "REFRESH_TOKEN_EXPIRE_MINUTES", 10080)) * 60,
+        )
+
+        logger.info("Login OTP check completed successfully")
+        return {"message": "Login successful.", **tokens}
+        
+    except HTTPException:
+        raise  
+    except Exception as e:
+        logger.error(f"Error checking OTP: {e}", exc_info=True)  
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to check OTP"
+        )
+      
 @router.post("/login-otp-resend", status_code=200)
 async def login_otp_resend(
     request: Request,
     response: Response,
 ):
+        
+        """Resend login OTP with a cooldown."""
         try: 
-            """Resend login OTP with a cooldown."""
             cookie = request.cookies.get(OTP_COOKIE_NAME)
             payload = _decode_cookie(cookie) if cookie else None
             if not payload or payload.get("purpose") != "login":
@@ -415,11 +615,14 @@ async def login_otp_resend(
 
             await _send_otp(payload.get("email"), payload.get("phone"), code)
             return {"message": "OTP resent."}
+        
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error exporting users: {e}")
+            logger.error(f"Error resending OTP: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to Resend OTP"
+                detail="Failed to resend OTP"
             )
 
 @router.post("/forgot-password-init", status_code=200)
@@ -428,8 +631,9 @@ async def forgot_password_init(
     response: Response,
     session: AsyncSession = Depends(get_async_session),
 ):
+        
+        """Start password reset: sets 'otpData' cookie with purpose=reset and sends OTP."""
         try:
-            """Start password reset: sets 'otpData' cookie with purpose=reset and sends OTP."""
             user_svc = UserService(session)
             user = await user_svc.get_user_by_email(data.email)
             if not user:
@@ -450,12 +654,13 @@ async def forgot_password_init(
             _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
 
             await _send_otp(user.email, user.phone, code)
-            return {"message": "If the account exists, we sent a code."}
+            return {"message": "Password reset OTP sent to your email/WhatsApp (if configured).", "expires_in_minutes": OTP_COOKIE_TTL_MINUTES}
+        
         except Exception as e:
-            logger.error(f"Error exporting users: {e}")
+            logger.error(f"Error in forgot password init: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to Forget Password"
+                detail="Failed to initiate password reset"
             )
 
 @router.post("/forgot-password-check", status_code=200)
@@ -464,8 +669,8 @@ async def forgot_password_check(
     response: Response,
     data: OtpInput,
 ):
+        """Verify OTP for reset then allow /reset-password-otp."""
         try:
-            """Verify OTP for reset then allow /reset-password-otp."""
             cookie = request.cookies.get(OTP_COOKIE_NAME)
             payload = _decode_cookie(cookie) if cookie else None
             if not payload or payload.get("purpose") != "reset":
@@ -477,11 +682,14 @@ async def forgot_password_check(
             token = _encode_cookie(payload)
             _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
             return {"message": "OTP verified. You may now reset your password."}
+        
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error exporting users: {e}")
+            logger.error(f"Error checking forgot password OTP: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to check password OTP"
+                detail="Failed to verify password reset OTP"
             )
 
 @router.post("/reset-password-otp", status_code=200)
@@ -491,8 +699,8 @@ async def reset_password_otp(
     data: ResetInput,
     session: AsyncSession = Depends(get_async_session),
 ):
+        """Finalize password reset using verified OTP cookie."""
         try:
-            """Finalize password reset using verified OTP cookie."""
             cookie = request.cookies.get(OTP_COOKIE_NAME)
             payload = _decode_cookie(cookie) if cookie else None
             if not payload or payload.get("purpose") != "reset_verified":
@@ -511,9 +719,12 @@ async def reset_password_otp(
 
             _clear_cookie(response, OTP_COOKIE_NAME)
             return {"message": "Password has been reset successfully."}
+        
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error exporting users: {e}")
+            logger.error(f"Error resetting password: {e}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to check OTP"
+                detail="Failed to reset password"
             )

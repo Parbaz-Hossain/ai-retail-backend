@@ -83,21 +83,21 @@ class Settings(BaseSettings):
     OVERTIME_RATE_MULTIPLIER: float = 1.5
 
 
-    OTP_COOKIE_SECRET="change-me"
-    OTP_COOKIE_NAME="otpData"
-    OTP_COOKIE_TTL_MINUTES=5
-    OTP_RESEND_COOLDOWN_SECONDS=60
+    OTP_COOKIE_SECRET: str = "change-me"
+    OTP_COOKIE_NAME: str = "otpData"
+    OTP_COOKIE_TTL_MINUTES: int = 300
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
 
-    ACCESS_TOKEN_COOKIE="access_token"
-    REFRESH_TOKEN_COOKIE="refresh_token"
-    COOKIE_SECURE=True
-    COOKIE_SAMESITE="lax"   # 'lax' | 'strict' | 'none'
-    COOKIE_DOMAIN=None      # or your domain
+    ACCESS_TOKEN_COOKIE: str = "access_token"
+    REFRESH_TOKEN_COOKIE: str = "refresh_token"
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "lax"   # 'lax' | 'strict' | 'none'
+    COOKIE_DOMAIN: Optional[str] = None      # or your domain
 
-    WHATSAPP_ENABLED=True
-    WHATSAPP_SENDER_MOBILE="966538748591"
-    WHATSAPP_INSTANCE_ID="234909"
-    WHATSAPP_PASSWORD="Ee@@19801980"
+    WHATSAPP_ENABLED: bool = True
+    WHATSAPP_SENDER_MOBILE: str = "966538748591"
+    WHATSAPP_INSTANCE_ID: str = "234909"
+    WHATSAPP_PASSWORD: str = "Ee@@19801980"
 
     class Config:
         env_file = ".env"
