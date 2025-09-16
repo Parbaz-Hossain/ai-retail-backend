@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # OTP / Cookie configuration
 # ==============================
 OTP_COOKIE_NAME = getattr(settings, "OTP_COOKIE_NAME", "otpData")
-OTP_COOKIE_TTL_MINUTES = int(getattr(settings, "OTP_COOKIE_TTL_MINUTES", 300))
+OTP_COOKIE_TTL_MINUTES = int(getattr(settings, "OTP_COOKIE_TTL_MINUTES", 5))
 OTP_RESEND_COOLDOWN_SECONDS = int(getattr(settings, "OTP_RESEND_COOLDOWN_SECONDS", 60))
 OTP_COOKIE_SECRET = getattr(settings, "OTP_COOKIE_SECRET", getattr(settings, "SECRET_KEY", "change-me"))
 ACCESS_TOKEN_COOKIE = getattr(settings, "ACCESS_TOKEN_COOKIE", "access_token")
