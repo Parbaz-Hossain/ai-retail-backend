@@ -85,7 +85,7 @@ class Settings(BaseSettings):
 
     OTP_COOKIE_SECRET: str = "change-me"
     OTP_COOKIE_NAME: str = "otpData"
-    OTP_COOKIE_TTL_MINUTES: int = 300
+    OTP_COOKIE_TTL_MINUTES: int = 5
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
 
     ACCESS_TOKEN_COOKIE: str = "access_token"
