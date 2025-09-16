@@ -220,7 +220,7 @@ async def export_data(
     # category: Optional[str] = Query(None, description="Filter by category"),
     # is_manager: Optional[bool] = Query(None, description="Filter by manager status"),
     # low_stock_only: Optional[bool] = Query(None, description="Show only low stock items"),
-    # employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
+    employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
     # vehicle_id: Optional[int] = Query(None, description="Filter by vehicle ID"),
     # driver_id: Optional[int] = Query(None, description="Filter by driver ID"),
     
