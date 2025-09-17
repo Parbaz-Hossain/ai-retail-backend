@@ -33,4 +33,4 @@ class Salary(BaseModel):
     
     # Relationships
     employee = relationship("Employee", back_populates="salaries")
-    deduction_details = relationship("SalaryDeduction", back_populates="salaries")
+    deduction_details = relationship("SalaryDeduction", back_populates="salary")

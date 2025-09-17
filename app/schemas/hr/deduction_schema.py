@@ -34,24 +34,14 @@ class DeductionTypeResponse(DeductionTypeBase):
 class EmployeeDeductionBase(BaseModel):
     employee_id: int
     deduction_type_id: int
-    total_amount: Decimal
+    total_amount: Optional[Decimal] = None
     monthly_deduction_limit: Optional[Decimal] = None
     effective_from: date
     effective_to: Optional[date] = None
     description: Optional[str] = None
 
-class EmployeeDeductionCreate(EmployeeDeductionBase):
-    @validator('total_amount')
-    def validate_total_amount(cls, v):
-        if v <= 0:
-            raise ValueError('Total amount must be greater than 0')
-        return v
-    
-    @validator('monthly_deduction_limit')
-    def validate_monthly_limit(cls, v, values):
-        if v is not None and 'total_amount' in values and v > values['total_amount']:
-            raise ValueError('Monthly limit cannot exceed total amount')
-        return v
+class EmployeeDeductionCreate(EmployeeDeductionBase):    
+    pass
 
 class EmployeeDeductionUpdate(BaseModel):
     total_amount: Optional[Decimal] = None
@@ -62,8 +52,8 @@ class EmployeeDeductionUpdate(BaseModel):
 
 class EmployeeDeductionResponse(EmployeeDeductionBase):
     id: int
-    paid_amount: Decimal
-    remaining_amount: Decimal
+    paid_amount: Optional[Decimal] = None
+    remaining_amount: Optional[Decimal] = None
     status: DeductionStatus
     created_by: Optional[int]
     created_at: datetime
@@ -93,25 +83,8 @@ class SalaryDeductionResponse(BaseModel):
 class BulkDeductionCreate(BaseModel):
     employee_ids: List[int]
     deduction_type_id: int
-    total_amount: Decimal
+    total_amount: Optional[Decimal] = None
     monthly_deduction_limit: Optional[Decimal] = None
     effective_from: date
     effective_to: Optional[date] = None
     description: Optional[str] = None
-
-# Report Schemas
-class DeductionSummaryResponse(BaseModel):
-    employee_id: int
-    employee_name: str
-    total_deductions: Decimal
-    paid_deductions: Decimal
-    remaining_deductions: Decimal
-    monthly_deduction: Decimal
-
-class DeductionReportResponse(BaseModel):
-    month: int
-    year: int
-    total_employees: int
-    total_deductions: Decimal
-    deduction_breakdown: List[dict]
-    employee_summaries: List[DeductionSummaryResponse]

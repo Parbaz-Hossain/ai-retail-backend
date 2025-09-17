@@ -16,7 +16,7 @@ router = APIRouter()
 @router.post("/generate/{employee_id}", response_model=SalaryResponse)
 async def generate_employee_salary(
     employee_id: int,
-    salary_month: date,
+    salary_month: date = Query(..., description="Salary month in YYYY-MM-dd format"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
