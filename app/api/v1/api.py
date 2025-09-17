@@ -3,7 +3,7 @@ from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.biometric import fingerprint
 from app.api.v1.endpoints.dashboard import dashboard
 from app.api.v1.endpoints.engagement import chat, faq, user_history
-from app.api.v1.endpoints.hr import attendance, employees, holidays, offdays, salary, shifts
+from app.api.v1.endpoints.hr import attendance, deductions, employees, holidays, offdays, salary, shifts
 from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.notification import notifications
@@ -30,6 +30,7 @@ api_router.include_router(locations.router, prefix="/organization/location", tag
 api_router.include_router(employees.router, prefix="/hr/employee", tags=["Human Resource"])
 api_router.include_router(shifts.router, prefix="/hr/shift", tags=["Human Resource"])
 api_router.include_router(attendance.router, prefix="/hr/attendance", tags=["Human Resource"])
+api_router.include_router(deductions.router, prefix="/hr/deduction", tags=["Human Resource"])
 api_router.include_router(salary.router, prefix="/hr/salary", tags=["Human Resource"])
 api_router.include_router(holidays.router, prefix="/hr/holiday", tags=["Human Resource"])
 api_router.include_router(offdays.router, prefix="/hr/offday", tags=["Human Resource"])
