@@ -46,6 +46,7 @@ class AttendanceResponse(AttendanceBase):
     bio_check_out: Optional[bool] = None
     remarks: Optional[str] = None
     is_holiday: Optional[bool] = None
+    is_weekend: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     

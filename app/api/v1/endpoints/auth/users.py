@@ -3,10 +3,11 @@ from typing import List, Any
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
-from app.schemas.auth.user import UserCreateForm, UserUpdate, UserResponse
+from app.schemas.auth.user import UserCreateForm, UserUpdateForm, UserResponse
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.auth.user_service import UserService
 from app.api.dependencies import get_current_user, get_current_superuser
+from starlette.responses import StreamingResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -109,6 +110,35 @@ async def get_users_count(
             detail="Failed to get users count"
         )
 
+# Export users to Excel
+@router.get("/export", response_class=StreamingResponse)
+async def export_users(
+    deleted: bool = Query(False, description="Set true to export soft-deleted users"),
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)  
+):
+    """
+    Export users to Excel.
+    - deleted = False (default) → export active users
+    - deleted = True  → export soft-deleted users
+    """
+    try:
+        user_svc = UserService(session)
+        file_bytes, filename = await user_svc.export_users_excel(deleted=deleted)
+
+        headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+        return StreamingResponse(
+            file_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except Exception as e:
+        logger.error(f"Error exporting users: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to export users"
+        )
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
@@ -153,11 +183,12 @@ async def get_user(
 @router.put("/{user_id}", response_model=UserResponse)
 async def update_user(
     user_id: int,
-    user_update: UserUpdate,
+    user_form: UserUpdateForm = Depends(),
+    profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_user)
 ):
-    """Update user"""
+    """Update user with optional profile image"""
     try:
         user_service = UserService(session)
         
@@ -168,12 +199,29 @@ async def update_user(
                 detail="Not enough permissions"
             )
         
+        # Convert form to schema
+        user_update = user_form.to_user_update()
+        
+        # Update user first
         updated_user = await user_service.update_user(user_id, user_update)
         if not updated_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
+        
+        # Handle image upload if provided
+        if profile_image:
+            from app.utils.file_handler import FileUploadService
+            file_service = FileUploadService()
+            
+            # Upload image with user ID
+            image_path = await file_service.save_image(profile_image, "users", updated_user.id)
+            
+            # Update user with image path
+            updated_user.profile_image = image_path
+            await session.commit()
+            await session.refresh(updated_user, attribute_names=["updated_at"])
         
         # Get user roles
         roles = await user_service.get_user_roles(updated_user.id)

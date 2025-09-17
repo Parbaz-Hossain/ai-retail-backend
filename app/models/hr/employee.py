@@ -37,3 +37,5 @@ class Employee(BaseModel):
     attendances = relationship("Attendance", back_populates="employee")
     user_shifts = relationship("UserShift", back_populates="employee")
     fingerprints = relationship("Fingerprint", back_populates="employee")
+    offdays = relationship("Offday", back_populates="employee")
+    deductions = relationship("EmployeeDeduction", back_populates="employee")

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class InMemoryRateLimiter:
     """In-memory rate limiter for API endpoints"""
     
-    def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
+    def __init__(self, max_attempts: int = 100, window_seconds: int = 300):
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
         # Use defaultdict with deque to store timestamps for each key
@@ -113,7 +113,7 @@ class InMemoryRateLimiter:
             }
 
 # Updated rate limiter instances
-login_rate_limiter = InMemoryRateLimiter(max_attempts=5, window_seconds=300)  # 5 attempts per 5 minutes
+login_rate_limiter = InMemoryRateLimiter(max_attempts=100, window_seconds=300)  # 5 attempts per 5 minutes
 general_rate_limiter = InMemoryRateLimiter(max_attempts=100, window_seconds=60)  # 100 requests per minute
 
 async def check_login_rate_limit(request: Request):

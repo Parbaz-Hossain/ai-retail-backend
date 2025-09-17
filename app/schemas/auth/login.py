@@ -26,3 +26,12 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
+
+class OtpInput(BaseModel):
+    otp: str
+
+class ForgotInitInput(BaseModel):
+    email: EmailStr
+
+class ResetInput(BaseModel):
+    new_password: str

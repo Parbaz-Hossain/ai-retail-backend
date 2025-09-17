@@ -12,6 +12,11 @@ from app.models.auth.user_role import UserRole
 from app.models.auth.role_permission import RolePermission
 from app.core.security import get_password_hash, generate_password_reset_token
 from app.schemas.auth.user import UserCreate, UserResponse, UserUpdate
+from openpyxl import Workbook
+from sqlalchemy import select
+from datetime import datetime
+from io import BytesIO
+from app.models.auth.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -433,3 +438,45 @@ class UserService:
             await self.session.rollback()
             logger.error(f"Error changing password: {str(e)}")
             return False
+
+                # ---------- Excel export helpers ----------
+    
+    # ----------------------- User Excel Export -----------------------
+    @staticmethod
+    def _write_users_sheet(ws, users):
+        ws.append(["ID", "Email", "Username", "Full Name", "Phone", "Is Active", "Is Verified", "Created At"])
+        for u in users:
+            created = getattr(u, "created_at", None)
+            ws.append([
+                u.id,
+                u.email,
+                u.username,
+                getattr(u, "full_name", None),
+                getattr(u, "phone", None),
+                bool(u.is_active),
+                bool(getattr(u, "is_verified", False)),
+                created.strftime("%Y-%m-%d %H:%M:%S") if created else None,
+            ])
+
+    async def export_users_excel(self, deleted: bool = False) -> tuple[BytesIO, str]:
+        """
+        Build an Excel workbook of either active or deleted users.
+        Returns: (file_bytes, filename)
+        """
+        result = await self.session.execute(
+            select(User).where(User.is_deleted == deleted)
+        )
+        users = result.scalars().all()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Deleted Users" if deleted else "Users"
+        self._write_users_sheet(ws, users)
+
+        file_bytes = BytesIO()
+        wb.save(file_bytes)
+        file_bytes.seek(0)
+
+        status_tag = "deleted" if deleted else "active"
+        filename = f"{status_tag}_users_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return file_bytes, filename
