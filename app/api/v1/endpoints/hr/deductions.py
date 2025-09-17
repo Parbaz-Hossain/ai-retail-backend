@@ -1,16 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional, Dict
+from typing import List, Optional
 from datetime import date
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
-from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.deduction_service import DeductionService
 from app.schemas.hr.deduction_schema import (
     DeductionTypeCreate, DeductionTypeUpdate, DeductionTypeResponse,
     EmployeeDeductionCreate, EmployeeDeductionUpdate, EmployeeDeductionResponse,
-    BulkDeductionCreate, DeductionSummaryResponse
+    BulkDeductionCreate
 )
 from app.models.auth.user import User
 from app.models.shared.enums import DeductionStatus
@@ -37,6 +36,16 @@ async def get_deduction_types(
     """Get all deduction types"""
     service = DeductionService(session)
     return await service.get_deduction_types(active_only)
+
+@router.get("/types/{type_id}", response_model=DeductionTypeResponse)
+async def get_deduction_type(
+    type_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific deduction type by ID"""
+    service = DeductionService(session)
+    return await service.get_deduction_type(type_id)
 
 @router.put("/types/{type_id}", response_model=DeductionTypeResponse)
 async def update_deduction_type(
@@ -71,6 +80,16 @@ async def get_employee_deductions(
     """Get employee deductions with filters"""
     service = DeductionService(session)
     return await service.get_employee_deductions(employee_id, status, active_only)
+
+@router.get("/employee/{deduction_id}", response_model=EmployeeDeductionResponse)
+async def get_employee_deduction(
+    deduction_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific employee deduction by ID"""
+    service = DeductionService(session)
+    return await service.get_employee_deduction(deduction_id)
 
 @router.put("/employee/{deduction_id}", response_model=EmployeeDeductionResponse)
 async def update_employee_deduction(

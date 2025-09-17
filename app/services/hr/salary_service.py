@@ -26,8 +26,8 @@ class SalaryService:
     async def generate_monthly_salary(self, employee_id: int, salary_month: date, current_user_id: int) -> Salary:
         """Generate monthly salary with integrated deduction calculation"""
         today = date.today()
-        if today.day < 25 and today.month == salary_month.month:
-            raise HTTPException(status_code=400, detail="Salary can only be generated from 25th of the month")
+        # if today.day < 25 and today.month == salary_month.month:
+        #     raise HTTPException(status_code=400, detail="Salary can only be generated from 25th of the month")
 
         # Get employee
         emp_res = await self.session.execute(
@@ -53,7 +53,7 @@ class SalaryService:
         # Calculate gross salary
         gross = (employee.basic_salary or 0) + (employee.housing_allowance or 0) + (employee.transport_allowance or 0) + overtime
         
-        # Calculate deductions using new deduction service
+        # Calculate deductions using updated deduction service (handles carryover automatically)
         total_deductions, deduction_details = await self.deduction_service.calculate_monthly_deductions(
             employee_id, salary_month
         )
@@ -99,7 +99,7 @@ class SalaryService:
         
         logger.info(f"Salary generated for {employee.employee_id} on {salary_month} with total deductions: {total_deductions}")
         return salary
-
+    
     async def _attendance_summary(self, employee_id: int, salary_month: date) -> Dict:
         """Calculate attendance summary for the month"""
         start, end = self._month_range(salary_month)

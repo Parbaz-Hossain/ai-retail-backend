@@ -25,7 +25,6 @@ class DeductionService:
 
     # ======================================= Deduction Type CRUD ============================================ #
     async def create_deduction_type(self, data: DeductionTypeCreate) -> DeductionType:
-        # Check if deduction type already exists
         existing = await self.session.scalar(
             select(DeductionType).where(DeductionType.name == data.name)
         )
@@ -46,6 +45,12 @@ class DeductionService:
         result = await self.session.execute(query.order_by(DeductionType.name))
         return result.scalars().all()
 
+    async def get_deduction_type(self, type_id: int) -> DeductionType:
+        deduction_type = await self.session.get(DeductionType, type_id)
+        if not deduction_type:
+            raise HTTPException(status_code=404, detail="Deduction type not found")
+        return deduction_type
+
     async def update_deduction_type(self, type_id: int, data: DeductionTypeUpdate) -> DeductionType:
         deduction_type = await self.session.get(DeductionType, type_id)
         if not deduction_type:
@@ -58,20 +63,16 @@ class DeductionService:
         await self.session.refresh(deduction_type)
         return deduction_type
 
-
     # ====================================== Employee Deduction CRUD =========================================== #
     async def create_employee_deduction(self, data: EmployeeDeductionCreate, created_by: int) -> EmployeeDeduction:
-        # Validate employee exists
         employee = await self.session.get(Employee, data.employee_id)
         if not employee or not employee.is_active:
             raise HTTPException(status_code=404, detail="Employee not found")
         
-        # Validate deduction type exists
         deduction_type = await self.session.get(DeductionType, data.deduction_type_id)
         if not deduction_type or not deduction_type.is_active:
             raise HTTPException(status_code=404, detail="Deduction type not found")
         
-        # Create employee deduction
         employee_deduction = EmployeeDeduction(
             **data.dict(),
             remaining_amount=data.total_amount,
@@ -81,7 +82,7 @@ class DeductionService:
         
         self.session.add(employee_deduction)
         await self.session.commit()
-        await self.session.refresh(employee_deduction)
+        await self.session.refresh(employee_deduction, attribute_names=["deduction_type"])
         
         logger.info(f"Created deduction for employee {data.employee_id}: {data.total_amount}")
         return employee_deduction
@@ -111,24 +112,30 @@ class DeductionService:
         result = await self.session.execute(query.order_by(EmployeeDeduction.created_at.desc()))
         return result.scalars().all()
 
+    async def get_employee_deduction(self, deduction_id: int) -> EmployeeDeduction:
+        deduction = await self.session.get(EmployeeDeduction, deduction_id, options=[
+            selectinload(EmployeeDeduction.deduction_type),
+            selectinload(EmployeeDeduction.employee)
+        ])
+        if not deduction:
+            raise HTTPException(status_code=404, detail="Employee deduction not found")
+        return deduction
+
     async def update_employee_deduction(self, deduction_id: int, data: EmployeeDeductionUpdate) -> EmployeeDeduction:
         deduction = await self.session.get(EmployeeDeduction, deduction_id)
         if not deduction:
             raise HTTPException(status_code=404, detail="Employee deduction not found")
         
-        # Update fields
         for field, value in data.dict(exclude_unset=True).items():
             if field == 'total_amount' and value:
-                # Recalculate remaining amount
                 deduction.remaining_amount = value - deduction.paid_amount
             setattr(deduction, field, value)
         
         await self.session.commit()
-        await self.session.refresh(deduction)
+        await self.session.refresh(deduction, attribute_names=["deduction_type", "updated_at"])
         return deduction
 
     async def bulk_create_deductions(self, data: BulkDeductionCreate, created_by: int) -> Dict[str, Any]:
-        """Create deductions for multiple employees"""
         stats = {"successful": 0, "failed": 0, "errors": []}
         
         for employee_id in data.employee_ids:
@@ -150,71 +157,50 @@ class DeductionService:
         
         return stats
 
-    # Deduction Calculation for Salary
+    # ====================================== MAIN CALCULATION METHOD =========================================== #
     async def calculate_monthly_deductions(self, employee_id: int, salary_month: date) -> Tuple[Decimal, List[Dict]]:
-        """Calculate total deductions for an employee for a specific month"""
+        """
+        Calculate total deductions for an employee for a specific month.
+        Handles both existing deductions (manual + carryover auto) and new auto-deductions.
+        """
         total_deduction = Decimal('0')
         deduction_details = []
         
-        # Get auto-calculated deductions (late, absent)
-        auto_deductions = await self._calculate_auto_deductions(employee_id, salary_month)
-        total_deduction += auto_deductions['total']
-        deduction_details.extend(auto_deductions['details'])
+        # 1. Process existing active deductions (manual + previous auto with remaining balance)
+        existing_deductions = await self._get_active_employee_deductions(employee_id, salary_month)
         
-        # Get manual deductions (penalties, loans, etc.)
-        manual_deductions = await self._calculate_manual_deductions(employee_id, salary_month)
-        total_deduction += manual_deductions['total']
-        deduction_details.extend(manual_deductions['details'])
+        for deduction in existing_deductions:
+            if deduction.remaining_amount > 0:
+                # Apply monthly limit
+                if deduction.monthly_deduction_limit:
+                    monthly_amount = min(deduction.monthly_deduction_limit, deduction.remaining_amount)
+                else:
+                    monthly_amount = deduction.remaining_amount
+                
+                if monthly_amount > 0:
+                    total_deduction += monthly_amount
+                    deduction_details.append({
+                        'employee_deduction_id': deduction.id,
+                        'type_id': deduction.deduction_type_id,
+                        'type_name': deduction.deduction_type.name,
+                        'amount': monthly_amount,
+                        'auto_calculated': deduction.deduction_type.is_auto_calculated,
+                        'source': 'existing_deduction'
+                    })
+        
+        # 2. Calculate and create new auto-deductions for current month
+        new_auto_deductions = await self._calculate_and_create_new_auto_deductions(
+            employee_id, salary_month
+        )
+        
+        total_deduction += new_auto_deductions['total']
+        deduction_details.extend(new_auto_deductions['details'])
         
         return total_deduction, deduction_details
 
-    async def _calculate_auto_deductions(self, employee_id: int, salary_month: date) -> Dict:
-        """Calculate automatic deductions like late and absent"""
-        total = Decimal('0')
-        details = []
-        
-        # Get deduction types for auto calculation
-        auto_types = await self.session.execute(
-            select(DeductionType).where(
-                DeductionType.is_auto_calculated == True,
-                DeductionType.is_active == True
-            )
-        )
-        auto_type_dict = {dt.name: dt for dt in auto_types.scalars().all()}
-        
-        # Calculate late deductions
-        if 'late' in auto_type_dict:
-            late_amount = await self._calculate_late_deductions(employee_id, salary_month)
-            if late_amount > 0:
-                total += late_amount
-                details.append({
-                    'type_id': auto_type_dict['late'].id,
-                    'type_name': 'Late',
-                    'amount': late_amount,
-                    'auto_calculated': True
-                })
-        
-        # Calculate absent deductions
-        if 'absent' in auto_type_dict:
-            absent_amount = await self._calculate_absent_deductions(employee_id, salary_month)
-            if absent_amount > 0:
-                total += absent_amount
-                details.append({
-                    'type_id': auto_type_dict['absent'].id,
-                    'type_name': 'Absent',
-                    'amount': absent_amount,
-                    'auto_calculated': True
-                })
-        
-        return {'total': total, 'details': details}
-
-    async def _calculate_manual_deductions(self, employee_id: int, salary_month: date) -> Dict:
-        """Calculate manual deductions for the month"""
-        total = Decimal('0')
-        details = []
-        
-        # Get active employee deductions for this month
-        deductions = await self.session.execute(
+    async def _get_active_employee_deductions(self, employee_id: int, salary_month: date) -> List[EmployeeDeduction]:
+        """Get all active deductions for employee that should be processed this month"""
+        result = await self.session.execute(
             select(EmployeeDeduction)
             .options(selectinload(EmployeeDeduction.deduction_type))
             .where(
@@ -227,64 +213,170 @@ class DeductionService:
                 ),
                 EmployeeDeduction.remaining_amount > 0
             )
+            .order_by(EmployeeDeduction.effective_from)
         )
+        return result.scalars().all()
+
+    async def _calculate_and_create_new_auto_deductions(self, employee_id: int, salary_month: date) -> Dict:
+        """
+        Calculate new auto-deductions (absent, late) for current month and create EmployeeDeduction records.
+        This is the KEY method that handles your scenario!
+        """
+        total = Decimal('0')
+        details = []
         
-        for deduction in deductions.scalars():
-            # Calculate amount to deduct this month
-            if deduction.monthly_deduction_limit:
-                monthly_amount = min(deduction.monthly_deduction_limit, deduction.remaining_amount)
-            else:
-                monthly_amount = deduction.remaining_amount
-            
-            if monthly_amount > 0:
-                total += monthly_amount
+        # Get auto-calculation deduction types
+        auto_types_result = await self.session.execute(
+            select(DeductionType).where(
+                DeductionType.is_auto_calculated == True,
+                DeductionType.is_active == True
+            )
+        )
+        auto_types = {dt.name: dt for dt in auto_types_result.scalars().all()}
+        
+        # Calculate and create ABSENT deduction
+        if 'absent' in auto_types:
+            absent_amount = await self._calculate_absent_deductions(employee_id, salary_month)
+            if absent_amount > 0:
+                # Get employee's monthly limit preference for absent deductions
+                monthly_limit = await self._get_employee_auto_deduction_limit(
+                    employee_id, 'absent'
+                )
+                
+                # Create EmployeeDeduction record for this absent deduction
+                absent_deduction = EmployeeDeduction(
+                    employee_id=employee_id,
+                    deduction_type_id=auto_types['absent'].id,
+                    total_amount=absent_amount,
+                    paid_amount=Decimal('0'),
+                    remaining_amount=absent_amount,
+                    monthly_deduction_limit=monthly_limit,  # This controls carryover!
+                    effective_from=salary_month,
+                    status=DeductionStatus.ACTIVE,
+                    description=f"Absent deduction for {salary_month.strftime('%B %Y')}"
+                )
+                
+                self.session.add(absent_deduction)
+                await self.session.flush()  # Get ID immediately
+                
+                # Calculate amount to deduct THIS month
+                if monthly_limit:
+                    current_month_amount = min(monthly_limit, absent_amount)
+                else:
+                    current_month_amount = absent_amount
+                
+                total += current_month_amount
                 details.append({
-                    'employee_deduction_id': deduction.id,
-                    'type_id': deduction.deduction_type_id,
-                    'type_name': deduction.deduction_type.name,
-                    'amount': monthly_amount,
-                    'auto_calculated': False
+                    'employee_deduction_id': absent_deduction.id,
+                    'type_id': auto_types['absent'].id,
+                    'type_name': 'absent',
+                    'amount': current_month_amount,
+                    'auto_calculated': True,
+                    'source': 'new_auto_calculation'
+                })
+        
+        # Calculate and create LATE deduction (same logic)
+        if 'late' in auto_types:
+            late_amount = await self._calculate_late_deductions(employee_id, salary_month)
+            if late_amount > 0:
+                monthly_limit = await self._get_employee_auto_deduction_limit(
+                    employee_id, 'late'
+                )
+                
+                late_deduction = EmployeeDeduction(
+                    employee_id=employee_id,
+                    deduction_type_id=auto_types['late'].id,
+                    total_amount=late_amount,
+                    paid_amount=Decimal('0'),
+                    remaining_amount=late_amount,
+                    monthly_deduction_limit=monthly_limit,
+                    effective_from=salary_month,
+                    status=DeductionStatus.ACTIVE,
+                    description=f"Late deduction for {salary_month.strftime('%B %Y')}"
+                )
+                
+                self.session.add(late_deduction)
+                await self.session.flush()
+                
+                current_month_amount = min(monthly_limit, late_amount) if monthly_limit else late_amount
+                
+                total += current_month_amount
+                details.append({
+                    'employee_deduction_id': late_deduction.id,
+                    'type_id': auto_types['late'].id,
+                    'type_name': 'late',
+                    'amount': current_month_amount,
+                    'auto_calculated': True,
+                    'source': 'new_auto_calculation'
                 })
         
         return {'total': total, 'details': details}
 
-    async def apply_deductions_to_salary(self, salary_id: int, employee_id: int, salary_month: date, deduction_details: List[Dict]):
-        """Apply calculated deductions to salary and update employee deduction records"""
+    async def _get_employee_auto_deduction_limit(self, employee_id: int, deduction_type_name: str) -> Optional[Decimal]:
+        """
+        Get employee's monthly limit for auto-deductions.
+        
+        You can implement this by:
+        1. Adding columns to employees table
+        2. Creating employee_deduction_limits table
+        """
+        
+        
+        # Query the monthly_deduction_limit from EmployeeDeduction by joining DeductionType on name
+        result = await self.session.scalar(
+            select(EmployeeDeduction.monthly_deduction_limit)
+            .join(DeductionType, EmployeeDeduction.deduction_type_id == DeductionType.id)
+            .where(
+            EmployeeDeduction.employee_id == employee_id,
+            DeductionType.name == deduction_type_name
+            )
+        )
+        return result
+        
+    async def apply_deductions_to_salary(
+        self, 
+        salary_id: int, 
+        employee_id: int, 
+        salary_month: date, 
+        deduction_details: List[Dict]
+    ):
+        """Apply calculated deductions to salary and update EmployeeDeduction balances"""
         
         for detail in deduction_details:
-            # Create salary deduction record
+            # 1. Create salary_deductions record (audit trail)
             salary_deduction = SalaryDeduction(
                 salary_id=salary_id,
-                employee_deduction_id=detail.get('employee_deduction_id'),
+                employee_deduction_id=detail['employee_deduction_id'],
                 deduction_type_id=detail['type_id'],
                 deducted_amount=detail['amount'],
                 salary_month=salary_month
             )
             self.session.add(salary_deduction)
             
-            # Update employee deduction if it's manual deduction
-            if not detail.get('auto_calculated') and detail.get('employee_deduction_id'):
-                employee_deduction = await self.session.get(EmployeeDeduction, detail['employee_deduction_id'])
-                if employee_deduction:
-                    employee_deduction.paid_amount += detail['amount']
-                    employee_deduction.remaining_amount -= detail['amount']
-                    
-                    # Mark as completed if fully paid
-                    if employee_deduction.remaining_amount <= 0:
-                        employee_deduction.status = DeductionStatus.COMPLETED
+            # 2. Update EmployeeDeduction balance
+            employee_deduction = await self.session.get(
+                EmployeeDeduction, detail['employee_deduction_id']
+            )
+            if employee_deduction:
+                employee_deduction.paid_amount += detail['amount']
+                employee_deduction.remaining_amount -= detail['amount']
+                
+                # Mark as completed if fully paid
+                if employee_deduction.remaining_amount <= 0:
+                    employee_deduction.status = DeductionStatus.COMPLETED
+                    employee_deduction.remaining_amount = Decimal('0')  # Ensure no negative
         
         await self.session.commit()
+        logger.info(f"Applied {len(deduction_details)} deductions to salary {salary_id}")
 
+    # Helper methods for calculating actual deduction amounts
     async def _calculate_late_deductions(self, employee_id: int, salary_month: date) -> Decimal:
-        """Calculate late deductions for the month"""
         from calendar import monthrange
         
-        # Get month range
         last_day = monthrange(salary_month.year, salary_month.month)[1]
         start_date = salary_month.replace(day=1)
         end_date = salary_month.replace(day=last_day)
         
-        # Count late days
         late_count = await self.session.scalar(
             select(func.count()).where(
                 Attendance.employee_id == employee_id,
@@ -293,7 +385,6 @@ class DeductionService:
             )
         )
         
-        # Get default amount for late deduction
         late_type = await self.session.scalar(
             select(DeductionType).where(DeductionType.name == 'late')
         )
@@ -302,15 +393,12 @@ class DeductionService:
         return Decimal(late_count or 0) * amount_per_late
 
     async def _calculate_absent_deductions(self, employee_id: int, salary_month: date) -> Decimal:
-        """Calculate absent deductions for the month"""
         from calendar import monthrange
         
-        # Get month range
         last_day = monthrange(salary_month.year, salary_month.month)[1]
         start_date = salary_month.replace(day=1)
         end_date = salary_month.replace(day=last_day)
         
-        # Count absent days (excluding holidays)
         absent_count = await self.session.scalar(
             select(func.count()).where(
                 Attendance.employee_id == employee_id,
@@ -320,8 +408,7 @@ class DeductionService:
             )
         )
         
-        if absent_count > 0:
-            # Get employee basic salary
+        if absent_count and absent_count > 0:
             employee = await self.session.get(Employee, employee_id)
             if employee and employee.basic_salary:
                 daily_salary = employee.basic_salary / Decimal(str(last_day))
