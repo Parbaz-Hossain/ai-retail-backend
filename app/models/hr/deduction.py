@@ -6,10 +6,10 @@ from app.models.shared.enums import DeductionStatus
 class DeductionType(BaseModel):
     __tablename__ = 'deduction_types'
     
-    name = Column(String(100), nullable=False, unique=True)  # late, absent, penalty, loan, advance, etc.
+    name = Column(String(100), nullable=False, unique=True) 
     description = Column(Text)
     is_auto_calculated = Column(Boolean, default=False)  # True for late/absent, False for manual penalties
-    default_amount = Column(Numeric(10, 2), default=0)  # Default amount for auto-calculated types
+    default_amount = Column(Numeric(10, 2), default=0) 
     is_active = Column(Boolean, default=True)
     
     # Relationships
@@ -20,10 +20,10 @@ class EmployeeDeduction(BaseModel):
     
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     deduction_type_id = Column(Integer, ForeignKey('deduction_types.id'), nullable=False)
-    total_amount = Column(Numeric(10, 2), nullable=False)  
+    total_amount = Column(Numeric(10, 2), default=0)  
     paid_amount = Column(Numeric(10, 2), default=0) 
-    remaining_amount = Column(Numeric(10, 2), nullable=False)  
-    monthly_deduction_limit = Column(Numeric(10, 2))  
+    remaining_amount = Column(Numeric(10, 2), default=0)  
+    monthly_deduction_limit = Column(Numeric(10, 2), default=0)  
     effective_from = Column(Date, nullable=False)  
     effective_to = Column(Date)  
     status = Column(SQLEnum(DeductionStatus), default=DeductionStatus.ACTIVE)
