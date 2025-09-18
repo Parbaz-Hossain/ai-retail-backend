@@ -47,6 +47,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.celery_tasks.hr_tasks.process_daily_attendance",
         "schedule": 3600.0,  # Every hour
     },
+    'send-attendance-warnings': {
+        'task': 'app.workers.celery_tasks.hr_tasks.send_attendance_warnings',
+        'schedule': 3600.0,  # Every hour
+        # 'schedule': 60.0 
+    },
 
     # Daily task schedules
     'send-daily-hr-tasks': {
@@ -61,8 +66,7 @@ celery_app.conf.beat_schedule = {
     # Task management schedules (from task_management_tasks.py)
     'check-low-stock-every-hour': {
         'task': 'app.workers.celery_tasks.task_management_tasks.check_low_stock_and_create_tasks',
-        # 'schedule': 3600.0,  # Every hour
-        'schedule': 60.0,  # Every minute (for testing)
+        'schedule': 3600.0,  # Every hour
     },
     'create-monthly-salary-tasks': {
         'task': 'app.workers.celery_tasks.task_management_tasks.create_monthly_salary_tasks',

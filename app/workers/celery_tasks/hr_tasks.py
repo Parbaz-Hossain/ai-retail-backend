@@ -79,12 +79,65 @@ def generate_monthly_salaries(salary_month: str = None):
     
     return run_async_task(_generate_salaries())
 
-# Simple test task for HR module
 @celery_app.task
-def simple_hr_test_task():
-    """Simple test task for HR module"""
-    import time
-    print("🚀 Simple HR test task started!")
-    time.sleep(2)
-    print("✅ Simple HR test task completed!")
-    return "Simple HR task completed successfully!"
+def send_attendance_warnings():
+    """Daily task to check late/absent employees and send WhatsApp warnings"""
+    async def _send_warnings():
+        async with async_session_maker() as db:
+            try:
+                # Import inside function to avoid circular imports
+                from app.models.hr.attendance import Attendance
+                from app.models.hr.employee import Employee
+                from app.models.shared.enums import AttendanceStatus
+                from app.services.communication.whatsapp_service import WhatsAppClient
+                from sqlalchemy import select, and_
+                
+                # Get today's date
+                today = date.today()
+                
+                # Query employees with late or absent attendance for today
+                query = select(Attendance, Employee).join(
+                    Employee, Attendance.employee_id == Employee.id
+                ).where(
+                    and_(
+                        Attendance.attendance_date == today,
+                        Attendance.status.in_([AttendanceStatus.LATE, AttendanceStatus.ABSENT]),
+                        Employee.is_active == True,
+                        Employee.phone.is_not(None)
+                    )
+                )
+                
+                result = await db.execute(query)
+                attendance_records = result.all()
+                
+                # Initialize WhatsApp client
+                whatsapp_client = WhatsAppClient()
+                
+                sent_count = 0
+                
+                for attendance, employee in attendance_records:
+                    # Prepare warning message based on attendance status
+                    if attendance.status == AttendanceStatus.LATE:
+                        message = f"⚠️ Warning: Dear {employee.first_name}, you were late today by {attendance.late_minutes} minutes. Please ensure punctuality. - Management"
+                    elif attendance.status == AttendanceStatus.ABSENT:
+                        message = f"⚠️ Warning: Dear {employee.first_name}, you were absent today without prior notice. Please contact HR immediately. - Management"
+                    
+                    # Send WhatsApp message
+                    whatsapp_response = await whatsapp_client.send(
+                        phone=employee.phone,
+                        body=message
+                    )
+                    
+                    if whatsapp_response.get("status") == "ok":
+                        sent_count += 1
+                        print(f"✅ Warning sent to {employee.first_name} ({employee.phone})")
+                    else:
+                        print(f"❌ Failed to send warning to {employee.first_name}: {whatsapp_response}")
+                
+                return f"✅ Attendance warnings sent: {sent_count} messages"
+                
+            except Exception as e:
+                print(f"❌ Error sending attendance warnings: {e}")
+                raise
+    
+    return run_async_task(_send_warnings())
