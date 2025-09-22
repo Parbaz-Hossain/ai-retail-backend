@@ -38,7 +38,7 @@ async def create_user(
             file_service = FileUploadService()
             
             # Upload image with user ID
-            image_path = await file_service.save_image(profile_image, "users", new_user.id)
+            image_path = await file_service.save_file(profile_image, "users", new_user.id)
             
             # Update user with image path
             new_user.profile_image = image_path
@@ -216,7 +216,7 @@ async def update_user(
             file_service = FileUploadService()
             
             # Upload image with user ID
-            image_path = await file_service.save_image(profile_image, "users", updated_user.id)
+            image_path = await file_service.save_file(profile_image, "users", updated_user.id)
             
             # Update user with image path
             updated_user.profile_image = image_path

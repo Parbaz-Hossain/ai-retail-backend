@@ -43,11 +43,8 @@ COOKIE_SAMESITE = getattr(settings, "COOKIE_SAMESITE", "lax").lower()
 def _now() -> datetime:
     return datetime.utcnow()
 
-def _make_otp() -> str:
-    return f"{random.randint(1000, 9999)}"
-
 def _make_timestamp() -> int:
-    """Generate consistent Unix timestamp"""
+    """Generate consistent Unix timestamp - use time.time() to match JWT library"""
     return int(time.time())
 
 def _encode_cookie(payload: dict) -> str:
@@ -55,13 +52,17 @@ def _encode_cookie(payload: dict) -> str:
     current_time = _make_timestamp()
     exp_time = current_time + (OTP_COOKIE_TTL_MINUTES * 60)
     
+    # Don't override exp if it's already set properly
     data = {
         **payload, 
-        "exp": exp_time,
         "iat": current_time
     }
     
-    logger.info(f"Creating JWT with iat={current_time}, exp={exp_time}, ttl={OTP_COOKIE_TTL_MINUTES} minutes")
+    # Only set exp if not already provided or if provided exp is invalid
+    if "exp" not in payload or payload["exp"] <= current_time:
+        data["exp"] = exp_time
+    
+    logger.info(f"Creating JWT with iat={current_time}, exp={data['exp']}, ttl={OTP_COOKIE_TTL_MINUTES} minutes")
     
     return jwt.encode(data, OTP_COOKIE_SECRET, algorithm="HS256")
 
@@ -78,14 +79,14 @@ def _decode_cookie(token: str) -> Optional[dict]:
     except jwt.ExpiredSignatureError:
         current_time = _make_timestamp()
         logger.error(f"JWT expired at timestamp: {current_time}")
-        return {"error": "expired"}
+        return None
     except jwt.InvalidTokenError as e:
         logger.error(f"Invalid JWT: {e}")
-        return {"error": "invalid"}
+        return None
     except Exception as e:
         logger.error(f"JWT decode error: {e}")
-        return {"error": "decode_failed"}
-    
+        return None
+
 def _set_cookie(resp: Response, name: str, value: str, ttl_minutes: int):
     """Set cookie with proper configuration"""
     resp.set_cookie(
@@ -98,6 +99,9 @@ def _set_cookie(resp: Response, name: str, value: str, ttl_minutes: int):
         domain=COOKIE_DOMAIN,
         path="/",
     )
+
+def _make_otp() -> str:
+    return f"{random.randint(1000, 9999)}"
 
 def _clear_cookie(resp: Response, name: str):
     """Clear cookie - Fixed FastAPI signature"""
@@ -426,49 +430,51 @@ async def login_otp_init(
     session: AsyncSession = Depends(get_async_session),
     _: None = Depends(check_login_rate_limit),
 ):
+    """Step 1: Verify credentials then send OTP via email/WhatsApp and set httpOnly cookie 'otpData'."""
+    try:
+        auth = AuthService(session)
+        req_ctx = get_request_context(request)
+
+        user = await auth.authenticate_user(
+            email=data.email,
+            password=data.password,
+            ip_address=req_ctx["ip_address"],
+            user_agent=req_ctx["user_agent"],
+            endpoint=req_ctx["endpoint"],
+            request_id=req_ctx["request_id"],
+            session_id=req_ctx["session_id"],
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+        code = _make_otp()
+        current_timestamp = _make_timestamp()  # Now uses time.time()
+        exp_timestamp = current_timestamp + (OTP_COOKIE_TTL_MINUTES * 60)
         
-        """Step 1: Verify credentials then send OTP via email/WhatsApp and set httpOnly cookie 'otpData'."""
-        try:
-            auth = AuthService(session)
-            req_ctx = get_request_context(request)
+        payload = {
+            "purpose": "login",
+            "user_id": user.id,
+            "email": user.email,
+            "phone": user.phone,
+            "otp": code,
+            "last_sent": current_timestamp,
+            "exp": exp_timestamp,
+        }
+        token = _encode_cookie(payload)
+        _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
 
-            user = await auth.authenticate_user(
-                email=data.email,
-                password=data.password,
-                ip_address=req_ctx["ip_address"],
-                user_agent=req_ctx["user_agent"],
-                endpoint=req_ctx["endpoint"],
-                request_id=req_ctx["request_id"],
-                session_id=req_ctx["session_id"],
-            )
-            if not user:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-
-            code = _make_otp()
-            payload = {
-                "purpose": "login",
-                "user_id": user.id,
-                "email": user.email,
-                "phone": user.phone,
-                "otp": code,
-                "last_sent": int(_now().timestamp()),
-                "exp": int((_now() + timedelta(minutes=OTP_COOKIE_TTL_MINUTES)).timestamp()),
-            }
-            token = _encode_cookie(payload)
-            _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
-
-            await _send_otp(user.email, user.phone, code)
-            return {"message": "OTP sent to your email/WhatsApp (if configured).", "expires_in_minutes": OTP_COOKIE_TTL_MINUTES}
-        
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Error in login OTP init: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to initiate OTP login"
-            )
-
+        await _send_otp(user.email, user.phone, code)
+        return {"message": "OTP sent to your email/WhatsApp (if configured).", "expires_in_minutes": OTP_COOKIE_TTL_MINUTES}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in login OTP init: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to initiate OTP login"
+        )
+    
 @router.post("/login-otp-check", status_code=200)
 async def login_otp_check(
     request: Request,
@@ -492,35 +498,23 @@ async def login_otp_check(
         
         logger.info(f"Cookie value (first 20 chars): {cookie[:20]}...")
         
-        try:
-            payload = _decode_cookie(cookie)
-            logger.info(f"Payload decoded successfully: {bool(payload)}")
-            if payload:
-                logger.info(f"Payload purpose: {payload.get('purpose')}")
-                logger.info(f"Payload user_id: {payload.get('user_id')}")
-                logger.info(f"Payload exp: {payload.get('exp')}")
-        except Exception as e:
-            logger.error(f"Failed to decode OTP cookie: {e}")
-            logger.error(f"Cookie content: {cookie}")
-            raise HTTPException(status_code=400, detail="Invalid OTP session")
+        payload = _decode_cookie(cookie)
+        logger.info(f"Payload decoded successfully: {bool(payload)}")
         
-        # Validate payload
+        # Check if decoding failed (expired, invalid, etc.)
         if not payload:
-            logger.error("Payload is None after decoding")
+            logger.error("Payload is None after decoding (expired, invalid, or decode failed)")
             raise HTTPException(status_code=400, detail="OTP session not found or expired.")
-            
+        
+        # Log payload details
+        logger.info(f"Payload purpose: {payload.get('purpose')}")
+        logger.info(f"Payload user_id: {payload.get('user_id')}")
+        logger.info(f"Payload exp: {payload.get('exp')}")
+        
+        # Validate payload contents
         if payload.get("purpose") != "login":
             logger.error(f"Wrong purpose: {payload.get('purpose')} (expected: login)")
             raise HTTPException(status_code=400, detail="OTP session not found or expired.")
-        
-        # Check expiration manually
-        exp_timestamp = payload.get("exp")
-        current_timestamp = int(_now().timestamp())
-        logger.info(f"Token exp: {exp_timestamp}, Current: {current_timestamp}")
-        
-        if exp_timestamp and current_timestamp > exp_timestamp:
-            logger.error("Token has expired")
-            raise HTTPException(status_code=400, detail="OTP session expired.")
         
         if payload.get("otp") != data.otp:
             logger.error(f"OTP mismatch. Expected: {payload.get('otp')}, Got: {data.otp}")
@@ -587,44 +581,43 @@ async def login_otp_check(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to check OTP"
         )
-      
+    
 @router.post("/login-otp-resend", status_code=200)
 async def login_otp_resend(
     request: Request,
     response: Response,
 ):
-        
-        """Resend login OTP with a cooldown."""
-        try: 
-            cookie = request.cookies.get(OTP_COOKIE_NAME)
-            payload = _decode_cookie(cookie) if cookie else None
-            if not payload or payload.get("purpose") != "login":
-                raise HTTPException(status_code=400, detail="No active OTP session.")
+    """Resend login OTP with a cooldown."""
+    try: 
+        cookie = request.cookies.get(OTP_COOKIE_NAME)
+        payload = _decode_cookie(cookie) if cookie else None
+        if not payload or payload.get("purpose") != "login":
+            raise HTTPException(status_code=400, detail="No active OTP session.")
 
-            last_sent = int(payload.get("last_sent", 0))
-            now = int(_now().timestamp())
-            if now - last_sent < OTP_RESEND_COOLDOWN_SECONDS:
-                raise HTTPException(status_code=429, detail="Please wait before requesting another code.")
+        last_sent = int(payload.get("last_sent", 0))
+        now = _make_timestamp()  # Now uses time.time()
+        if now - last_sent < OTP_RESEND_COOLDOWN_SECONDS:
+            raise HTTPException(status_code=429, detail="Please wait before requesting another code.")
 
-            code = _make_otp()
-            payload["otp"] = code
-            payload["last_sent"] = now
+        code = _make_otp()
+        payload["otp"] = code
+        payload["last_sent"] = now
 
-            token = _encode_cookie(payload)
-            _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
+        token = _encode_cookie(payload)
+        _set_cookie(response, OTP_COOKIE_NAME, token, OTP_COOKIE_TTL_MINUTES)
 
-            await _send_otp(payload.get("email"), payload.get("phone"), code)
-            return {"message": "OTP resent."}
-        
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Error resending OTP: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to resend OTP"
-            )
-
+        await _send_otp(payload.get("email"), payload.get("phone"), code)
+        return {"message": "OTP resent."}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resending OTP: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to resend OTP"
+        )
+    
 @router.post("/forgot-password-init", status_code=200)
 async def forgot_password_init(
     data: ForgotInitInput,
