@@ -67,6 +67,7 @@ class RoleService:
             
             self.session.add(db_role)
             await self.session.commit()
+            await self.session.refresh(db_role, attribute_names=["role_permissions"])
             
             logger.info(f"Role created: {role_create.name}")
             return db_role
