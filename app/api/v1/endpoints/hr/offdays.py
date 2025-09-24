@@ -65,6 +65,19 @@ async def get_all__offdays(
         month=month
     )
 
+@router.get("/{offday_id}", response_model=OffdayResponse)
+async def get_offday(
+    offday_id: int = Path(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a single offday by ID"""
+    service = OffdayService(session)
+    offday = await service.get_offday(offday_id)
+    if not offday:
+        raise HTTPException(status_code=404, detail="Offday not found")
+    return offday
+
 @router.put("/{offday_id}", response_model=OffdayResponse)
 async def update__offday(
     offday_id: int = Path(...),

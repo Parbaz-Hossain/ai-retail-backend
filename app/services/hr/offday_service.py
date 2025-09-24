@@ -200,6 +200,16 @@ class OffdayService:
                 "data": []
             }
 
+    async def get_offday(self, offday_id: int) -> Optional[OffdayResponse]:
+        """Get a single offday by ID"""
+        result = await self.db.execute(
+            select(Offday)
+            .options(selectinload(Offday.employee))
+            .where(Offday.id == offday_id, Offday.is_active == True)
+        )
+
+        return result.scalars().first()
+
     async def update_offday(self, offday_id: int, offday_data: OffdayUpdate, current_user_id: int) -> OffdayResponse:
         """Update a offday"""
         result = await self.db.execute(

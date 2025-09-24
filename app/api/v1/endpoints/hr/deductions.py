@@ -1,3 +1,4 @@
+from app.schemas.common.pagination import PaginatedResponse
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -27,15 +28,23 @@ async def create_deduction_type(
     service = DeductionService(session)
     return await service.create_deduction_type(data)
 
-@router.get("/types", response_model=List[DeductionTypeResponse])
+@router.get("/types", response_model=PaginatedResponse[DeductionTypeResponse])
 async def get_deduction_types(
-    active_only: bool = Query(True),
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
+    is_active: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """Get all deduction types"""
     service = DeductionService(session)
-    return await service.get_deduction_types(active_only)
+    return await service.get_deduction_types(
+        page_index=page_index,
+        page_size=page_size,         
+        is_active=is_active,
+        search=search
+    )
 
 @router.get("/types/{type_id}", response_model=DeductionTypeResponse)
 async def get_deduction_type(
@@ -69,17 +78,25 @@ async def create_employee_deduction(
     service = DeductionService(session)
     return await service.create_employee_deduction(data, current_user.id)
 
-@router.get("/employee", response_model=List[EmployeeDeductionResponse])
+@router.get("/employee", response_model=PaginatedResponse[EmployeeDeductionResponse])
 async def get_employee_deductions(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
     employee_id: Optional[int] = Query(None),
     status: Optional[DeductionStatus] = Query(None),
-    active_only: bool = Query(True),
+    search: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """Get employee deductions with filters"""
     service = DeductionService(session)
-    return await service.get_employee_deductions(employee_id, status, active_only)
+    return await service.get_employee_deductions(
+        page_index=page_index,
+        page_size=page_size, 
+        employee_id=employee_id, 
+        status=status,
+        search=search
+    )
 
 @router.get("/employee/{deduction_id}", response_model=EmployeeDeductionResponse)
 async def get_employee_deduction(
