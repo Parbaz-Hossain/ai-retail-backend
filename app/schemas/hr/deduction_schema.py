@@ -50,6 +50,11 @@ class EmployeeDeductionUpdate(BaseModel):
     status: Optional[DeductionStatus] = None
     description: Optional[str] = None
 
+class EmployeeInfo(BaseModel):
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+
 class EmployeeDeductionResponse(EmployeeDeductionBase):
     id: int
     paid_amount: Optional[Decimal] = None
@@ -61,6 +66,7 @@ class EmployeeDeductionResponse(EmployeeDeductionBase):
     
     # Related data
     deduction_type: Optional[DeductionTypeResponse] = None
+    employee : Optional[EmployeeInfo] = None  
     
     class Config:
         from_attributes = True

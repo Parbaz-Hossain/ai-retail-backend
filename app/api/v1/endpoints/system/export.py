@@ -4,7 +4,7 @@ from app.core.database import get_async_session
 from app.api.dependencies import get_current_user
 from app.models.auth.user import User
 from app.utils.data_exporter import DataExportService, EXPORT_FIELD_MAPPINGS
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 import logging
 
@@ -52,6 +52,16 @@ SERVICE_MAPPING = {
         "service": "app.services.hr.attendance_service.AttendanceService", 
         "method": "get_attendance",
         "params": ["employee_id", "start_date", "end_date", "status"]
+    },
+    "deduction_types": {
+        "service": "app.services.hr.deduction_service.DeductionService",
+        "method": "get_deduction_types",
+        "params": ["is_active", "search"]
+    },
+    "employee_deductions": {
+        "service": "app.services.hr.deduction_service.DeductionService",
+        "method": "get_employee_deductions",
+        "params": ["employee_id", "status", "search"]
     },
     "salaries": {
         "service": "app.services.hr.salary_service.SalaryService", 
@@ -200,68 +210,17 @@ def get_service_instance(service_path: str, session: AsyncSession):
 @router.get("/{entity_type}")
 async def export_data(
     entity_type: str,
-    format: str = Query("csv", regex="^(csv|excel)$", description="Export format: csv or excel"),
+    format: str = Query("excel", regex="^(csv|excel)$", description="Export format: csv or excel"),
     filename: Optional[str] = Query(None, description="Custom filename (without extension)"),
     
-    # region Filters (all optional)
-    # Common filters
-    # search: Optional[str] = Query(None, description="Search term"),
-    # is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    
-    # Entity-specific filters
-    # department_id: Optional[int] = Query(None, description="Filter by department ID"),
-    # location_id: Optional[int] = Query(None, description="Filter by location ID"),
-    # category_id: Optional[int] = Query(None, description="Filter by category ID"),
-    # supplier_id: Optional[int] = Query(None, description="Filter by supplier ID"),
-    # item_id: Optional[int] = Query(None, description="Filter by item ID"),
-    # stock_type_id: Optional[int] = Query(None, description="Filter by stock type ID"),
-    # status: Optional[str] = Query(None, description="Filter by status"),
-    # priority: Optional[str] = Query(None, description="Filter by priority"),
-    # category: Optional[str] = Query(None, description="Filter by category"),
-    # is_manager: Optional[bool] = Query(None, description="Filter by manager status"),
-    # low_stock_only: Optional[bool] = Query(None, description="Show only low stock items"),
+    # Simplified filter parameters - add more as needed
     employee_id: Optional[int] = Query(None, description="Filter by employee ID"),
-    # vehicle_id: Optional[int] = Query(None, description="Filter by vehicle ID"),
-    # driver_id: Optional[int] = Query(None, description="Filter by driver ID"),
     
-    # Date filters
-    # start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
-    # end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    # from_date: Optional[str] = Query(None, description="From date (YYYY-MM-DD)"),
-    # to_date: Optional[str] = Query(None, description="To date (YYYY-MM-DD)"),
-    # salary_month: Optional[str] = Query(None, description="Salary month (YYYY-MM-DD)"),
-    
-    # Report specific filters
-    # stock_status: Optional[str] = Query(None, description="Stock status filter"),
-    # sort_by: Optional[str] = Query("item_name", description="Sort by field"),
-    # sort_order: Optional[str] = Query("asc", description="Sort order (asc/desc)"),
-    # movement_type: Optional[str] = Query(None, description="Movement type filter"),
-    # forecast_period: Optional[str] = Query("monthly", description="Forecast period"),
-    # attendance_status: Optional[str] = Query(None, description="Attendance status filter"),
-    # payment_status: Optional[str] = Query(None, description="Payment status filter"),
-    # shipment_status: Optional[str] = Query(None, description="Shipment status filter"),
-    # from_location_id: Optional[int] = Query(None, description="From location ID"),
-    # to_location_id: Optional[int] = Query(None, description="To location ID"),
-    # vehicle_type: Optional[str] = Query(None, description="Vehicle type filter"),
-    # is_available: Optional[bool] = Query(None, description="Availability filter"),
-    # year: Optional[int] = Query(None, description="Year filter"),
-    # month: Optional[int] = Query(None, description="Month filter"),
-    # purchase_order_id: Optional[int] = Query(None, description="Purchase order ID"),
-    # date_from: Optional[str] = Query(None, description="Date from filter"),
-    # date_to: Optional[str] = Query(None, description="Date to filter"),
-    # endregion
-
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """
     Dynamic export endpoint that handles all entity types including reports
-    
-    Supported entity types:
-    - users, employees, items, roles, departments, locations
-    - categories, stock_levels, purchase_orders, suppliers
-    - shipments, tasks, and more...
-    - Reports: stock_levels_report, stock_movements_report, etc.
     """
     try:
         # Check if entity type is supported
@@ -308,6 +267,8 @@ async def export_data(
                 else:
                     params[param] = local_vars[param]
         
+        logger.info(f"Exporting {entity_type} with params: {params}")
+        
         # Get data using the service method
         method = getattr(service, service_config["method"])
         result = await method(**params)
@@ -320,12 +281,27 @@ async def export_data(
         else:
             data = result if isinstance(result, list) else []
         
+        logger.info(f"Retrieved {len(data)} records for export")
+        
         # Prepare data for export
         exporter = DataExportService()
         export_data = exporter.prepare_data_for_export(
             data, 
             EXPORT_FIELD_MAPPINGS[entity_type]
         )
+        
+        logger.info(f"Prepared {len(export_data)} rows for export")
+        
+        # Debug: Check which columns will be summed (only for Excel exports)
+        if format.lower() == "excel" and export_data:
+            debug_info = exporter.debug_column_detection(export_data)
+            columns_to_sum = [col for col, info in debug_info.items() if info['will_be_summed']]
+            logger.info(f"Columns that will be summed: {columns_to_sum}")
+            
+            # Log sample values from amount columns for debugging
+            for col in columns_to_sum:
+                sample_values = [row.get(col, '') for row in export_data[:3]]  # First 3 rows
+                logger.info(f"Sample values from '{col}': {sample_values}")
         
         # Generate filename if not provided
         if not filename:
@@ -341,8 +317,9 @@ async def export_data(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error exporting {entity_type}: {e}")
+        logger.error(f"Error exporting {entity_type}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to export {entity_type} data: {str(e)}"
         )
+    

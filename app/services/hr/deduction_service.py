@@ -37,13 +37,44 @@ class DeductionService:
         await self.session.refresh(deduction_type)
         return deduction_type
 
-    async def get_deduction_types(self, active_only: bool = True) -> List[DeductionType]:
-        query = select(DeductionType)
-        if active_only:
-            query = query.where(DeductionType.is_active == True)
+    async def get_deduction_types(
+        self, 
+        page_index: int = 1,
+        page_size: int = 100,
+        is_active: Optional[bool] = None,
+        search: Optional[str] = None
+        ) -> Dict[str, Any]:
+        """Get paginated list of deduction types with optional active filter"""
+
+        conditions = []
+        if is_active is not None:
+            conditions.append(DeductionType.is_active == is_active)
+
+        if search:
+            like = f"%{search}%"
+            conditions.append(DeductionType.name.ilike(like))
+
+        # Get total count
+        total_count = await self.session.scalar(
+            select(func.count(DeductionType.id)).where(*conditions)
+        )
         
-        result = await self.session.execute(query.order_by(DeductionType.name))
-        return result.scalars().all()
+        # Calculate offset
+        skip = (page_index - 1) * page_size
+        
+        # Get paginated data
+        deduction_types = await self.session.scalars(
+            select(DeductionType)
+            .where(*conditions)
+            .offset(skip)
+            .limit(page_size)
+        )
+        return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": deduction_types.all()
+            }
 
     async def get_deduction_type(self, type_id: int) -> DeductionType:
         deduction_type = await self.session.get(DeductionType, type_id)
@@ -89,28 +120,56 @@ class DeductionService:
 
     async def get_employee_deductions(
         self, 
+        page_index: int = 1,
+        page_size: int = 100,
         employee_id: Optional[int] = None,
         status: Optional[DeductionStatus] = None,
-        active_only: bool = True
-    ) -> List[EmployeeDeduction]:
-        query = select(EmployeeDeduction).options(
-            selectinload(EmployeeDeduction.deduction_type),
-            selectinload(EmployeeDeduction.employee)
-        )
-        
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get paginated list of employee deduction with filtering"""
+
         conditions = []
         if employee_id:
             conditions.append(EmployeeDeduction.employee_id == employee_id)
         if status:
             conditions.append(EmployeeDeduction.status == status)
-        if active_only:
-            conditions.append(EmployeeDeduction.status.in_([DeductionStatus.ACTIVE]))
+
+        if search:
+            like = f"%{search}%"
+            conditions.append(
+                    or_(
+                        Employee.first_name.ilike(like),
+                        Employee.last_name.ilike(like),
+                        Employee.employee_id.ilike(like),
+                        DeductionStatus.ilike(like),
+                    )
+                )
+                
+        # Get total count
+        total_count = await self.session.scalar(
+            select(func.count(EmployeeDeduction.id)).where(*conditions)
+        )
         
-        if conditions:
-            query = query.where(and_(*conditions))
+        # Calculate offset
+        skip = (page_index - 1) * page_size
         
-        result = await self.session.execute(query.order_by(EmployeeDeduction.created_at.desc()))
-        return result.scalars().all()
+        # Get paginated data
+        employee_deductions = await self.session.scalars(
+            select(EmployeeDeduction)
+            .options(
+                selectinload(EmployeeDeduction.deduction_type),
+                selectinload(EmployeeDeduction.employee)
+            )
+            .where(*conditions)
+            .offset(skip)
+            .limit(page_size)
+        )
+        return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": employee_deductions.all()
+            }
 
     async def get_employee_deduction(self, deduction_id: int) -> EmployeeDeduction:
         deduction = await self.session.get(EmployeeDeduction, deduction_id, options=[
