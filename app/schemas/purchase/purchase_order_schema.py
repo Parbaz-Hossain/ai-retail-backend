@@ -40,25 +40,20 @@ class PurchaseOrderBase(BaseModel):
     order_date: Optional[date] = None
     expected_delivery_date: Optional[date] = None
     notes: Optional[str] = None
+    payment_conditions: Optional[str] = None
     tax_amount: Optional[Decimal] = Decimal('0')
     discount_amount: Optional[Decimal] = Decimal('0')
 
 class PurchaseOrderCreate(PurchaseOrderBase):
-    items: List[PurchaseOrderItemCreate]
-
-    @validator('items')
-    def validate_items(cls, v):
-        if not v:
-            raise ValueError('Purchase order must have at least one item')
-        return v
+    pass
 
 class PurchaseOrderUpdate(BaseModel):
     supplier_id: Optional[int] = None
     expected_delivery_date: Optional[date] = None
     notes: Optional[str] = None
+    payment_conditions: Optional[str] = None
     tax_amount: Optional[Decimal] = None
     discount_amount: Optional[Decimal] = None
-    items: Optional[List[PurchaseOrderItemCreate]] = None
 
 class SupplierInfo(BaseModel):
     id: int
@@ -73,6 +68,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     status: PurchaseOrderStatus
     subtotal: Decimal
     total_amount: Decimal
+    file_paths: Optional[List[str]] = None
     requested_by: Optional[int]
     approved_by: Optional[int]
     approved_date: Optional[datetime]

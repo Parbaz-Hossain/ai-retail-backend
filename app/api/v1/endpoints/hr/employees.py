@@ -35,7 +35,7 @@ async def create_employee(
             file_service = FileUploadService()
             
             # Upload image with employee ID
-            image_path = await file_service.save_image(profile_image, "employees", new_employee.id)
+            image_path = await file_service.save_file(profile_image, "employees", new_employee.id)
             
             # Update employee with image path
             new_employee.profile_image = image_path            
@@ -124,7 +124,7 @@ async def update_employee(
             file_service = FileUploadService()
             
             # Upload image with employee ID
-            image_path = await file_service.save_image(profile_image, "employees", updated_employee.id)
+            image_path = await file_service.save_file(profile_image, "employees", updated_employee.id)
             
             # Update employee with image path
             updated_employee.profile_image = image_path

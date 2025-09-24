@@ -17,6 +17,8 @@ class PurchaseOrder(BaseModel):
     discount_amount = Column(Numeric(12, 2), default=0)
     total_amount = Column(Numeric(12, 2), nullable=False)
     notes = Column(Text)
+    payment_conditions = Column(String(500))  
+    file_paths = Column(JSON)  
     requested_by = Column(Integer)  # User ID
     approved_by = Column(Integer)  # User ID
     approved_date = Column(DateTime(timezone=True))

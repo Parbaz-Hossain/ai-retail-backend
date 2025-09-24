@@ -39,7 +39,7 @@ async def create_item(
             file_service = FileUploadService()
             
             # Upload image with item ID
-            image_path = await file_service.save_image(item_image, "items", item.id)
+            image_path = await file_service.save_file(item_image, "items", item.id)
             
             # Update item with image path
             item.image_url = image_path
@@ -171,7 +171,7 @@ async def update_item(
             file_service = FileUploadService()
             
             # Upload image with item ID
-            image_path = await file_service.save_image(item_image, "items", updated_item.id)
+            image_path = await file_service.save_file(item_image, "items", updated_item.id)
             
             # Update item with image path
             updated_item.image_url = image_path

@@ -81,9 +81,9 @@ class DataExportService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to export data to CSV"
             )
-    
+        
     def export_to_excel(self, data: List[Dict[str, Any]], filename: str, sheet_name: str = "Data") -> StreamingResponse:
-        """Export data to Excel format"""
+        """Export data to Excel format with table formatting, borders, and summation"""
         try:
             output = BytesIO()
             
@@ -98,16 +98,91 @@ class DataExportService:
                     workbook = writer.book
                     worksheet = writer.sheets[sheet_name]
                     
-                    # Style headers
-                    from openpyxl.styles import Font, PatternFill, Alignment
+                    # Import styling classes
+                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                    from openpyxl.utils import get_column_letter
+                    from openpyxl.worksheet.table import Table, TableStyleInfo
+                    
+                    # Define styles
                     header_font = Font(bold=True, color="FFFFFF")
                     header_fill = PatternFill("solid", fgColor="366092")
                     header_alignment = Alignment(horizontal="center")
                     
-                    for cell in worksheet[1]:  # First row (headers)
-                        cell.font = header_font
-                        cell.fill = header_fill
-                        cell.alignment = header_alignment
+                    # Border style
+                    thin_border = Border(
+                        left=Side(style='thin'),
+                        right=Side(style='thin'),
+                        top=Side(style='thin'),
+                        bottom=Side(style='thin')
+                    )
+                    
+                    # Sum row styling
+                    sum_font = Font(bold=True)
+                    sum_fill = PatternFill("solid", fgColor="E7E6E6")
+                    
+                    # Get data range
+                    max_row = len(df) + 1  # +1 for header
+                    max_col = len(df.columns)
+                    
+                    # Create table
+                    table_ref = f"A1:{get_column_letter(max_col)}{max_row}"
+                    table = Table(displayName="DataTable", ref=table_ref)
+                    
+                    # Table style
+                    style = TableStyleInfo(
+                        name="TableStyleMedium9", 
+                        showFirstColumn=False,
+                        showLastColumn=False, 
+                        showRowStripes=True, 
+                        showColumnStripes=False
+                    )
+                    table.tableStyleInfo = style
+                    worksheet.add_table(table)
+                    
+                    # Identify amount/numeric columns for summation
+                    amount_keywords = [
+                        'amount', 'salary', 'cost', 'price', 'value', 'total', 'subtotal', 'tax_amount', 'total_amount',
+                        'allowance', 'bonus', 'deduction', 'tax', 'gross', 'net', 'overtime',
+                        'stock', 'quantity', 'capacity', 'weight', 'volume', 'hours', 
+                        'distance', 'mileage', 'fuel', 'percentage'
+                    ]
+                    
+                    # Find numeric columns to sum
+                    sum_columns = {}
+                    for col_idx, column_name in enumerate(df.columns, 1):
+                        if any(keyword in column_name.lower() for keyword in amount_keywords):
+                            # Check if column contains numeric data
+                            try:
+                                # Convert column to numeric, errors='coerce' will turn non-numeric to NaN
+                                numeric_values = pd.to_numeric(df.iloc[:, col_idx-1], errors='coerce')
+                                if not numeric_values.isna().all():  # If column has some numeric values
+                                    sum_columns[col_idx] = column_name
+                            except:
+                                pass
+                    
+                    # Add sum row if there are numeric columns to sum
+                    if sum_columns:
+                        sum_row = max_row + 2  # Leave one empty row
+                        
+                        # Add "Total" label in first column
+                        worksheet.cell(row=sum_row, column=1, value="TOTAL")
+                        worksheet.cell(row=sum_row, column=1).font = sum_font
+                        worksheet.cell(row=sum_row, column=1).fill = sum_fill
+                        
+                        # Add sum formulas for numeric columns
+                        for col_idx, col_name in sum_columns.items():
+                            col_letter = get_column_letter(col_idx)
+                            sum_formula = f"=SUM({col_letter}2:{col_letter}{max_row})"
+                            cell = worksheet.cell(row=sum_row, column=col_idx, value=sum_formula)
+                            cell.font = sum_font
+                            cell.fill = sum_fill
+                            cell.number_format = '#,##0.00'  # Format as number with commas
+                    
+                    # Apply borders to all cells including sum row
+                    border_end_row = sum_row if sum_columns else max_row
+                    for row in range(1, border_end_row + 1):
+                        for col in range(1, max_col + 1):
+                            worksheet.cell(row=row, column=col).border = thin_border
                     
                     # Auto-adjust column widths
                     for column in worksheet.columns:
@@ -136,7 +211,7 @@ class DataExportService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to export data to Excel"
             )
-
+    
 # Export field mappings for different entities
 EXPORT_FIELD_MAPPINGS = {
     # Auth & User Management
