@@ -7,6 +7,8 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 import logging
+from decimal import Decimal, InvalidOperation
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,90 @@ class DataExportService:
     def __init__(self):
         self.export_dir = Path("uploads/exports")
         self.export_dir.mkdir(parents=True, exist_ok=True)
+    
+    def clean_numeric_value(self, value: Any) -> float:
+        """Clean and convert value to numeric, handling various data types"""
+        if value is None or value == "" or value == "N/A":
+            return 0.0
+        
+        # If it's already a number
+        if isinstance(value, (int, float)):
+            return float(value)
+        
+        # If it's a Decimal
+        if isinstance(value, Decimal):
+            return float(value)
+        
+        # If it's a string, clean it
+        if isinstance(value, str):
+            # Remove common formatting characters but keep digits, dots, and minus
+            cleaned = re.sub(r'[^\d.-]', '', value.replace(',', ''))
+            if cleaned == '' or cleaned == '-' or cleaned == '.':
+                return 0.0
+            try:
+                return float(cleaned)
+            except ValueError:
+                return 0.0
+        
+        return 0.0
+    
+    def debug_column_detection(self, data: List[Dict[str, Any]]) -> Dict[str, bool]:
+        """Debug method to see which columns would be detected as numeric"""
+        if not data:
+            return {}
+        
+        debug_info = {}
+        amount_keywords = [
+            'amount', 'salary', 'cost', 'price', 'value', 'total', 'subtotal', 'tax', 
+            'allowance', 'bonus', 'deduction', 'gross', 'net', 'overtime',
+            'stock', 'quantity', 'capacity', 'weight', 'volume', 'hours', 
+            'distance', 'mileage', 'fuel'
+        ]
+        
+        for column_name in data[0].keys():
+            has_keyword = any(keyword in column_name.lower() for keyword in amount_keywords)
+            is_numeric = self.is_numeric_column(data, column_name)
+            debug_info[column_name] = {
+                'has_amount_keyword': has_keyword,
+                'is_numeric': is_numeric,
+                'will_be_summed': has_keyword and is_numeric
+            }
+        
+        return debug_info
+    
+    def is_numeric_column(self, data: List[Dict[str, Any]], column_name: str) -> bool:
+        """Check if a column contains primarily numeric data"""
+        if not data:
+            return False
+        
+        numeric_count = 0
+        total_count = 0
+        has_non_zero = False
+        
+        for row in data:
+            value = row.get(column_name)
+            if value is not None and value != "":
+                total_count += 1
+                try:
+                    cleaned_value = self.clean_numeric_value(value)
+                    # Check if it's a valid number (including 0)
+                    if isinstance(value, (int, float, Decimal)) or (isinstance(value, str) and value.replace('.', '').replace('-', '').replace(',', '').isdigit()):
+                        numeric_count += 1
+                        if cleaned_value != 0.0:
+                            has_non_zero = True
+                    elif str(value).strip() in ['0', '0.0', '0.00']:
+                        numeric_count += 1
+                except:
+                    pass
+        
+        # Consider it numeric if at least 70% of non-empty values are numeric
+        # OR if column name suggests it's numeric
+        is_percentage_numeric = total_count > 0 and (numeric_count / total_count) >= 0.7
+        
+        # For debugging
+        logger.info(f"Column '{column_name}': {numeric_count}/{total_count} numeric values, has_non_zero: {has_non_zero}")
+        
+        return is_percentage_numeric
     
     def prepare_data_for_export(self, data: List[Any], fields_mapping: Dict[str, str]) -> List[Dict[str, Any]]:
         """Prepare data for export by mapping fields and formatting"""
@@ -42,7 +128,7 @@ class DataExportService:
                             value = value.strftime("%Y-%m-%d %H:%M:%S")
                         elif isinstance(value, bool):
                             value = "Yes" if value else "No"
-                        elif hasattr(value, '__dict__') and not isinstance(value, (str, int, float)):  # Complex object
+                        elif hasattr(value, '__dict__') and not isinstance(value, (str, int, float, Decimal)):  # Complex object
                             value = str(value)
                     else:
                         value = ""
@@ -88,7 +174,40 @@ class DataExportService:
             output = BytesIO()
             
             if data:
-                df = pd.DataFrame(data)
+                # Clean and prepare numeric data
+                cleaned_data = []
+                for row in data:
+                    cleaned_row = {}
+                    for key, value in row.items():
+                        cleaned_row[key] = value
+                    cleaned_data.append(cleaned_row)
+                
+                df = pd.DataFrame(cleaned_data)
+                
+                # Identify amount/numeric columns for summation with more specific keywords
+                amount_keywords = [
+                    'amount', 'salary', 'cost', 'price', 'value', 'total', 'subtotal', 'tax', 
+                    'allowance', 'bonus', 'deduction', 'gross', 'net', 'overtime',
+                    'stock', 'quantity', 'capacity', 'weight', 'volume', 'hours', 
+                    'distance', 'mileage', 'fuel'
+                ]
+                
+                # Find numeric columns to sum - improved detection
+                sum_columns = {}
+                sum_column_names = []
+                
+                for col_idx, column_name in enumerate(df.columns, 1):
+                    column_lower = column_name.lower()
+                    # Check if column name contains amount-related keywords
+                    if any(keyword in column_lower for keyword in amount_keywords):
+                        # Verify it's actually numeric
+                        if self.is_numeric_column(cleaned_data, column_name):
+                            sum_columns[col_idx] = column_name
+                            sum_column_names.append(column_name)
+                            # Convert column to numeric for proper summation
+                            df[column_name] = df[column_name].apply(lambda x: self.clean_numeric_value(x))
+                
+                logger.info(f"Detected columns for summation: {sum_column_names}")
                 
                 # Create Excel writer with styling
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -101,12 +220,10 @@ class DataExportService:
                     # Import styling classes
                     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
                     from openpyxl.utils import get_column_letter
-                    from openpyxl.worksheet.table import Table, TableStyleInfo
                     
                     # Define styles
                     header_font = Font(bold=True, color="FFFFFF")
                     header_fill = PatternFill("solid", fgColor="366092")
-                    header_alignment = Alignment(horizontal="center")
                     
                     # Border style
                     thin_border = Border(
@@ -117,85 +234,85 @@ class DataExportService:
                     )
                     
                     # Sum row styling
-                    sum_font = Font(bold=True)
-                    sum_fill = PatternFill("solid", fgColor="E7E6E6")
+                    sum_font = Font(bold=True, size=12)
+                    sum_fill = PatternFill("solid", fgColor="D9D9D9")
                     
                     # Get data range
                     max_row = len(df) + 1  # +1 for header
                     max_col = len(df.columns)
                     
-                    # Create table
-                    table_ref = f"A1:{get_column_letter(max_col)}{max_row}"
-                    table = Table(displayName="DataTable", ref=table_ref)
+                    # Apply header styling
+                    for col in range(1, max_col + 1):
+                        header_cell = worksheet.cell(row=1, column=col)
+                        header_cell.font = header_font
+                        header_cell.fill = header_fill
+                        header_cell.border = thin_border
                     
-                    # Table style
-                    style = TableStyleInfo(
-                        name="TableStyleMedium9", 
-                        showFirstColumn=False,
-                        showLastColumn=False, 
-                        showRowStripes=True, 
-                        showColumnStripes=False
-                    )
-                    table.tableStyleInfo = style
-                    worksheet.add_table(table)
-                    
-                    # Identify amount/numeric columns for summation
-                    amount_keywords = [
-                        'amount', 'salary', 'cost', 'price', 'value', 'total', 'subtotal', 'tax_amount', 'total_amount',
-                        'allowance', 'bonus', 'deduction', 'tax', 'gross', 'net', 'overtime',
-                        'stock', 'quantity', 'capacity', 'weight', 'volume', 'hours', 
-                        'distance', 'mileage', 'fuel', 'percentage'
-                    ]
-                    
-                    # Find numeric columns to sum
-                    sum_columns = {}
-                    for col_idx, column_name in enumerate(df.columns, 1):
-                        if any(keyword in column_name.lower() for keyword in amount_keywords):
-                            # Check if column contains numeric data
-                            try:
-                                # Convert column to numeric, errors='coerce' will turn non-numeric to NaN
-                                numeric_values = pd.to_numeric(df.iloc[:, col_idx-1], errors='coerce')
-                                if not numeric_values.isna().all():  # If column has some numeric values
-                                    sum_columns[col_idx] = column_name
-                            except:
-                                pass
-                    
-                    # Add sum row if there are numeric columns to sum
-                    if sum_columns:
-                        sum_row = max_row + 2  # Leave one empty row
-                        
-                        # Add "Total" label in first column
-                        worksheet.cell(row=sum_row, column=1, value="TOTAL")
-                        worksheet.cell(row=sum_row, column=1).font = sum_font
-                        worksheet.cell(row=sum_row, column=1).fill = sum_fill
-                        
-                        # Add sum formulas for numeric columns
-                        for col_idx, col_name in sum_columns.items():
-                            col_letter = get_column_letter(col_idx)
-                            sum_formula = f"=SUM({col_letter}2:{col_letter}{max_row})"
-                            cell = worksheet.cell(row=sum_row, column=col_idx, value=sum_formula)
-                            cell.font = sum_font
-                            cell.fill = sum_fill
-                            cell.number_format = '#,##0.00'  # Format as number with commas
-                    
-                    # Apply borders to all cells including sum row
-                    border_end_row = sum_row if sum_columns else max_row
-                    for row in range(1, border_end_row + 1):
+                    # Apply borders to all data cells and format numeric columns
+                    for row in range(1, max_row + 1):
                         for col in range(1, max_col + 1):
-                            worksheet.cell(row=row, column=col).border = thin_border
+                            cell = worksheet.cell(row=row, column=col)
+                            cell.border = thin_border
+                            
+                            # Format numeric columns (skip header row)
+                            if row > 1 and col in sum_columns:
+                                cell.number_format = '#,##0.00'
+                    
+                    # Add sum row - ALWAYS add it if we have numeric columns
+                    if sum_columns:
+                        sum_row_number = max_row + 2  # Leave one empty row
+                        
+                        logger.info(f"Adding sum row at row {sum_row_number}")
+                        
+                        # Add "TOTAL" label in first column
+                        total_label_cell = worksheet.cell(row=sum_row_number, column=1, value="TOTAL")
+                        total_label_cell.font = sum_font
+                        total_label_cell.fill = sum_fill
+                        total_label_cell.border = thin_border
+                        
+                        # Calculate and add sum values for each numeric column
+                        for col_idx, col_name in sum_columns.items():
+                            # Calculate sum from the actual data
+                            column_sum = 0.0
+                            for row_data in cleaned_data:
+                                value = row_data.get(col_name, 0)
+                                numeric_value = self.clean_numeric_value(value)
+                                column_sum += numeric_value
+                            
+                            # Add sum to the cell
+                            sum_cell = worksheet.cell(row=sum_row_number, column=col_idx, value=column_sum)
+                            sum_cell.font = sum_font
+                            sum_cell.fill = sum_fill
+                            sum_cell.number_format = '#,##0.00'
+                            sum_cell.border = thin_border
+                            
+                            logger.info(f"Column '{col_name}' sum: {column_sum}")
+                        
+                        # Fill empty cells in sum row with borders
+                        for col in range(1, max_col + 1):
+                            if col not in sum_columns and col != 1:  # Skip total label column
+                                empty_cell = worksheet.cell(row=sum_row_number, column=col, value="")
+                                empty_cell.fill = sum_fill
+                                empty_cell.border = thin_border
                     
                     # Auto-adjust column widths
-                    for column in worksheet.columns:
+                    for col_idx, column in enumerate(worksheet.columns, 1):
                         max_length = 0
-                        column_letter = column[0].column_letter
+                        column_letter = get_column_letter(col_idx)
+                        
                         for cell in column:
                             try:
-                                if len(str(cell.value)) > max_length:
-                                    max_length = len(str(cell.value))
+                                cell_value = str(cell.value) if cell.value is not None else ""
+                                if len(cell_value) > max_length:
+                                    max_length = len(cell_value)
                             except:
                                 pass
-                        adjusted_width = min(max_length + 2, 50)
+                        
+                        # Set minimum width and maximum width
+                        adjusted_width = min(max(max_length + 2, 10), 50)
                         worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+                logger.info(f"Excel export completed successfully with {len(sum_columns)} numeric columns summed")
             
             output.seek(0)
             
@@ -299,6 +416,29 @@ EXPORT_FIELD_MAPPINGS = {
         "total_hours": "Total Hours",
         "overtime_hours": "Overtime Hours",
         "late_minutes": "Late Minutes",
+        "created_at": "Created Date"
+    },
+    "deduction_types": {
+        "id": "ID",
+        "name": "Deduction Type",
+        "description": "Description",
+        "is_active": "Active",
+        "created_at": "Created Date"
+    },
+    "employee_deductions": {
+        "id": "ID",
+        "employee.employee_id": "Employee ID",
+        "employee.first_name": "First Name", 
+        "employee.last_name": "Last Name",
+        "deduction_type.name": "Deduction Type",
+        "total_amount": "Total Amount",
+        "paid_amount": "Paid Amount",
+        "remaining_amount": "Remaining Amount",
+        "monthly_deduction_limit": "Monthly Limit",
+        "effective_from": "Effective From",
+        "effective_to": "Effective To",
+        "status": "Status",
+        "description": "Description",
         "created_at": "Created Date"
     },
     "salaries": {
