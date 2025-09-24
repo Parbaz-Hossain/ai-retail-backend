@@ -58,7 +58,7 @@ class PurchaseOrderService:
         po_data: PurchaseOrderCreate, 
         user_id: int
     ) -> PurchaseOrder:
-        """Create new purchase order with optional auto-approval task"""
+        """Create new purchase order with master data only (no items)"""
         try:
             # Verify supplier exists
             supplier_result = await self.session.execute(
@@ -80,67 +80,27 @@ class PurchaseOrderService:
             # Generate PO number
             po_number = await self.generate_po_number()
 
-            # Calculate totals
-            subtotal = sum(
-                Decimal(str(item.quantity)) * Decimal(str(item.unit_cost))
-                for item in po_data.items
-            )
-            tax_amount = po_data.tax_amount or Decimal('0')
-            discount_amount = po_data.discount_amount or Decimal('0')
-            total_amount = subtotal + tax_amount - discount_amount
-
-            # Create purchase order
+            # Create purchase order with master data only
             purchase_order = PurchaseOrder(
                 po_number=po_number,
                 supplier_id=po_data.supplier_id,
                 order_date=po_data.order_date or date.today(),
                 expected_delivery_date=po_data.expected_delivery_date,
                 status=PurchaseOrderStatus.DRAFT,
-                subtotal=subtotal,
-                tax_amount=tax_amount,
-                discount_amount=discount_amount,
-                total_amount=total_amount,
+                subtotal=Decimal('0'),  # Will be calculated when items are added
+                tax_amount=po_data.tax_amount or Decimal('0'),
+                discount_amount=po_data.discount_amount or Decimal('0'),
+                total_amount=Decimal('0'),  # Will be calculated when items are added
                 notes=po_data.notes,
+                payment_conditions=po_data.payment_conditions,
                 requested_by=user_id,
-                created_by = user_id
+                created_by=user_id
             )
 
             self.session.add(purchase_order)
-            await self.session.flush()  # Get the ID
-
-            # Create PO items
-            po_items = []
-            for item_data in po_data.items:
-                # Verify item exists
-                item_result = await self.session.execute(
-                    select(Item).where(Item.id == item_data.item_id)
-                )
-                if not item_result.scalar_one_or_none():
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail=f"Item {item_data.item_id} not found"
-                    )
-
-                total_cost = Decimal(str(item_data.quantity)) * Decimal(str(item_data.unit_cost))
-                
-                po_item = PurchaseOrderItem(
-                    purchase_order_id=purchase_order.id,
-                    item_id=item_data.item_id,
-                    quantity=item_data.quantity,
-                    unit_cost=item_data.unit_cost,
-                    total_cost=total_cost,
-                    received_quantity=Decimal('0'),
-                    created_by=user_id
-                )
-                po_items.append(po_item)
-
-            self.session.add_all(po_items)
             await self.session.commit()
 
-            # Auto-submit for approval if requested
-            await self._submit_for_approval(purchase_order.id, user_id)
-
-            # Reload PO with items eagerly
+            # Reload PO with supplier
             result = await self.session.execute(
                 select(PurchaseOrder)
                 .options(selectinload(PurchaseOrder.supplier))
@@ -160,6 +120,237 @@ class PurchaseOrderService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create purchase order"
             )
+
+    async def add_item_to_po(
+        self,
+        po_id: int,
+        item_data: PurchaseOrderItemCreate,
+        user_id: int
+    ) -> bool:
+        """Add item to existing purchase order"""
+        try:
+            # Check if PO exists and can be modified
+            po = await self.get_purchase_order(po_id)
+            if not po:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Purchase order not found"
+                )
+
+            if po.status not in [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.PENDING]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot add items to purchase order in current status"
+                )
+
+            # Verify item exists
+            item_result = await self.session.execute(
+                select(Item).where(Item.id == item_data.item_id)
+            )
+            if not item_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Item {item_data.item_id} not found"
+                )
+
+            # Check if item already exists in PO
+            existing_item_result = await self.session.execute(
+                select(PurchaseOrderItem).where(
+                    and_(
+                        PurchaseOrderItem.purchase_order_id == po_id,
+                        PurchaseOrderItem.item_id == item_data.item_id,
+                        PurchaseOrderItem.is_deleted == False
+                    )
+                )
+            )
+            existing_item = existing_item_result.scalar_one_or_none()
+            
+            if existing_item:
+                # Update existing item quantity
+                existing_item.quantity += item_data.quantity
+                existing_item.unit_cost = item_data.unit_cost
+                existing_item.total_cost = existing_item.quantity * existing_item.unit_cost
+                existing_item.updated_by = user_id
+            else:
+                # Add new item
+                total_cost = Decimal(str(item_data.quantity)) * Decimal(str(item_data.unit_cost))
+                
+                po_item = PurchaseOrderItem(
+                    purchase_order_id=po_id,
+                    item_id=item_data.item_id,
+                    quantity=item_data.quantity,
+                    unit_cost=item_data.unit_cost,
+                    total_cost=total_cost,
+                    received_quantity=Decimal('0'),
+                    created_by=user_id
+                )
+                self.session.add(po_item)
+
+            # Recalculate PO totals
+            await self._recalculate_po_totals(po_id)
+            await self.session.commit()
+
+            logger.info(f"Item added to purchase order: {po_id} by user {user_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error adding item to purchase order: {str(e)}")
+            return False
+
+    async def remove_item_from_po(
+        self,
+        po_id: int,
+        item_id: int,
+        user_id: int
+    ) -> bool:
+        """Remove item from purchase order"""
+        try:
+            # Check if PO exists and can be modified
+            po = await self.get_purchase_order(po_id)
+            if not po:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Purchase order not found"
+                )
+
+            if po.status not in [PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.PENDING]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot remove items from purchase order in current status"
+                )
+
+            # Find and soft delete the item
+            await self.session.execute(
+                update(PurchaseOrderItem)
+                .where(
+                    and_(
+                        PurchaseOrderItem.purchase_order_id == po_id,
+                        PurchaseOrderItem.id == item_id,
+                        PurchaseOrderItem.is_deleted == False
+                    )
+                )
+                .values(is_deleted=True, updated_by=user_id)
+            )
+
+            # Recalculate PO totals
+            await self._recalculate_po_totals(po_id)
+            await self.session.commit()
+
+            logger.info(f"Item removed from purchase order: {po_id} by user {user_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error removing item from purchase order: {str(e)}")
+            return False
+
+    async def _recalculate_po_totals(self, po_id: int):
+        """Recalculate purchase order totals based on current items"""
+        try:
+            # Get all active items for this PO
+            result = await self.session.execute(
+                select(PurchaseOrderItem)
+                .where(
+                    and_(
+                        PurchaseOrderItem.purchase_order_id == po_id,
+                        PurchaseOrderItem.is_deleted == False
+                    )
+                )
+            )
+            items = result.scalars().all()
+
+            # Calculate subtotal
+            subtotal = sum(item.total_cost for item in items)
+
+            # Get PO for tax and discount amounts
+            po_result = await self.session.execute(
+                select(PurchaseOrder).where(PurchaseOrder.id == po_id)
+            )
+            po = po_result.scalar_one()
+
+            # Calculate total
+            total_amount = subtotal + (po.tax_amount or Decimal('0')) - (po.discount_amount or Decimal('0'))
+
+            # Update PO totals
+            await self.session.execute(
+                update(PurchaseOrder)
+                .where(PurchaseOrder.id == po_id)
+                .values(
+                    subtotal=subtotal,
+                    total_amount=total_amount
+                )
+            )
+
+        except Exception as e:
+            logger.error(f"Error recalculating PO totals: {str(e)}")
+            raise
+
+    async def update_po_file_paths(self, po_id: int, file_paths: List[str]) -> bool:
+        """Update purchase order file paths (multiple files)"""
+        try:
+            await self.session.execute(
+                update(PurchaseOrder)
+                .where(PurchaseOrder.id == po_id)
+                .values(file_paths=file_paths)
+            )
+            await self.session.commit()
+            return True
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error updating PO file paths: {str(e)}")
+            return False
+
+    async def delete_po_file(self, po_id: int, file_index: int) -> bool:
+        """Delete a specific file from purchase order by index"""
+        try:
+            # Get current PO
+            po = await self.get_purchase_order(po_id)
+            if not po:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Purchase order not found"
+                )
+
+            if not po.file_paths or file_index >= len(po.file_paths) or file_index < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid file index"
+                )
+
+            # Remove file from list
+            updated_file_paths = po.file_paths.copy()
+            removed_file_path = updated_file_paths.pop(file_index)
+
+            # Update database
+            await self.session.execute(
+                update(PurchaseOrder)
+                .where(PurchaseOrder.id == po_id)
+                .values(file_paths=updated_file_paths if updated_file_paths else None)
+            )
+            await self.session.commit()
+
+            # Optionally delete actual file from filesystem
+            try:
+                import os
+                if removed_file_path and os.path.exists(removed_file_path):
+                    os.remove(removed_file_path)
+            except Exception as e:
+                logger.warning(f"Could not delete file from filesystem: {str(e)}")
+
+            logger.info(f"File deleted from purchase order: {po_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error deleting file from purchase order: {str(e)}")
+            return False
 
     async def get_purchase_order(self, po_id: int) -> Optional[PurchaseOrder]:
         """Get purchase order by ID with only non-deleted items"""
@@ -254,7 +445,7 @@ class PurchaseOrderService:
         po_data: PurchaseOrderUpdate,
         user_id: int
     ) -> Optional[PurchaseOrder]:
-        """Update purchase order"""
+        """Update purchase order master data"""
         try:
             po = await self.get_purchase_order(po_id)
             if not po:
@@ -271,40 +462,14 @@ class PurchaseOrderService:
                 )
 
             # Update basic fields
-            update_data = po_data.model_dump(exclude_unset=True, exclude={'items'})
+            update_data = po_data.model_dump(exclude_unset=True)
             update_data['updated_by'] = user_id
             for field, value in update_data.items():
                 setattr(po, field, value)
 
-            # Update items if provided
-            if po_data.items:
-                # Remove existing items
-                await self.session.execute(
-                    update(PurchaseOrderItem)
-                    .where(PurchaseOrderItem.purchase_order_id == po_id)
-                    .values(is_deleted=True)
-                )
-
-                # Add new items
-                subtotal = Decimal('0')
-                for item_data in po_data.items:
-                    total_cost = Decimal(str(item_data.quantity)) * Decimal(str(item_data.unit_cost))
-                    subtotal += total_cost
-                    
-                    po_item = PurchaseOrderItem(
-                        purchase_order_id=po_id,
-                        item_id=item_data.item_id,
-                        quantity=item_data.quantity,
-                        unit_cost=item_data.unit_cost,
-                        total_cost=total_cost,
-                        received_quantity=Decimal('0'),
-                        updated_by=user_id
-                    )
-                    self.session.add(po_item)
-
-                # Recalculate totals
-                po.subtotal = subtotal
-                po.total_amount = subtotal + (po.tax_amount or Decimal('0')) - (po.discount_amount or Decimal('0'))
+            # Recalculate total if tax or discount changed
+            if po_data.tax_amount is not None or po_data.discount_amount is not None:
+                await self._recalculate_po_totals(po_id)
 
             await self.session.commit()
             await self.session.refresh(po)
@@ -322,6 +487,7 @@ class PurchaseOrderService:
                 detail="Failed to update purchase order"
             )
 
+    # Keep all other existing methods unchanged
     async def submit_for_approval(self, po_id: int, user_id: int) -> bool:
         """Submit purchase order for approval"""
         try:
