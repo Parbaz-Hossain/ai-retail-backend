@@ -22,8 +22,14 @@ class PurchaseOrder(BaseModel):
     requested_by = Column(Integer)  # User ID
     approved_by = Column(Integer)  # User ID
     approved_date = Column(DateTime(timezone=True))
+
+    # NEW PAYMENT FIELDS
+    paid_amount = Column(Numeric(12, 2), default=0)
+    paid_percentage = Column(Numeric(5, 2), default=0)  # 0.00 to 100.00
+    is_closed = Column(Boolean, default=False)
     
     # Relationships
     supplier = relationship("Supplier", back_populates="purchase_orders")
     items = relationship("PurchaseOrderItem", back_populates="purchase_order")
     goods_receipts = relationship("GoodsReceipt", back_populates="purchase_order")
+    payments = relationship("POPayment", back_populates="purchase_order")

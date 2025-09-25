@@ -16,7 +16,7 @@ from app.models.hr import attendance, employee, holiday, salary, shift_type, use
 from app. models.inventory import category, inventory_count_item, inventory_count, item, reorder_request_item, reorder_request, stock_analytics, stock_level, stock_movement, stock_type, transfer_item, transfer
 from app.models.logistics import driver, shipment_item, shipment_tracking, shipment, vehicle
 from app.models.organization import department, location
-from app.models.purchase import goods_receipt_item, goods_receipt, item_supplier, purchase_order_item, purchase_order, supplier
+from app.models.purchase import goods_receipt_item, goods_receipt, item_supplier, purchase_order_item, purchase_order, supplier, po_payment
 from app.models.system import file_upload, performance_metrics, qr_code, system_setting
 from app.models.engagement import faq, user_history, chat
 from app.models.biometric import fingerprint
