@@ -151,18 +151,17 @@ class OffdayType(str, Enum):
     PERSONAL_OFFDAY = "PERSONAL_OFFDAY"
     COMPENSATORY_OFF = "COMPENSATORY_OFF"
 
-class DeductionTypeEnum(str, Enum):
-    LATE = "late"
-    ABSENT = "absent"
-    PENALTY = "penalty"
-    LOAN = "loan"
-    ADVANCE = "advance"
-    TAX = "tax"
-    INSURANCE = "insurance"
-    OTHER = "other"
-
 class DeductionStatus(str, Enum):
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    SUSPENDED = "suspended"
-    CANCELLED = "cancelled"
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    SUSPENDED = "SUSPENDED"
+    CANCELLED = "CANCELLED"
+
+class PaymentStatus(Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class PaymentType(Enum):
+    REGULAR = "REGULAR"
+    CLOSE = "CLOSE"

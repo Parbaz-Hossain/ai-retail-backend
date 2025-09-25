@@ -77,5 +77,11 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     items: List[PurchaseOrderItemResponse] = []
     supplier: Optional[SupplierInfo] = None
 
+    # NEW PAYMENT FIELDS
+    paid_amount: Optional[Decimal]= None
+    paid_percentage: Optional[Decimal] = None
+    remaining_amount: Optional[Decimal] = None
+    is_closed: Optional[bool] = None
+
     class Config:
         from_attributes = True
