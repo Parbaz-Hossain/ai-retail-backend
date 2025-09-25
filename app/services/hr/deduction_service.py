@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr.deduction import DeductionType, EmployeeDeduction, SalaryDeduction
 from app.models.hr.employee import Employee
 from app.models.hr.attendance import Attendance
-from app.models.shared.enums import DeductionStatus, DeductionTypeEnum, AttendanceStatus
+from app.models.shared.enums import DeductionStatus, AttendanceStatus
 from app.schemas.hr.deduction_schema import (
     DeductionTypeCreate, DeductionTypeUpdate,
     EmployeeDeductionCreate, EmployeeDeductionUpdate,
