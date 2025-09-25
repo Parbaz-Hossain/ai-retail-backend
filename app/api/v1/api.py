@@ -8,7 +8,7 @@ from app.api.v1.endpoints.inventory import analytics, categories, inventory_coun
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.notification import notifications
 from app.api.v1.endpoints.organization import departments, locations
-from app.api.v1.endpoints.purchase import goods_receipts, purchase_orders, suppliers
+from app.api.v1.endpoints.purchase import goods_receipts, po_payments, purchase_orders, suppliers
 from app.api.v1.endpoints.reports import reports
 from app.api.v1.endpoints.system import export
 from app.api.v1.endpoints.task import tasks, task_types, webhooks, mobile
@@ -50,6 +50,7 @@ api_router.include_router(transfers.router, prefix="/inventory/transfer", tags=[
 api_router.include_router(goods_receipts.router, prefix="/purchase/goods-receipt", tags=["Purchase"])
 api_router.include_router(purchase_orders.router, prefix="/purchase/purchase-order", tags=["Purchase"])
 api_router.include_router(suppliers.router, prefix="/purchase/suplier", tags=["Purchase"])
+api_router.include_router(po_payments.router, prefix="/purchase/po-payment", tags=["Purchase"])
 
 # Logistics routes
 api_router.include_router(drivers.router, prefix="/logistics/driver", tags=["Logistics"])
