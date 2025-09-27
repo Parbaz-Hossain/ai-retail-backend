@@ -138,10 +138,9 @@ class DeductionService:
             like = f"%{search}%"
             conditions.append(
                     or_(
+                        EmployeeDeduction.deduction_type.has(DeductionType.name.ilike(like)),
                         Employee.first_name.ilike(like),
-                        Employee.last_name.ilike(like),
-                        Employee.employee_id.ilike(like),
-                        DeductionStatus.ilike(like),
+                        Employee.last_name.ilike(like)
                     )
                 )
                 
