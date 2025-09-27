@@ -123,72 +123,74 @@ async def get_po_payment(
             detail="Failed to get payment"
         )
 
-@router.put("/{payment_id}", response_model=POPaymentResponse)
-async def update_po_payment(
-    payment_id: int,
-    payment_amount: str = Form(None),
-    notes: str = Form(None),
-    files: List[UploadFile] = File(None),
-    replace_files: bool = Form(False),
-    session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
-):
-    """Update PO payment (only if pending)"""
-    try:
-        # Create update data
-        update_data = {}
-        if payment_amount is not None:
-            update_data['payment_amount'] = Decimal(payment_amount)
-        if notes is not None:
-            update_data['notes'] = notes
+# region Update Payment - Disabled for now
+# @router.put("/{payment_id}", response_model=POPaymentResponse)
+# async def update_po_payment(
+#     payment_id: int,
+#     payment_amount: str = Form(None),
+#     notes: str = Form(None),
+#     files: List[UploadFile] = File(None),
+#     replace_files: bool = Form(False),
+#     session: AsyncSession = Depends(get_async_session),
+#     current_user = Depends(get_current_user)
+# ):
+#     """Update PO payment (only if pending)"""
+#     try:
+#         # Create update data
+#         update_data = {}
+#         if payment_amount is not None:
+#             update_data['payment_amount'] = Decimal(payment_amount)
+#         if notes is not None:
+#             update_data['notes'] = notes
 
-        payment_update = POPaymentUpdate(**update_data)
-        payment_service = POPaymentService(session)
+#         payment_update = POPaymentUpdate(**update_data)
+#         payment_service = POPaymentService(session)
         
-        payment = await payment_service.update_payment(payment_id, payment_update, current_user.id)
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Payment not found or cannot be updated"
-            )
+#         payment = await payment_service.update_payment(payment_id, payment_update, current_user.id)
+#         if not payment:
+#             raise HTTPException(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 detail="Payment not found or cannot be updated"
+#             )
 
-        # Handle file uploads if provided
-        if files and any(file.filename for file in files if file):
-            file_service = FileUploadService()
-            new_file_paths = []
+#         # Handle file uploads if provided
+#         if files and any(file.filename for file in files if file):
+#             file_service = FileUploadService()
+#             new_file_paths = []
             
-            for file in files:
-                if file and file.filename:
-                    try:
-                        file_path = await file_service.save_file(file, "po_payments", payment.purchase_order_id)
-                        new_file_paths.append(file_path)
-                    except Exception as e:
-                        logger.error(f"Error uploading file {file.filename}: {str(e)}")
-                        continue
+#             for file in files:
+#                 if file and file.filename:
+#                     try:
+#                         file_path = await file_service.save_file(file, "po_payments", payment.purchase_order_id)
+#                         new_file_paths.append(file_path)
+#                     except Exception as e:
+#                         logger.error(f"Error uploading file {file.filename}: {str(e)}")
+#                         continue
             
-            if new_file_paths:
-                # Get existing file paths if not replacing
-                existing_file_paths = []
-                if not replace_files and payment.file_paths:
-                    existing_file_paths = payment.file_paths
+#             if new_file_paths:
+#                 # Get existing file paths if not replacing
+#                 existing_file_paths = []
+#                 if not replace_files and payment.file_paths:
+#                     existing_file_paths = payment.file_paths
                 
-                # Combine existing and new file paths
-                all_file_paths = existing_file_paths + new_file_paths
+#                 # Combine existing and new file paths
+#                 all_file_paths = existing_file_paths + new_file_paths
                 
-                # Update payment with file paths
-                await payment_service.update_payment_files(payment_id, all_file_paths)
-                payment.file_paths = all_file_paths
+#                 # Update payment with file paths
+#                 await payment_service.update_payment_files(payment_id, all_file_paths)
+#                 payment.file_paths = all_file_paths
 
-        return payment
+#         return payment
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating payment {payment_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update payment"
-        )
+#     except HTTPException:
+#         raise
+#     except Exception as e:
+#         logger.error(f"Error updating payment {payment_id}: {str(e)}")
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail="Failed to update payment"
+#         )
+# endregion
 
 @router.post("/{payment_id}/approve")
 async def approve_po_payment(
