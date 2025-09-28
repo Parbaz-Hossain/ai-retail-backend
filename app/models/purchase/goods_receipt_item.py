@@ -13,11 +13,10 @@ class GoodsReceiptItem(BaseModel):
     received_quantity = Column(Numeric(10, 2), nullable=False)
     unit_cost = Column(Numeric(10, 2), nullable=False)
     batch_number = Column(String(50))
-    expiry_date = Column(Date)
-    location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
+    expiry_date = Column(Date)    
     
     # Relationships
     goods_receipt = relationship("GoodsReceipt", back_populates="items")
     purchase_order_item = relationship("PurchaseOrderItem")
     item = relationship("Item")
-    location = relationship("Location")
+    
