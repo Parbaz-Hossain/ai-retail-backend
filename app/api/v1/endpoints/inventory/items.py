@@ -99,6 +99,17 @@ async def get_items(
     )
     return items
 
+@router.get("/by-location/{location_id}/dropdown", response_model=List[Item])
+async def get_items_by_location_for_dropdown(
+    location_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get items available in a specific location with stock > 0 (for dropdown)"""
+    service = ItemService(db)
+    items = await service.get_items_by_location_with_stock(location_id)
+    return items
+
 @router.get("/low-stock", response_model=List[LowStockItem])
 async def get_low_stock_items(
     location_id: Optional[int] = Query(None),
