@@ -143,6 +143,26 @@ class ItemService:
                 "data": []
             }
 
+    async def get_items_by_location_with_stock(self, location_id: int) -> List[Item]:
+        """Get items that exist in a specific location with stock > 0"""
+        result = await self.db.execute(
+            select(Item)
+            .join(StockLevel)
+            .options(
+                selectinload(Item.category),
+                selectinload(Item.stock_type),
+                selectinload(Item.stock_levels)
+            )
+            .where(
+                and_(
+                    Item.is_active == True,
+                    StockLevel.location_id == location_id,
+                    StockLevel.available_stock > 0
+                )
+            )
+        )
+        return result.scalars().all()
+
     async def update_item(self, item_id: int, item_data: ItemUpdate, current_user_id: int) -> Item:
         item = await self.get_item_by_id(item_id)
         if not item:

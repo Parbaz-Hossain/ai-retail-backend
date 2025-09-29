@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional
 from decimal import Decimal
+from app.models.shared.enums import PaymentStatus
 from app.schemas.common.pagination import PaginatedResponse
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Form, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +69,35 @@ async def create_po_payment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create PO payment"
+        )
+    
+@router.get("/", response_model=PaginatedResponse[POPaymentResponse])
+async def get_all_po_payments(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
+    purchase_order_id: Optional[int] = Query(None),
+    status: Optional[PaymentStatus] = Query(None),
+    search: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
+):
+    """Get all PO payments with pagination and filters"""
+    try:
+        payment_service = POPaymentService(session)
+        payments = await payment_service.get_all_po_payments(
+            page_index=page_index,
+            page_size=page_size,
+            purchase_order_id=purchase_order_id,
+            status=status,
+            search=search
+        )
+        return payments
+
+    except Exception as e:
+        logger.error(f"Error getting all PO payments: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get PO payments"
         )
 
 @router.get("/po/{po_id}", response_model=PaginatedResponse[POPaymentResponse])

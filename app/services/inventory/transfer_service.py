@@ -20,6 +20,7 @@ class TransferService:
         self.db = db
 
     async def create_transfer(self, transfer_data: TransferCreate, current_user_id: int) -> Transfer:
+        """Create transfer with basic info only (no items)"""
         # Validate locations exist and are different
         if transfer_data.from_location_id == transfer_data.to_location_id:
             raise ValidationError("From and to locations cannot be the same")
@@ -47,36 +48,120 @@ class TransferService:
         )
         
         self.db.add(transfer)
-        await self.db.flush()  # Get the ID
-
-        # Add items and check stock availability
-        for item_data in transfer_data.items:
-            await self._add_transfer_item(transfer.id, item_data, transfer_data.from_location_id, current_user_id)
-
-        await self.db.commit()        
-        await self.db.refresh(transfer)
-
+        await self.db.commit()
+        
         result = await self.db.execute(
             select(Transfer)
             .options(
                 selectinload(Transfer.from_location),
                 selectinload(Transfer.to_location),
-                selectinload(Transfer.items).selectinload(TransferItem.item).options(
-                    selectinload(Item.category),      
-                    selectinload(Item.stock_levels), 
-                    selectinload(Item.stock_type)  
-                )
+                selectinload(Transfer.items)
             )
             .where(Transfer.id == transfer.id)
         )
         transfer =  result.scalar_one_or_none()
-    
+
         # CREATE APPROVAL TASK WITH NOTIFICATIONS
         from app.services.task.task_integration_service import TaskIntegrationService
         task_integration = TaskIntegrationService(self.db)
         await task_integration.create_transfer_approval_task(transfer, current_user_id)
-        
         return transfer
+
+    async def add_item_to_transfer(
+        self, 
+        transfer_id: int, 
+        item_data: TransferItemCreate, 
+        current_user_id: int
+    ) -> bool:
+        """Add item to existing transfer"""
+        transfer = await self.get_transfer_by_id(transfer_id)
+        if not transfer:
+            raise NotFoundError("Transfer not found")
+
+        if transfer.status != TransferStatus.PENDING:
+            raise ValidationError("Can only add items to pending transfers")
+
+        # Validate item exists
+        item = await self.db.execute(select(Item).where(Item.id == item_data.item_id))
+        if not item.scalar_one_or_none():
+            raise ValidationError(f"Item {item_data.item_id} not found")
+
+        # Check stock availability
+        stock_level_result = await self.db.execute(
+            select(StockLevel)
+            .where(and_(
+                StockLevel.item_id == item_data.item_id,
+                StockLevel.location_id == transfer.from_location_id
+            ))
+        )
+        stock_level = stock_level_result.scalar_one_or_none()
+        
+        if not stock_level or stock_level.available_stock < item_data.requested_quantity:
+            raise ValidationError(f"Insufficient stock for item {item_data.item_id}")
+
+        # Check if item already exists in transfer
+        existing_item_result = await self.db.execute(
+            select(TransferItem).where(
+                and_(
+                    TransferItem.transfer_id == transfer_id,
+                    TransferItem.item_id == item_data.item_id
+                )
+            )
+        )
+        existing_item = existing_item_result.scalar_one_or_none()
+        
+        if existing_item:
+            # Update existing item quantity
+            existing_item.requested_quantity += item_data.requested_quantity
+            existing_item.batch_number = item_data.batch_number
+            existing_item.expiry_date = item_data.expiry_date
+            existing_item.updated_by = current_user_id
+        else:
+            # Add new item
+            transfer_item = TransferItem(
+                transfer_id=transfer_id,
+                item_id=item_data.item_id,
+                requested_quantity=item_data.requested_quantity,
+                batch_number=item_data.batch_number,
+                expiry_date=item_data.expiry_date,
+                created_by=current_user_id
+            )
+            self.db.add(transfer_item)
+
+        await self.db.commit()
+        return True
+
+    async def remove_item_from_transfer(
+        self, 
+        transfer_id: int, 
+        item_id: int, 
+        current_user_id: int
+    ) -> bool:
+        """Remove item from transfer"""
+        transfer = await self.get_transfer_by_id(transfer_id)
+        if not transfer:
+            raise NotFoundError("Transfer not found")
+
+        if transfer.status != TransferStatus.PENDING:
+            raise ValidationError("Can only remove items from pending transfers")
+
+        # Find and delete the item
+        result = await self.db.execute(
+            select(TransferItem).where(
+                and_(
+                    TransferItem.transfer_id == transfer_id,
+                    TransferItem.id == item_id
+                )
+            )
+        )
+        transfer_item = result.scalar_one_or_none()
+        
+        if not transfer_item:
+            raise NotFoundError("Transfer item not found")
+
+        await self.db.delete(transfer_item)
+        await self.db.commit()
+        return True
 
     async def _generate_transfer_number(self) -> str:
         """Generate unique transfer number"""
@@ -90,38 +175,6 @@ class TransferService:
         count = result.scalar() + 1
         
         return f"{prefix}-{count:04d}"
-
-    async def _add_transfer_item(self, transfer_id: int, item_data: TransferItemCreate, from_location_id: int, current_user_id: int):
-        """Add item to transfer and validate stock availability"""
-        # Validate item exists
-        item = await self.db.execute(select(Item).where(Item.id == item_data.item_id))
-        if not item.scalar_one_or_none():
-            raise ValidationError(f"Item {item_data.item_id} not found")
-
-        # Check stock availability
-        stock_level_result = await self.db.execute(
-            select(StockLevel)
-            .where(and_(
-                StockLevel.item_id == item_data.item_id,
-                StockLevel.location_id == from_location_id
-            ))
-        )
-        stock_level = stock_level_result.scalar_one_or_none()
-        
-        if not stock_level or stock_level.available_stock < item_data.requested_quantity:
-            raise ValidationError(f"Insufficient stock for item {item_data.item_id}")
-
-        transfer_item = TransferItem(
-            transfer_id=transfer_id,
-            item_id=item_data.item_id,
-            requested_quantity=item_data.requested_quantity,
-            unit_cost=item_data.unit_cost,
-            batch_number=item_data.batch_number,
-            expiry_date=item_data.expiry_date,
-            created_by=current_user_id
-        )
-        
-        self.db.add(transfer_item)
 
     async def get_transfer_by_id(self, transfer_id: int) -> Optional[Transfer]:
         result = await self.db.execute(
