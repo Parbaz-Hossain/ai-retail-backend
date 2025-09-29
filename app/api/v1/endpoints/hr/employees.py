@@ -38,10 +38,10 @@ async def create_employee(
             image_path = await file_service.save_file(profile_image, "employees", new_employee.id)
             
             # Update employee with image path
-            new_employee.profile_image = image_path            
-            await session.commit()
-            await session.refresh(new_employee, attribute_names=["department", "location", "updated_at"])
-        
+            new_employee.profile_image = image_path      
+
+        await session.commit()
+        await session.refresh(new_employee, attribute_names=["department", "location", "updated_at"])        
         return new_employee
         
     except HTTPException:
@@ -128,9 +128,9 @@ async def update_employee(
             
             # Update employee with image path
             updated_employee.profile_image = image_path
-            await session.commit()
-            await session.refresh(updated_employee, attribute_names=["department", "location", "updated_at"])
-        
+
+        await session.commit()
+        await session.refresh(updated_employee, attribute_names=["department", "location", "updated_at"])        
         return updated_employee
         
     except HTTPException:

@@ -42,8 +42,10 @@ async def create_user(
             
             # Update user with image path
             new_user.profile_image = image_path
-            await session.commit()
-            await session.refresh(new_user, attribute_names=["created_at", "updated_at"])
+
+            
+        await session.commit()
+        await session.refresh(new_user, attribute_names=["created_at", "updated_at"])
         
         # Get user with roles
         roles = await user_service.get_user_roles(new_user.id)
@@ -220,8 +222,9 @@ async def update_user(
             
             # Update user with image path
             updated_user.profile_image = image_path
-            await session.commit()
-            await session.refresh(updated_user, attribute_names=["updated_at"])
+            
+        await session.commit()
+        await session.refresh(updated_user, attribute_names=["updated_at"])
         
         # Get user roles
         roles = await user_service.get_user_roles(updated_user.id)
