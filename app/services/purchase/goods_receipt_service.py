@@ -82,10 +82,10 @@ class GoodsReceiptService:
                     detail="Purchase order not found"
                 )
 
-            if purchase_order.status != PurchaseOrderStatus.APPROVED:
+            if purchase_order.status not in [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Can only receive items from approved purchase orders"
+                    detail="Can only receive items from approved or partially received purchase orders"
                 )
 
             # Generate receipt number
@@ -97,7 +97,7 @@ class GoodsReceiptService:
                 purchase_order_id=receipt_data.purchase_order_id,
                 supplier_id=purchase_order.supplier_id,
                 receipt_date=receipt_data.receipt_date or date.today(),
-                delivered_by=receipt_data.delivered_by,
+                location_id=receipt_data.location_id,
                 received_by=user_id,
                 notes=receipt_data.notes,
                 created_by=user_id
@@ -139,7 +139,6 @@ class GoodsReceiptService:
                     unit_cost=po_item.unit_cost,
                     batch_number=item_data.batch_number,
                     expiry_date=item_data.expiry_date,
-                    location_id=item_data.location_id,
                     created_by=user_id
                 )
                 receipt_items.append(receipt_item)
@@ -150,7 +149,7 @@ class GoodsReceiptService:
                 # Update stock levels
                 await self._update_stock_levels(
                     item_id=po_item.item_id,
-                    location_id=item_data.location_id,
+                    location_id=receipt_data.location_id,
                     quantity=item_data.received_quantity,
                     unit_cost=po_item.unit_cost,
                     user_id=user_id,
@@ -173,7 +172,7 @@ class GoodsReceiptService:
             for receipt_item in receipt_items:
                 await self._check_and_complete_low_stock_task(
                     receipt_item.item_id,
-                    receipt_item.location_id,
+                    receipt_data.location_id,
                     user_id
                 )
 
@@ -183,8 +182,8 @@ class GoodsReceiptService:
                 .options(
                     selectinload(GoodsReceipt.supplier),
                     selectinload(GoodsReceipt.purchase_order),
-                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
-                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
+                    selectinload(GoodsReceipt.location),
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item)
                 )
                 .where(GoodsReceipt.id == goods_receipt.id)
             )
@@ -211,8 +210,8 @@ class GoodsReceiptService:
                 .options(
                     selectinload(GoodsReceipt.supplier),
                     selectinload(GoodsReceipt.purchase_order),
-                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
-                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
+                    selectinload(GoodsReceipt.location),
+                    selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item)
                 )
                 .where(
                     and_(
@@ -244,8 +243,8 @@ class GoodsReceiptService:
             .options(
                 selectinload(GoodsReceipt.supplier),
                 selectinload(GoodsReceipt.purchase_order),
-                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item),
-                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.location)
+                selectinload(GoodsReceipt.location),
+                selectinload(GoodsReceipt.items).selectinload(GoodsReceiptItem.item)
             )).where(GoodsReceipt.is_deleted == False)
 
             # Apply filters
@@ -264,7 +263,7 @@ class GoodsReceiptService:
             if search:
                 search_filter = or_(
                     GoodsReceipt.receipt_number.ilike(f"%{search}%"),
-                    GoodsReceipt.delivered_by.ilike(f"%{search}%"),
+                    GoodsReceipt.location.name.ilike(f"%{search}%"),
                     GoodsReceipt.notes.ilike(f"%{search}%")
                 )
                 query = query.where(search_filter)
@@ -315,7 +314,7 @@ class GoodsReceiptService:
             update_data = receipt_data.model_dump(exclude_unset=True)
             update_data["updated_by"] = user_id
             for field, value in update_data.items():
-                if field in ['delivered_by', 'notes', 'updated_by']:  # Only allow these fields to be updated
+                if field in ['notes', 'updated_by']:  # Only allow these fields to be updated
                     setattr(receipt, field, value)
 
             await self.session.commit()
@@ -349,7 +348,7 @@ class GoodsReceiptService:
                 # Reverse stock level update
                 await self._reverse_stock_levels(
                     item_id=receipt_item.item_id,
-                    location_id=receipt_item.location_id,
+                    location_id=receipt.location_id,
                     quantity=receipt_item.received_quantity,
                     user_id=user_id,
                     reference_id=receipt.id

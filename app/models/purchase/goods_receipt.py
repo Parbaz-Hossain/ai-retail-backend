@@ -10,7 +10,8 @@ class GoodsReceipt(BaseModel):
     purchase_order_id = Column(Integer, ForeignKey('purchase_orders.id'), nullable=False)
     supplier_id = Column(Integer, ForeignKey('suppliers.id'), nullable=False)
     receipt_date = Column(Date, nullable=False)
-    delivered_by = Column(String(100))
+    # delivered_by = Column(String(100))
+    location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
     received_by = Column(Integer)  # Employee ID
     notes = Column(Text)
     
@@ -18,3 +19,4 @@ class GoodsReceipt(BaseModel):
     purchase_order = relationship("PurchaseOrder", back_populates="goods_receipts")
     supplier = relationship("Supplier")
     items = relationship("GoodsReceiptItem", back_populates="goods_receipt")
+    location = relationship("Location")
