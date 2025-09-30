@@ -1,4 +1,3 @@
-# app/services/logistics/shipment_service.py
 import logging
 import random
 import string
@@ -10,6 +9,7 @@ from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.employee import Employee
+from app.models.inventory.stock_movement import StockMovement
 from app.models.logistics.shipment import Shipment
 from app.models.logistics.shipment_item import ShipmentItem
 from app.models.logistics.shipment_tracking import ShipmentTracking
@@ -17,7 +17,7 @@ from app.models.logistics.driver import Driver
 from app.models.logistics.vehicle import Vehicle
 from app.models.organization.location import Location
 from app.models.inventory.item import Item
-from app.models.shared.enums import ShipmentStatus
+from app.models.shared.enums import ShipmentStatus, StockMovementType
 from app.schemas.logistics.shipment_schema import (
     ShipmentCreate, ShipmentUpdate, ShipmentResponse,
     ShipmentItemCreate, OTPVerificationRequest
@@ -81,36 +81,10 @@ class ShipmentService:
             
             self.session.add(shipment)
             await self.session.flush()
-
-            # Add shipment items
-            if shipment_data.items:
-                total_weight = 0
-                total_volume = 0
-                
-                for item_data in shipment_data.items:
-                    # Validate item
-                    await self._validate_item(item_data.item_id)
-                    
-                    shipment_item = ShipmentItem(
-                        shipment_id=shipment.id,
-                        **item_data.dict()
-                    )
-                    self.session.add(shipment_item)
-                    
-                    # Calculate totals
-                    if item_data.weight:
-                        total_weight += float(item_data.weight)
-                    if item_data.volume:
-                        total_volume += float(item_data.volume)
-
-                shipment.total_weight = total_weight
-                shipment.total_volume = total_volume
-
             await self.session.commit()
 
             # CREATE SHIPMENT TASKS
-            task_integration = TaskIntegrationService(self.session)
-                        
+            task_integration = TaskIntegrationService(self.session)                        
             # Create monitoring task for logistics manager
             await task_integration.create_shipment_tasks(shipment, user_id=user_id)
 
@@ -154,6 +128,147 @@ class ShipmentService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create shipment"
             )
+
+    async def add_item_to_shipment(self, shipment_id: int, item_data: ShipmentItemCreate, user_id: int) -> bool:
+        """Add item to existing shipment"""
+        try:
+            shipment = await self.get_shipment(shipment_id)
+            if not shipment:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Shipment not found"
+                )
+
+            if shipment.status not in [ShipmentStatus.READY_FOR_PICKUP]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot add items to shipment in current status"
+                )
+
+            # Validate item
+            await self._validate_item(item_data.item_id)
+
+            # Check if item already exists
+            existing_item = await self.session.execute(
+                select(ShipmentItem).where(
+                    and_(
+                        ShipmentItem.shipment_id == shipment_id,
+                        ShipmentItem.item_id == item_data.item_id,
+                        ShipmentItem.is_deleted == False
+                    )
+                )
+            )
+            if existing_item.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Item already exists in shipment"
+                )
+
+            shipment_item = ShipmentItem(
+                shipment_id=shipment_id,
+                **item_data.dict(),
+                created_by=user_id
+            )
+            self.session.add(shipment_item)
+
+            # Update totals
+            await self._recalculate_shipment_totals(shipment_id)
+            
+            # CREATE OUTBOUND MOVEMENT when item is added
+            await self._create_outbound_movement(shipment, item_data, user_id)
+            
+            await self.session.commit()
+            
+            logger.info(f"Item added to shipment: {shipment_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error adding item to shipment: {str(e)}")
+            return False
+
+    async def _recalculate_shipment_totals(self, shipment_id: int):
+        """Recalculate shipment totals"""
+        result = await self.session.execute(
+            select(ShipmentItem)
+            .where(
+                and_(
+                    ShipmentItem.shipment_id == shipment_id,
+                    ShipmentItem.is_deleted == False
+                )
+            )
+        )
+        items = result.scalars().all()
+        
+        total_weight = sum(float(item.weight or 0) for item in items)
+        total_volume = sum(float(item.volume or 0) for item in items)
+        
+        await self.session.execute(
+            update(Shipment)
+            .where(Shipment.id == shipment_id)
+            .values(
+                total_weight=total_weight,
+                total_volume=total_volume
+            )
+        )
+
+    async def _create_outbound_movement(self, shipment: Shipment, item_data: ShipmentItemCreate, user_id: int):
+        """Create outbound movement when item is added to shipment"""
+        
+        movement = StockMovement(
+            item_id=item_data.item_id,
+            location_id=shipment.from_location_id,
+            quantity=item_data.quantity,
+            movement_type=StockMovementType.OUTBOUND,
+            reference_type="SHIPMENT",
+            reference_id=shipment.id,
+            movement_date=date.today(),
+            remarks=f"Outbound movement for shipment {shipment.shipment_number}",
+            created_by=user_id
+        )
+        
+        self.session.add(movement)
+        logger.info(f"Outbound movement created for shipment {shipment.id}, item {item_data.item_id}")
+
+    async def remove_item_from_shipment(self, shipment_id: int, item_id: int, user_id: int) -> bool:
+        """Remove item from shipment"""
+        try:
+            shipment = await self.get_shipment(shipment_id)
+            if not shipment:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Shipment not found"
+                )
+
+            if shipment.status not in [ShipmentStatus.READY_FOR_PICKUP]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot remove items from shipment in current status"
+                )
+
+            await self.session.execute(
+                ShipmentItem.__table__.delete().where(
+                    and_(
+                        ShipmentItem.shipment_id == shipment_id, 
+                        ShipmentItem.id == item_id
+                    )
+                )
+            )
+
+            await self._recalculate_shipment_totals(shipment_id)
+            await self.session.commit()
+
+            logger.info(f"Item removed from shipment: {shipment_id}")
+            return True
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error removing item from shipment: {str(e)}")
+            return False
 
     async def get_shipment(self, shipment_id: int) -> Optional[Shipment]:
         """Get shipment by ID with all related data"""

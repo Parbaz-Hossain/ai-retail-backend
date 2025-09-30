@@ -29,10 +29,18 @@ class POPaymentUpdate(BaseModel):
             raise ValueError('Payment amount must be positive')
         return v
 
+class PurchaseOrder(BaseModel):
+    po_number: str
+    total_amount: Decimal
+
+    class Config:
+        from_attributes = True
+
 class POPaymentResponse(POPaymentBase):
     id: int
     status: PaymentStatus
     file_paths: Optional[List[str]] = None
+    purchase_order: Optional[PurchaseOrder] = None
     requested_by: int
     approved_by: Optional[int] = None
     approved_date: Optional[datetime] = None

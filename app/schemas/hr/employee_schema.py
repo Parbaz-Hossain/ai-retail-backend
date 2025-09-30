@@ -186,7 +186,7 @@ class LocationInfo(BaseModel):
     id: int
     name: str
     location_type: str
-    city: Optional[str]
+    city: Optional[str] = None
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
 
@@ -196,11 +196,11 @@ class EmployeeResponse(EmployeeBase):
     id: int
     employee_id: str
     is_fingerprint_registered: Optional[bool] = False
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime]
-    department: Optional[DepartmentInfo]
-    location: Optional[LocationInfo]    
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    department: Optional[DepartmentInfo] = None
+    location: Optional[LocationInfo] = None    
     
     model_config = ConfigDict(from_attributes=True)
 
