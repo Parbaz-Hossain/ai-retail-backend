@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.reorder_request_service import ReorderRequestService
-from app.schemas.inventory.reorder_request import ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate
+from app.schemas.inventory.reorder_request import ReorderRequest, ReorderRequestCreate, ReorderRequestItemCreate, ReorderRequestUpdate
 from app.models.shared.enums import ReorderRequestStatus
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
@@ -24,6 +24,44 @@ async def create_reorder_request(
         service = ReorderRequestService(db)
         request = await service.create_reorder_request(request_data, current_user.id)
         return request
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/{request_id}/items", response_model=dict)
+async def add_item_to_reorder_request(
+    request_id: int,
+    item_data: ReorderRequestItemCreate,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Add item to existing reorder request"""
+    try:
+        service = ReorderRequestService(db)
+        success = await service.add_item_to_reorder_request(request_id, item_data, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to add item to reorder request")
+        return {"message": "Item added to reorder request successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Reorder request not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{request_id}/items/{item_id}")
+async def remove_item_from_reorder_request(
+    request_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove item from reorder request"""
+    try:
+        service = ReorderRequestService(db)
+        success = await service.remove_item_from_reorder_request(request_id, item_id, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to remove item from reorder request")
+        return {"message": "Item removed from reorder request successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Reorder request not found")
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

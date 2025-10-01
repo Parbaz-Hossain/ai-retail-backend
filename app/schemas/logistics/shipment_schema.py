@@ -48,7 +48,6 @@ class ShipmentBase(BaseModel):
 class ShipmentCreate(ShipmentBase):
     driver_id: Optional[int] = None
     vehicle_id: Optional[int] = None
-    items: Optional[List[ShipmentItemCreate]] = []
 
 class ShipmentUpdate(BaseModel):
     driver_id: Optional[int] = None
