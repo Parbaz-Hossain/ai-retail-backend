@@ -4,7 +4,7 @@ from app.api.v1.endpoints.biometric import fingerprint
 from app.api.v1.endpoints.dashboard import dashboard
 from app.api.v1.endpoints.engagement import chat, faq, user_history
 from app.api.v1.endpoints.hr import attendance, deductions, employees, holidays, offdays, salary, shifts
-from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
+from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, inventory_mismatch_reasons, items, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.notification import notifications
 from app.api.v1.endpoints.organization import departments, locations
@@ -39,6 +39,7 @@ api_router.include_router(offdays.router, prefix="/hr/offday", tags=["Human Reso
 # api_router.include_router(analytics.router, prefix="/inventory/analytics", tags=["Inventory"])
 api_router.include_router(categories.router, prefix="/inventory/category", tags=["Inventory"])
 api_router.include_router(inventory_counts.router, prefix="/inventory/inventory-count", tags=["Inventory"])
+api_router.include_router(inventory_mismatch_reasons.router, prefix="/inventory/inventory-mismatch-reason", tags=["Inventory"])
 api_router.include_router(items.router, prefix="/inventory/item", tags=["Inventory"])
 api_router.include_router(reorder_requests.router, prefix="/inventory/reorder-request", tags=["Inventory"])
 api_router.include_router(stock_levels.router, prefix="/inventory/stock-level", tags=["Inventory"])

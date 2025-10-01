@@ -503,6 +503,9 @@ class PurchaseOrderService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Only draft purchase orders can be submitted for approval"
                 )
+            
+            # Auto-submit for approval if requested
+            await self._submit_for_approval(po_id, user_id)
 
             po.status = PurchaseOrderStatus.PENDING
             await self.session.commit()
@@ -690,12 +693,6 @@ class PurchaseOrderService:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Purchase order not found"
-                )
-
-            if po.status != PurchaseOrderStatus.DRAFT:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Only draft purchase orders can be submitted for approval"
                 )
 
             po.status = PurchaseOrderStatus.PENDING

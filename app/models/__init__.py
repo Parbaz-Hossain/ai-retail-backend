@@ -32,6 +32,7 @@ from app.models.purchase.purchase_order import PurchaseOrder
 from app.models.inventory.reorder_request_item import ReorderRequestItem
 from app.models.inventory.transfer_item import TransferItem
 from app.models.inventory.inventory_count_item import InventoryCountItem
+from app.models.inventory.inventory_mismatch_reason import InventoryMismatchReason
 from app.models.purchase.supplier import Supplier
 from app.models.logistics.driver import Driver
 from app.models.logistics.vehicle import Vehicle
@@ -84,6 +85,7 @@ __all__ = [
     "ReorderRequestItem",
     "TransferItem",
     "InventoryCountItem",
+    "InventoryMismatchReason",
     "Supplier",
     "Driver",
     "Vehicle",

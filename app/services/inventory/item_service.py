@@ -143,9 +143,13 @@ class ItemService:
                 "data": []
             }
 
-    async def get_items_by_location_with_stock(self, location_id: int) -> List[Item]:
-        """Get items that exist in a specific location with stock > 0"""
-        result = await self.db.execute(
+    async def get_items_by_location_with_stock(self, location_id: int, include_zero: Optional[bool] = False) -> List[Item]:
+        """
+        Get items for dropdown (DDL) in a specific location.
+        By default, returns items with available_stock > 0.
+        If include_zero is True, also includes items with available_stock == 0.
+        """
+        query = (
             select(Item)
             .join(StockLevel)
             .options(
@@ -157,11 +161,17 @@ class ItemService:
                 and_(
                     Item.is_active == True,
                     StockLevel.location_id == location_id,
-                    StockLevel.available_stock > 0
                 )
             )
         )
-        return result.scalars().all()
+
+        if include_zero:
+            query = query.where(StockLevel.available_stock >= 0)
+        else:
+            query = query.where(StockLevel.available_stock > 0)
+
+        result = await self.db.execute(query)
+        return result.scalars().unique().all()
 
     async def update_item(self, item_id: int, item_data: ItemUpdate, current_user_id: int) -> Item:
         item = await self.get_item_by_id(item_id)

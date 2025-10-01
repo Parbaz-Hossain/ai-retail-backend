@@ -18,6 +18,7 @@ class StockLevelRef(BaseModel):
     id: int
     location_id: int
     current_stock: Decimal
+    available_stock: Decimal
 # ---------------------------------------------------
 
 class ItemBase(BaseModel):

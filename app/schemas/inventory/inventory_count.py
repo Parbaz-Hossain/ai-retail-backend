@@ -11,12 +11,17 @@ class ItemRef(BaseModel):
     class Config:
         from_attributes = True
 
+class ReasonRef(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
 class InventoryCountItemBase(BaseModel):
     item_id: int
     system_quantity: Decimal
     counted_quantity: Decimal
-    unit_cost: Optional[Decimal] = None
-    batch_number: Optional[str] = None
+    reason_id: Optional[int] = None
     expiry_date: Optional[date] = None
     remarks: Optional[str] = None
 
@@ -36,6 +41,7 @@ class InventoryCountItemInDB(InventoryCountItemBase):
 # ✅ items are InventoryCountItem, each with a shallow ItemRef
 class InventoryCountItem(InventoryCountItemInDB):
     item: Optional[ItemRef] = None
+    reason: Optional[ReasonRef] = None
 
 class InventoryCountBase(BaseModel):
     location_id: int
@@ -44,7 +50,7 @@ class InventoryCountBase(BaseModel):
     notes: Optional[str] = None
 
 class InventoryCountCreate(InventoryCountBase):
-    items: List[InventoryCountItemCreate] = Field(default_factory=list)  # ✅
+    pass
 
 class InventoryCountUpdate(BaseModel):
     count_date: Optional[date] = None
