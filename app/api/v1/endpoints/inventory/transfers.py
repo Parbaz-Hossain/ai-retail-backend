@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.transfer_service import TransferService
-from app.schemas.inventory.transfer import Transfer, TransferCreate, TransferUpdate
+from app.schemas.inventory.transfer import Transfer, TransferCreate, TransferItemCreate, TransferUpdate
 from app.models.shared.enums import TransferStatus
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
@@ -24,6 +24,50 @@ async def create_transfer(
         service = TransferService(db)
         transfer = await service.create_transfer(transfer_data, current_user.id)
         return transfer
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/{transfer_id}/items")
+async def add_item_to_transfer(
+    transfer_id: int,
+    item_data: TransferItemCreate,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Add item to existing transfer"""
+    try:
+        service = TransferService(db)
+        success = await service.add_item_to_transfer(transfer_id, item_data, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to add item to transfer"
+            )
+        return {"message": "Item added to transfer successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{transfer_id}/items/{item_id}")
+async def remove_item_from_transfer(
+    transfer_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove item from transfer"""
+    try:
+        service = TransferService(db)
+        success = await service.remove_item_from_transfer(transfer_id, item_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to remove item from transfer"
+            )
+        return {"message": "Item removed from transfer successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Transfer not found")
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

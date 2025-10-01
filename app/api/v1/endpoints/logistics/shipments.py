@@ -1,4 +1,3 @@
-# app/api/v1/endpoints/logistics/shipments.py
 import logging
 from typing import List, Optional
 from datetime import date
@@ -10,7 +9,7 @@ from app.api.dependencies import get_current_user
 from app.models.shared.enums import ShipmentStatus
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.shipment_schema import (
-    ShipmentCreate, ShipmentUpdate, ShipmentResponse,
+    ShipmentCreate, ShipmentItemCreate, ShipmentUpdate, ShipmentResponse,
     OTPVerificationRequest, ShipmentStatusUpdate,
     ShipmentAssignment, ShipmentTrackingResponse
 )
@@ -37,6 +36,58 @@ async def create_shipment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create shipment"
+        )
+
+@router.post("/{shipment_id}/items", response_model=dict)
+async def add_item_to_shipment(
+    shipment_id: int,
+    item_data: ShipmentItemCreate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
+):
+    """Add item to existing shipment"""
+    try:
+        shipment_service = ShipmentService(session)
+        success = await shipment_service.add_item_to_shipment(shipment_id, item_data, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to add item to shipment"
+            )
+        return {"message": "Item added to shipment successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding item to shipment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add item to shipment"
+        )
+
+@router.delete("/{shipment_id}/items/{item_id}")
+async def remove_item_from_shipment(
+    shipment_id: int,
+    item_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
+):
+    """Remove item from shipment"""
+    try:
+        shipment_service = ShipmentService(session)
+        success = await shipment_service.remove_item_from_shipment(shipment_id, item_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to remove item from shipment"
+            )
+        return {"message": "Item removed from shipment successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing item from shipment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove item from shipment"
         )
 
 @router.get("/", response_model=PaginatedResponse[ShipmentResponse])

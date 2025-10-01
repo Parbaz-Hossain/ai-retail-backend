@@ -9,7 +9,6 @@ from app.schemas.organization.location_schema import LocationResponse
 class TransferItemBase(BaseModel):
     item_id: int
     requested_quantity: Decimal
-    unit_cost: Optional[Decimal] = None
     batch_number: Optional[str] = None
     expiry_date: Optional[date] = None
 
@@ -52,13 +51,7 @@ class TransferBase(BaseModel):
         return v
 
 class TransferCreate(TransferBase):
-    items: List[TransferItemCreate]
-
-    @validator('items')
-    def validate_items_not_empty(cls, v):
-        if not v:
-            raise ValueError('At least one item is required')
-        return v
+    pass
 
 class TransferUpdate(BaseModel):
     expected_date: Optional[date] = None

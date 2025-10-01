@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, update
+from sqlalchemy import or_, select, and_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
@@ -214,6 +214,67 @@ class POPaymentService:
             logger.error(f"Error closing purchase order: {str(e)}")
             return False
 
+    async def get_all_po_payments(
+        self, 
+        page_index: int = 1,
+        page_size: int = 100,
+        purchase_order_id: Optional[int] = None,
+        status: Optional[PaymentStatus] = None,
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get all payments with pagination and filters"""
+        try:
+            filters = [POPayment.is_deleted == False]
+            
+            if purchase_order_id is not None:
+                filters.append(POPayment.purchase_order_id == purchase_order_id)
+            
+            if status is not None:
+                filters.append(POPayment.status == status)
+            
+            if search:
+                filters.append(
+                    or_(
+                        POPayment.notes.ilike(f"%{search}%"),
+                        PurchaseOrder.po_number.ilike(f"%{search}%")
+                    )
+                )
+
+            query = (
+                select(POPayment)
+                .options(selectinload(POPayment.purchase_order))
+                .join(PurchaseOrder, POPayment.purchase_order_id == PurchaseOrder.id)
+                .where(and_(*filters))
+                .order_by(POPayment.created_at.desc())
+            )
+
+            # Get total count
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.session.execute(count_query)
+            total = total_result.scalar() or 0
+
+            # Pagination
+            skip = (page_index - 1) * page_size
+            paginated_query = query.offset(skip).limit(page_size)
+            result = await self.session.execute(paginated_query)
+            payments = result.scalars().all()
+
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total,
+                "data": payments
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting all payments: {str(e)}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+
     async def get_po_payments(
         self, 
         page_index: int = 1,
@@ -229,7 +290,10 @@ class POPaymentService:
             if search:
                 filters.append(POPayment.notes.ilike(f"%{search}%"))
 
-            query = select(POPayment).where(and_(*filters)).order_by(POPayment.created_at.desc())
+            query = (select(POPayment)
+                        .options(selectinload(POPayment.purchase_order))
+                    .where(and_(*filters)).order_by(POPayment.created_at.desc())
+                    )
 
             # Get total count
             count_query = select(func.count()).select_from(
@@ -350,6 +414,7 @@ class POPaymentService:
         try:
             result = await self.session.execute(
                 select(POPayment)
+                .options(selectinload(POPayment.purchase_order))
                 .where(
                     and_(
                         POPayment.id == payment_id,
