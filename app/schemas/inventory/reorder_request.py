@@ -9,7 +9,6 @@ from app.schemas.organization.location_schema import LocationResponse
 class ReorderRequestItemBase(BaseModel):
     item_id: int
     requested_quantity: Decimal
-    estimated_unit_cost: Optional[Decimal] = None
     reason: Optional[str] = None
 
     @validator('requested_quantity')
@@ -26,7 +25,6 @@ class ReorderRequestItemInDB(ReorderRequestItemBase):
     reorder_request_id: int
     current_stock: Decimal
     approved_quantity: Optional[Decimal] = None
-    estimated_total_cost: Optional[Decimal] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -37,24 +35,18 @@ class ReorderRequestItem(ReorderRequestItemInDB):
     item: Optional['Item'] = None
 
 class ReorderRequestBase(BaseModel):
-    location_id: int
+    location_id: int        # From which location (warehouse) requesting
+    to_location_id: int     # To which location the items should go
     request_date: Optional[date] = None
     required_date: Optional[date] = None
-    priority: str = "NORMAL"
     notes: Optional[str] = None
 
 class ReorderRequestCreate(ReorderRequestBase):
-    items: List[ReorderRequestItemCreate]
-
-    @validator('items')
-    def validate_items_not_empty(cls, v):
-        if not v:
-            raise ValueError('At least one item is required')
-        return v
+    pass
 
 class ReorderRequestUpdate(BaseModel):
+    to_location_id: Optional[int] = None
     required_date: Optional[date] = None
-    priority: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[ReorderRequestStatus] = None
 
@@ -62,7 +54,6 @@ class ReorderRequestInDB(ReorderRequestBase):
     id: int
     request_number: str
     status: ReorderRequestStatus
-    total_estimated_cost: Optional[Decimal]
     requested_by: int
     approved_by: Optional[int] = None
     approved_date: Optional[datetime] = None
@@ -75,4 +66,5 @@ class ReorderRequestInDB(ReorderRequestBase):
 
 class ReorderRequest(ReorderRequestInDB):
     location: Optional['LocationResponse'] = None
+    to_location: Optional['LocationResponse'] = None
     items: List[ReorderRequestItem] = Field(default_factory=list)

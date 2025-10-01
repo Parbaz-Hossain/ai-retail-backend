@@ -8,7 +8,8 @@ class ReorderRequest(BaseModel):
     __tablename__ = 'reorder_requests'
     
     request_number = Column(String(50), unique=True, nullable=False)
-    location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
+    location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)    # Warehouse location
+    to_location_id = Column(Integer, ForeignKey('locations.id'), nullable=False) # Destination location
     request_date = Column(Date, nullable=False)
     required_date = Column(Date)
     status = Column(SQLEnum(ReorderRequestStatus), default=ReorderRequestStatus.PENDING)
@@ -21,5 +22,6 @@ class ReorderRequest(BaseModel):
     is_active = Column(Boolean, default=True)
     
     # Relationships
-    location = relationship("Location", back_populates="reorder_requests")
+    location = relationship("Location", foreign_keys=[location_id], back_populates="reorder_requests")
+    to_location = relationship("Location", foreign_keys=[to_location_id], back_populates="incoming_reorder_requests")
     items = relationship("ReorderRequestItem", back_populates="reorder_request")

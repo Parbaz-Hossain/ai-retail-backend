@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import and_, func, desc
+from sqlalchemy import and_, func, desc, update
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -29,30 +29,19 @@ class ReorderRequestService:
         # Generate request number
         request_number = await self._generate_request_number()
 
-        # Calculate total estimated cost
-        total_estimated_cost = sum(
-            item.requested_quantity * (item.estimated_unit_cost or 0) 
-            for item in request_data.items
-        )
-
         reorder_request = ReorderRequest(
             request_number=request_number,
             location_id=request_data.location_id,
             request_date=request_data.request_date or date.today(),
             required_date=request_data.required_date,
-            priority=request_data.priority or "NORMAL",
-            total_estimated_cost=total_estimated_cost,
+            total_estimated_cost=0,
             requested_by=current_user_id,
-            notes=request_data.notes
+            notes=request_data.notes,
+            to_location_id=request_data.to_location_id,
+            created_by=current_user_id
         )
         
         self.db.add(reorder_request)
-        await self.db.flush()  # Get the ID
-
-        # Add items
-        for item_data in request_data.items:
-            await self._add_reorder_item(reorder_request.id, item_data, current_user_id)
-
         await self.db.commit()
         await self.db.refresh(reorder_request)
 
@@ -61,6 +50,7 @@ class ReorderRequestService:
             select(ReorderRequest)
             .options(
                 selectinload(ReorderRequest.location),
+                selectinload(ReorderRequest.to_location),
                 selectinload(ReorderRequest.items)
                     .selectinload(ReorderRequestItem.item)
                     .options(
@@ -94,20 +84,40 @@ class ReorderRequestService:
         
         return f"{prefix}-{count:04d}"
 
-    async def _add_reorder_item(self, request_id: int, item_data: ReorderRequestItemCreate, current_user_id: int):
-        """Add item to reorder request"""
+    async def add_item_to_reorder_request(self, request_id: int, item_data: ReorderRequestItemCreate, current_user_id: int) -> bool:
+        """Add item to existing reorder request"""
+        reorder_request = await self.get_reorder_request_by_id(request_id)
+        if not reorder_request:
+            raise NotFoundError("Reorder request not found")
+
+        if reorder_request.status not in [ReorderRequestStatus.PENDING]:
+            raise ValidationError("Cannot add items to reorder request in current status")
+
         # Validate item exists
         item = await self.db.execute(select(Item).where(Item.id == item_data.item_id))
         if not item.scalar_one_or_none():
             raise ValidationError(f"Item {item_data.item_id} not found")
 
-        # Get current stock level
+        # Check if item already exists
+        existing_item = await self.db.execute(
+            select(ReorderRequestItem).where(
+                and_(
+                    ReorderRequestItem.reorder_request_id == request_id,
+                    ReorderRequestItem.item_id == item_data.item_id,
+                    ReorderRequestItem.is_deleted == False
+                )
+            )
+        )
+        if existing_item.scalar_one_or_none():
+            raise ValidationError("Item already exists in reorder request")
+
+        # Get current stock level from the requesting location
         current_stock = Decimal(0)
         stock_level_result = await self.db.execute(
             select(StockLevel.current_stock)
             .where(and_(
                 StockLevel.item_id == item_data.item_id,
-                StockLevel.location_id == request_id  # Using request location
+                StockLevel.location_id == reorder_request.location_id
             ))
         )
         stock_level = stock_level_result.scalar_one_or_none()
@@ -119,18 +129,41 @@ class ReorderRequestService:
             item_id=item_data.item_id,
             current_stock=current_stock,
             requested_quantity=item_data.requested_quantity,
-            estimated_unit_cost=item_data.estimated_unit_cost,
-            estimated_total_cost=item_data.requested_quantity * (item_data.estimated_unit_cost or 0),
-            reason=item_data.reason
+            reason=item_data.reason,
+            created_by=current_user_id
         )
         
         self.db.add(reorder_item)
+        await self.db.commit()
+        return True
+
+    async def remove_item_from_reorder_request(self, request_id: int, item_id: int, current_user_id: int) -> bool:
+        """Remove item from reorder request"""
+        reorder_request = await self.get_reorder_request_by_id(request_id)
+        if not reorder_request:
+            raise NotFoundError("Reorder request not found")
+
+        if reorder_request.status not in [ReorderRequestStatus.PENDING]:
+            raise ValidationError("Cannot remove items from reorder request in current status")
+
+        await self.db.execute(
+            ReorderRequestItem.__table__.delete().where(
+            and_(
+                ReorderRequestItem.reorder_request_id == request_id,
+                ReorderRequestItem.id == item_id
+            )
+            )
+        )
+
+        await self.db.commit()
+        return True
 
     async def get_reorder_request_by_id(self, request_id: int) -> Optional[ReorderRequest]:
         result = await self.db.execute(
             select(ReorderRequest)
             .options(
                  selectinload(ReorderRequest.location),
+                 selectinload(ReorderRequest.to_location),
                  selectinload(ReorderRequest.items)
                     .selectinload(ReorderRequestItem.item)
                     .options(
@@ -155,6 +188,7 @@ class ReorderRequestService:
         try:
             query = select(ReorderRequest).options(
                 selectinload(ReorderRequest.location),
+                selectinload(ReorderRequest.to_location),
                 selectinload(ReorderRequest.items)
                     .selectinload(ReorderRequestItem.item)
                     .options(

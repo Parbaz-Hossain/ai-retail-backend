@@ -290,7 +290,10 @@ class POPaymentService:
             if search:
                 filters.append(POPayment.notes.ilike(f"%{search}%"))
 
-            query = select(POPayment).where(and_(*filters)).order_by(POPayment.created_at.desc())
+            query = (select(POPayment)
+                        .options(selectinload(POPayment.purchase_order))
+                    .where(and_(*filters)).order_by(POPayment.created_at.desc())
+                    )
 
             # Get total count
             count_query = select(func.count()).select_from(
@@ -411,6 +414,7 @@ class POPaymentService:
         try:
             result = await self.session.execute(
                 select(POPayment)
+                .options(selectinload(POPayment.purchase_order))
                 .where(
                     and_(
                         POPayment.id == payment_id,
