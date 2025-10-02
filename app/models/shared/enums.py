@@ -5,16 +5,22 @@ Base = declarative_base()
 
 # Enums
 class UnitType(str, Enum):
-    PCS = "PCS"
-    KG = "KG"
-    M2 = "M2"
-    M3 = "M3"
-    L = "L"
-    LM = "LM"
+    PCS = "PCS"        # Piece
+    KG = "KG"          # Kilogram
+    G = "G"            # Gram
+    MG = "MG"          # Milligram
+    L = "L"            # Liter
+    ML = "ML"          # Milliliter
+    M2 = "M2"          # Square Meter
+    M3 = "M3"          # Cubic Meter
+    LM = "LM"          # Linear Meter
+    CM = "CM"          # Centimeter
+    MM = "MM"          # Millimeter
+    IN = "IN"          # Inch
     BAG = "BAG"
     BOX = "BOX"
     CARTON = "CARTON"
-    BTL = "BTL"
+    BTL = "BTL"        # Bottle
     DOZEN = "DOZEN"
 
 class StockMovementType(str, Enum):
