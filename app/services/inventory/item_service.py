@@ -32,13 +32,6 @@ class ItemService:
             if not stock_type.scalar_one_or_none():
                 raise ValidationError("Stock type not found")
 
-        # Check for duplicate item code
-        existing = await self.db.execute(
-            select(Item).where(Item.item_code == item_data.item_code)
-        )
-        if existing.scalar_one_or_none():
-            raise ValidationError("Item code already exists")
-
         # Generate QR code if not provided
         qr_code = item_data.qr_code or f"ITEM-{uuid.uuid4().hex[:8].upper()}"
 

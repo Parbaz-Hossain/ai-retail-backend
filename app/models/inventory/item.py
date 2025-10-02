@@ -7,8 +7,8 @@ from app.models.shared.enums import UnitType
 class Item(BaseModel):
     __tablename__ = 'items'
     
-    item_code = Column(String(50), unique=True, nullable=False, index=True)
-    name = Column(String(200), nullable=False)
+    item_code = Column(String(50), unique=True, index=True, nullable=True)
+    name = Column(String(1000), nullable=False)
     description = Column(Text)
     category_id = Column(Integer, ForeignKey('categories.id'))
     stock_type_id = Column(Integer, ForeignKey('stock_types.id'))

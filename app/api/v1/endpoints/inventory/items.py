@@ -1,3 +1,4 @@
+from datetime import date
 import logging
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from sqlalchemy import select
@@ -32,6 +33,11 @@ async def create_item(
         
         # Create item first
         item = await service.create_item(item_create, current_user.id)
+        
+        # Generate unique item code: SKU-000000ItemId-TodayDate-UserId
+        today = date.today().strftime("%Y-%m-%d")
+        item_code = f"SKU-{item.id:07d}-{today}-{current_user.id}"
+        item.item_code = item_code
         
         # Handle image upload if provided
         if item_image:
