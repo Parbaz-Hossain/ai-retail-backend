@@ -18,10 +18,10 @@ class StockLevelRef(BaseModel):
     id: int
     location_id: int
     current_stock: Decimal
+    available_stock: Decimal
 # ---------------------------------------------------
 
 class ItemBase(BaseModel):
-    item_code: str
     name: str
     description: Optional[str] = None
     category_id: Optional[int] = None
@@ -49,7 +49,6 @@ class ItemCreate(ItemBase):
 class ItemCreateForm:
     def __init__(
         self,
-        item_code: str = Form(...),
         name: str = Form(...),
         description: Optional[str] = Form(None),
         category_id: Optional[int] = Form(None),
@@ -64,7 +63,6 @@ class ItemCreateForm:
         maximum_stock_level: Decimal = Form(0),
         reorder_point: Decimal = Form(0)
     ):
-        self.item_code = item_code
         self.name = name
         self.description = description
         self.category_id = category_id
@@ -82,7 +80,6 @@ class ItemCreateForm:
     def to_item_create(self) -> ItemCreate:
         """Convert form data to ItemCreate schema"""
         return ItemCreate(
-            item_code=self.item_code,
             name=self.name,
             description=self.description,
             category_id=self.category_id,
@@ -99,7 +96,6 @@ class ItemCreateForm:
         )
 
 class ItemUpdate(BaseModel):
-    item_code: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[int] = None
@@ -119,7 +115,6 @@ class ItemUpdate(BaseModel):
 class ItemUpdateForm:
     def __init__(
         self,
-        item_code: Optional[str] = Form(None),
         name: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
         category_id: Optional[int] = Form(None),
@@ -135,7 +130,6 @@ class ItemUpdateForm:
         reorder_point: Optional[Decimal] = Form(None),
         is_active: Optional[bool] = Form(None)
     ):
-        self.item_code = item_code
         self.name = name
         self.description = description
         self.category_id = category_id
@@ -154,7 +148,6 @@ class ItemUpdateForm:
     def to_item_update(self) -> ItemUpdate:
         """Convert form data to ItemUpdate schema"""
         return ItemUpdate(
-            item_code=self.item_code,
             name=self.name,
             description=self.description,
             category_id=self.category_id,
@@ -173,6 +166,7 @@ class ItemUpdateForm:
 
 class ItemInDB(ItemBase):
     id: int
+    item_code: Optional[str] = None
     qr_code: Optional[str] = None
     is_active: Optional[bool] = None
     created_at: Optional[datetime] = None

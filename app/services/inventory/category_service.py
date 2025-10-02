@@ -54,9 +54,10 @@ class CategoryService:
         return result.scalar_one_or_none()
 
     async def get_categories(self, 
-                             page_index: int = 1, 
-                             page_size: int = 100, 
-                             search: Optional[str] = None) -> Dict[str, Any]:
+        page_index: int = 1, 
+        page_size: int = 100, 
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Get categories with pagination"""
         try:
             query = select(Category).options(

@@ -5,7 +5,7 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.inventory_count_service import InventoryCountService
-from app.schemas.inventory.inventory_count import InventoryCount, InventoryCountCreate, InventoryCountUpdate
+from app.schemas.inventory.inventory_count import InventoryCount, InventoryCountCreate, InventoryCountItemCreate, InventoryCountUpdate
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
 
@@ -22,6 +22,44 @@ async def create_inventory_count(
         service = InventoryCountService(db)
         count = await service.create_inventory_count(count_data, current_user.id)
         return count
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+@router.post("/{count_id}/items", response_model=dict)
+async def add_item_to_inventory_count(
+    count_id: int,
+    item_data: InventoryCountItemCreate,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Add item to existing inventory count"""
+    try:
+        service = InventoryCountService(db)
+        success = await service.add_item_to_count(count_id, item_data, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to add item to inventory count")
+        return {"message": "Item added to inventory count successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Inventory count not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{count_id}/items/{item_id}")
+async def remove_item_from_inventory_count(
+    count_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove item from inventory count"""
+    try:
+        service = InventoryCountService(db)
+        success = await service.remove_item_from_count(count_id, item_id, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to remove item from inventory count")
+        return {"message": "Item removed from inventory count successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Inventory count not found")
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
