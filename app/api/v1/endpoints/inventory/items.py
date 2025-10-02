@@ -1,3 +1,4 @@
+from datetime import date
 import logging
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from sqlalchemy import select
@@ -32,6 +33,11 @@ async def create_item(
         
         # Create item first
         item = await service.create_item(item_create, current_user.id)
+        
+        # Generate unique item code: SKU-000000ItemId-TodayDate-UserId
+        today = date.today().strftime("%Y-%m-%d")
+        item_code = f"SKU-{item.id:07d}-{today}-{current_user.id}"
+        item.item_code = item_code
         
         # Handle image upload if provided
         if item_image:
@@ -102,12 +108,13 @@ async def get_items(
 @router.get("/by-location/{location_id}/dropdown", response_model=List[Item])
 async def get_items_by_location_for_dropdown(
     location_id: int,
+    include_zero_stock: Optional[bool] = Query(False, description="Include items with zero stock"),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """Get items available in a specific location with stock > 0 (for dropdown)"""
     service = ItemService(db)
-    items = await service.get_items_by_location_with_stock(location_id)
+    items = await service.get_items_by_location_with_stock(location_id, include_zero_stock)
     return items
 
 @router.get("/low-stock", response_model=List[LowStockItem])

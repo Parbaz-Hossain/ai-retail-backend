@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, ForeignKey, Enum as SQLEnum, Date, Time, JSON
+from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, Enum as SQLEnum, Date, Time, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
@@ -15,8 +15,10 @@ class InventoryCountItem(BaseModel):
     variance_value = Column(Numeric(12, 2))
     batch_number = Column(String(50))
     expiry_date = Column(Date)
+    reason_id = Column(Integer, ForeignKey('inventory_mismatch_reasons.id'))
     remarks = Column(Text)
     
     # Relationships
     inventory_count = relationship("InventoryCount", back_populates="items")
     item = relationship("Item", back_populates="inventory_count_items")
+    reason = relationship("InventoryMismatchReason", back_populates="inventory_count_items")

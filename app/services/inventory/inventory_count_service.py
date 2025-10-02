@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -35,19 +36,16 @@ class InventoryCountService:
         )
         
         self.db.add(inventory_count)
-        await self.db.flush()  # Get the ID
-
-        # Add items if provided
-        for item_data in count_data.items:
-            await self._add_count_item(inventory_count.id, item_data, current_user_id)
-
         await self.db.commit()
         await self.db.refresh(inventory_count)
         result = await self.db.execute(
             select(InventoryCount)
             .options(
                 selectinload(InventoryCount.location),
-                selectinload(InventoryCount.items).selectinload(InventoryCountItem.item),
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.item),
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.reason)
             )
             .where(InventoryCount.id == inventory_count.id)
         )
@@ -66,18 +64,51 @@ class InventoryCountService:
         
         return f"{prefix}-{count:04d}"
 
-    async def _add_count_item(self, count_id: int, item_data: InventoryCountItemCreate, current_user_id: int):
+    async def add_item_to_count(
+        self, 
+        count_id: int, 
+        item_data: InventoryCountItemCreate, 
+        current_user_id: int
+    ) -> bool:
         """Add item to inventory count"""
+        # Get inventory count
+        inventory_count = await self.get_inventory_count_by_id(count_id)
+        if not inventory_count:
+            raise NotFoundError("Inventory count not found")
+
+        # Check if count can be modified
+        if inventory_count.status == "COMPLETED":
+            raise ValidationError("Cannot add items to completed inventory count")
+
         # Validate item exists
-        item = await self.db.execute(select(Item).where(Item.id == item_data.item_id))
+        item = await self.db.execute(
+            select(Item).where(Item.id == item_data.item_id)
+        )
         if not item.scalar_one_or_none():
             raise ValidationError(f"Item {item_data.item_id} not found")
 
+        # Check if item already exists in this count
+        existing_item = await self.db.execute(
+            select(InventoryCountItem).where(
+                and_(
+                    InventoryCountItem.inventory_count_id == count_id,
+                    InventoryCountItem.item_id == item_data.item_id,
+                    InventoryCountItem.is_deleted == False
+                )
+            )
+        )
+        if existing_item.scalar_one_or_none():
+            raise ValidationError("Item already exists in this inventory count")
+
+        # Get unit cost from item
+        item_obj = await self.db.execute(
+            select(Item.unit_cost).where(Item.id == item_data.item_id)
+        )
+        unit_cost = item_obj.scalar_one_or_none() or Decimal(0)
+
         # Calculate variance
         variance_quantity = item_data.counted_quantity - item_data.system_quantity
-        variance_value = None
-        if item_data.unit_cost:
-            variance_value = variance_quantity * item_data.unit_cost
+        variance_value = variance_quantity * unit_cost if unit_cost else None
 
         count_item = InventoryCountItem(
             inventory_count_id=count_id,
@@ -85,21 +116,53 @@ class InventoryCountService:
             system_quantity=item_data.system_quantity,
             counted_quantity=item_data.counted_quantity,
             variance_quantity=variance_quantity,
-            unit_cost=item_data.unit_cost,
+            unit_cost=unit_cost,
             variance_value=variance_value,
-            batch_number=item_data.batch_number,
             expiry_date=item_data.expiry_date,
-            remarks=item_data.remarks
+            reason_id=item_data.reason_id,
+            remarks=item_data.remarks,
+            created_by=current_user_id
         )
         
         self.db.add(count_item)
+        await self.db.commit()
+        return True
 
+    async def remove_item_from_count(
+        self, 
+        count_id: int, 
+        item_id: int, 
+        current_user_id: int
+    ) -> bool:
+        """Remove item from inventory count"""
+        inventory_count = await self.get_inventory_count_by_id(count_id)
+        if not inventory_count:
+            raise NotFoundError("Inventory count not found")
+
+        if inventory_count.status == "COMPLETED":
+            raise ValidationError("Cannot remove items from completed inventory count")
+
+        await self.db.execute(
+            InventoryCountItem.__table__.delete().where(
+                and_(
+                    InventoryCountItem.inventory_count_id == count_id,
+                    InventoryCountItem.id == item_id
+                )
+            )
+        )
+
+        await self.db.commit()
+        return True
+    
     async def get_inventory_count_by_id(self, count_id: int) -> Optional[InventoryCount]:
         result = await self.db.execute(
             select(InventoryCount)
             .options(
                 selectinload(InventoryCount.location),
-                selectinload(InventoryCount.items).selectinload(InventoryCountItem.item)
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.item),
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.reason)
             )
             .where(InventoryCount.id == count_id)
         )
@@ -116,7 +179,10 @@ class InventoryCountService:
         try:
             query = select(InventoryCount).options(
                 selectinload(InventoryCount.location),
-                selectinload(InventoryCount.items).selectinload(InventoryCountItem.item)
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.item),
+                selectinload(InventoryCount.items)
+                    .selectinload(InventoryCountItem.reason)
             ).order_by(desc(InventoryCount.count_date))
             
             conditions = []
