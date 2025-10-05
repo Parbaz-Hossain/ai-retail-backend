@@ -4,6 +4,11 @@ from enum import Enum
 Base = declarative_base()
 
 # Enums
+class LocationType(str, Enum):
+    WAREHOUSE = "WAREHOUSE"
+    BRANCH = "BRANCH"
+    CENTRAL_KITCHEN = "CENTRAL_KITCHEN"
+
 class UnitType(str, Enum):
     PCS = "PCS"        # Piece
     KG = "KG"          # Kilogram

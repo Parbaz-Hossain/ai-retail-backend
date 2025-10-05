@@ -1,12 +1,13 @@
 from sqlalchemy import Boolean, Column, Numeric, String, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.db.base import BaseModel
+from app.models.shared.enums import LocationType
 
 class Location(BaseModel):
     __tablename__ = 'locations'
     
     name = Column(String(100), nullable=False)
-    location_type = Column(SQLEnum("BRANCH", "WAREHOUSE", name="location_type"), nullable=False)
+    location_type = Column(SQLEnum(LocationType), nullable=False)
     address = Column(Text)
     city = Column(String(50))
     state = Column(String(50))

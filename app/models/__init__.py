@@ -14,9 +14,9 @@ from app.models.hr.user_shift import UserShift
 from app.models.hr.deduction import DeductionType, EmployeeDeduction, SalaryDeduction
 from app.models.organization.department import Department
 from app.models.organization.location import Location
-from app.models.inventory.product import Product
+# from app.models.inventory.product import Product
 from app.models.inventory.item import Item
-from app.models.inventory.product_item import ProductItem
+# from app.models.inventory.product_item import ProductItem
 from app.models.inventory.stock_level import StockLevel
 from app.models.inventory.stock_movement import StockMovement
 from app.models.inventory.reorder_request import ReorderRequest
