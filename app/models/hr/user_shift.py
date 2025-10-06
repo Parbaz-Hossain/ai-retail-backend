@@ -1,6 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, ForeignKey, Enum as SQLEnum, Date, Time, JSON
+from sqlalchemy import Column, Integer,Boolean, Numeric, ForeignKey, Date
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from app.db.base import BaseModel
 
 class UserShift(BaseModel):
@@ -10,6 +9,7 @@ class UserShift(BaseModel):
     shift_type_id = Column(Integer, ForeignKey('shift_types.id'), nullable=False)
     effective_date = Column(Date, nullable=False)
     end_date = Column(Date)  # NULL means current
+    deduction_amount = Column(Numeric(10, 2), default=0)
     is_active = Column(Boolean, default=True)
     
     # Relationships

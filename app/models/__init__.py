@@ -12,6 +12,7 @@ from app.models.hr.salary import Salary
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.user_shift import UserShift
 from app.models.hr.deduction import DeductionType, EmployeeDeduction, SalaryDeduction
+from app.models.hr.ticket import Ticket
 from app.models.organization.department import Department
 from app.models.organization.location import Location
 # from app.models.inventory.product import Product
@@ -67,7 +68,8 @@ __all__ = [
     "UserShift",
     'DeductionType', 
     'EmployeeDeduction',
-    'SalaryDeduction'
+    'SalaryDeduction',
+    "Ticket",
     "Department",
     "Location",
     "Product",
