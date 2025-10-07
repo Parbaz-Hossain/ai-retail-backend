@@ -21,8 +21,8 @@ class LocationBase(BaseModel):
 class LocationCreate(LocationBase):
     @validator('location_type')
     def validate_location_type(cls, v):
-        if v not in ['BRANCH', 'WAREHOUSE']:
-            raise ValueError('Location type must be BRANCH or WAREHOUSE')
+        if v not in ['BRANCH', 'WAREHOUSE', 'CENTRAL_KITCHEN']:
+            raise ValueError('Location type must be BRANCH or WAREHOUSE or CENTRAL_KITCHEN')
         return v
     
     @validator('name')

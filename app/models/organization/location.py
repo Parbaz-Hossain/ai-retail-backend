@@ -6,7 +6,7 @@ class Location(BaseModel):
     __tablename__ = 'locations'
     
     name = Column(String(100), nullable=False)
-    location_type = Column(SQLEnum("BRANCH", "WAREHOUSE", name="location_type"), nullable=False)
+    location_type = Column(SQLEnum('WAREHOUSE', 'BRANCH', 'CENTRAL_KITCHEN', name='location_type', create_type=False), nullable=False)
     address = Column(Text)
     city = Column(String(50))
     state = Column(String(50))

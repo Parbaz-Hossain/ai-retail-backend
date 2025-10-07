@@ -13,7 +13,8 @@ from app.models.auth.user import User
 
 router = APIRouter()
 
-# Shift Type Endpoints
+# region Shift Type Endpoints
+
 @router.post("/types", response_model=ShiftTypeResponse)
 async def create_shift_type(
     shift_type: ShiftTypeCreate,
@@ -40,7 +41,6 @@ async def get_shift_types(
         is_active=is_active
     )
 
-
 @router.get("/types/{shift_type_id}", response_model=ShiftTypeResponse)
 async def get_shift_type(
     shift_type_id: int,
@@ -65,17 +65,6 @@ async def update_shift_type(
     service = ShiftService(session)
     return await service.update_shift_type(shift_type_id, shift_type, current_user.id)
 
-# User Shift Assignment Endpoints
-@router.post("/assign", response_model=UserShiftResponse)
-async def assign_shift_to_employee(
-    assignment: UserShiftCreate,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
-):
-    """Assign shift to employee"""
-    service = ShiftService(session)
-    return await service.assign_shift_to_employee(assignment, current_user.id)
-
 @router.get("/employee/{employee_id}/current", response_model=Optional[UserShiftResponse])
 async def get_employee_current_shift(
     employee_id: int,
@@ -95,3 +84,19 @@ async def get_employee_shift_history(
     """Get employee's shift history"""
     service = ShiftService(session)
     return await service.get_employee_shift_history(employee_id)
+
+# endregion 
+
+# region User Shift Endpoints
+
+@router.post("/assign", response_model=UserShiftResponse)
+async def assign_shift_to_employee(
+    assignment: UserShiftCreate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Assign shift to employee"""
+    service = ShiftService(session)
+    return await service.assign_shift_to_employee(assignment, current_user.id)
+
+# endregion
