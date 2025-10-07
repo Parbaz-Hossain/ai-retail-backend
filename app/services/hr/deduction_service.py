@@ -113,7 +113,7 @@ class DeductionService:
         
         self.session.add(employee_deduction)
         await self.session.commit()
-        await self.session.refresh(employee_deduction, attribute_names=["deduction_type"])
+        await self.session.refresh(employee_deduction, attribute_names=["deduction_type", "employee"])
         
         logger.info(f"Created deduction for employee {data.employee_id}: {data.total_amount}")
         return employee_deduction
@@ -190,7 +190,7 @@ class DeductionService:
             setattr(deduction, field, value)
         
         await self.session.commit()
-        await self.session.refresh(deduction, attribute_names=["deduction_type", "updated_at"])
+        await self.session.refresh(deduction, attribute_names=["deduction_type", "employee", "updated_at"])
         return deduction
 
     async def bulk_create_deductions(self, data: BulkDeductionCreate, created_by: int) -> Dict[str, Any]:

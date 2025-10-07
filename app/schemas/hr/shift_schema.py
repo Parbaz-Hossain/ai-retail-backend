@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional
+from typing import List, Optional
 from datetime import time, date, datetime
 
 class ShiftTypeBase(BaseModel):
@@ -38,12 +38,16 @@ class UserShiftBase(BaseModel):
     shift_type_id: int
     effective_date: date
     end_date: Optional[date] = None
+    deduction_amount: Optional[float] = None
 
 class UserShiftCreate(UserShiftBase):
     pass
 
 class UserShiftUpdate(BaseModel):
+    shift_type_id: Optional[int] = None
+    effective_date: Optional[date] = None
     end_date: Optional[date] = None
+    deduction_amount: Optional[float] = None
     is_active: Optional[bool] = None
 
 class UserShiftResponse(UserShiftBase):
@@ -52,6 +56,32 @@ class UserShiftResponse(UserShiftBase):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+class EmployeeShiftSummary(BaseModel):
+    """Summary for displaying in shift list"""
+    employee_id: int
+    employee_code: str
+    employee_name: str
+    department: Optional[str] = None
+    current_shift: Optional[UserShiftResponse] = None
+    total_shift_changes: int
+    latest_effective_date: Optional[date] = None
+    
+    class Config:
+        from_attributes = True
+
+class EmployeeShiftDetail(BaseModel):
+    """Detailed view with all shifts for an employee"""
+    employee_id: int
+    employee_code: str
+    employee_name: str
+    department: Optional[str] = None
+    current_shift: Optional[UserShiftResponse] = None
+    shift_history: List[UserShiftResponse] = []
+    total_shifts: int
     
     class Config:
         from_attributes = True
