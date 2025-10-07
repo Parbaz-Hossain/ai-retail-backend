@@ -4,13 +4,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from app.models.shared.enums import DeductionStatus
 
-# Deduction Type Schemas
+# region Deduction Type Schemas
 class DeductionTypeBase(BaseModel):
     name: str
     description: Optional[str] = None
     is_auto_calculated: bool = False
     default_amount: Decimal = Decimal('0')
-    is_active: bool = True
 
 class DeductionTypeCreate(DeductionTypeBase):
     pass
@@ -20,7 +19,6 @@ class DeductionTypeUpdate(BaseModel):
     description: Optional[str] = None
     is_auto_calculated: Optional[bool] = None
     default_amount: Optional[Decimal] = None
-    is_active: Optional[bool] = None
 
 class DeductionTypeResponse(DeductionTypeBase):
     id: int
@@ -30,7 +28,10 @@ class DeductionTypeResponse(DeductionTypeBase):
     class Config:
         from_attributes = True
 
-# Employee Deduction Schemas
+# endregion
+
+# region Employee Deduction Schemas
+
 class EmployeeDeductionBase(BaseModel):
     employee_id: int
     deduction_type_id: int
@@ -71,7 +72,10 @@ class EmployeeDeductionResponse(EmployeeDeductionBase):
     class Config:
         from_attributes = True
 
-# Salary Deduction Schemas
+# endregion
+
+# region Salary Deduction Schemas
+
 class SalaryDeductionResponse(BaseModel):
     id: int
     employee_deduction_id: int
@@ -94,3 +98,5 @@ class BulkDeductionCreate(BaseModel):
     effective_from: date
     effective_to: Optional[date] = None
     description: Optional[str] = None
+
+# endregion
