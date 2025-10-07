@@ -12,7 +12,7 @@ from app.models.ai import ai_interaction, automation_log, automation_rule
 from app.models.alerts import alert, notification_queue
 from app.models.auth import audit_log, permission, refresh_token, role_permission, role, user_role, user
 from app.models.communication import email_log, whatsapp_log
-from app.models.hr import attendance, employee, holiday, salary, shift_type, user_shift, offday, deduction
+from app.models.hr import attendance, employee, holiday, salary, shift_type, user_shift, offday, deduction, ticket
 from app. models.inventory import category, inventory_count_item, inventory_count, item, reorder_request_item, reorder_request, stock_analytics, stock_level, stock_movement, stock_type, transfer_item, transfer, inventory_mismatch_reason
 from app.models.logistics import driver, shipment_item, shipment_tracking, shipment, vehicle
 from app.models.organization import department, location

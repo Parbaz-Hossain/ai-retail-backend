@@ -23,4 +23,4 @@ class Category(BaseModel):
         cascade="all, delete-orphan"
     )
     items = relationship("Item", back_populates="category")
-    products = relationship("Product", back_populates="category")
+    # products = relationship("Product", back_populates="category")
