@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Optional, List, Dict
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, or_, select
@@ -12,8 +13,11 @@ from app.models.hr.user_shift import UserShift
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.holiday import Holiday
 from app.models.hr.offday import Offday
+from app.models.hr.ticket import Ticket
 from app.models.shared.enums import AttendanceStatus
 from app.schemas.hr.attendance_schema import AttendanceCreate, AttendanceResponse
+from app.schemas.hr.ticket_schema import TicketCreate
+from app.services.hr.ticket_service import TicketService
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +65,7 @@ def get_shift_dates_and_times(attendance_date: date, shift_start_time, shift_end
 class AttendanceService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.ticket_service = TicketService(session)
 
     # region Attendance Helper Methods
     async def _check_holiday(self, attendance_date: date) -> bool:
@@ -144,6 +149,82 @@ class AttendanceService:
                     return previous_day_attendance
         
         return None
+
+    async def _check_existing_ticket(self, employee_id: int, attendance_date: date, ticket_type: str) -> bool:
+        """Check if a ticket already exists for this employee on this date with this type"""
+        result = await self.session.execute(
+            select(Ticket).where(
+                Ticket.employee_id == employee_id,
+                func.date(Ticket.created_at) == attendance_date,
+                Ticket.ticket_type == ticket_type
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def _create_late_ticket(self, employee_id: int, user_shift: UserShift, attendance_date: date):
+        """Create a ticket for late attendance"""
+        try:
+            # Check if ticket already exists for this date
+            if await self._check_existing_ticket(employee_id, attendance_date, "LATE"):
+                logger.info(f"Late ticket already exists for employee {employee_id} on {attendance_date}")
+                return
+            
+            # Get deduction amount from user_shift
+            deduction_amount = user_shift.deduction_amount or Decimal("0.00")
+            
+            # Create ticket
+            ticket_data = TicketCreate(
+                employee_id=employee_id,
+                ticket_type="LATE",
+                deduction_amount=deduction_amount
+            )
+            
+            await self.ticket_service.create_ticket(ticket_data)
+            logger.info(f"Late ticket created for employee {employee_id} - Amount: {deduction_amount}")
+            
+        except Exception as e:
+            logger.error(f"Error creating late ticket: {e}")
+            # Don't raise exception, just log it to not block attendance marking
+
+    async def _create_absent_ticket(self, employee_id: int, attendance_date: date):
+        """Create a ticket for absent attendance with one day salary deduction"""
+        try:
+            # Check if ticket already exists for this date
+            if await self._check_existing_ticket(employee_id, attendance_date, "ABSENT"):
+                logger.info(f"Absent ticket already exists for employee {employee_id} on {attendance_date}")
+                return
+            
+            # Get employee details to calculate one day salary
+            emp_result = await self.session.execute(
+                select(Employee).where(Employee.id == employee_id)
+            )
+            employee = emp_result.scalar_one_or_none()
+            
+            if not employee:
+                logger.error(f"Employee {employee_id} not found for absent ticket")
+                return
+            
+            # Calculate one day salary
+            monthly_salary = (
+                (employee.basic_salary or Decimal('0')) +
+                (employee.housing_allowance or Decimal('0')) +
+                (employee.transport_allowance or Decimal('0'))
+            )
+            one_day_salary = round(monthly_salary / 30, 2)
+            
+            # Create ticket
+            ticket_data = TicketCreate(
+                employee_id=employee_id,
+                ticket_type="ABSENT",
+                deduction_amount=one_day_salary
+            )
+            
+            await self.ticket_service.create_ticket(ticket_data)
+            logger.info(f"Absent ticket created for employee {employee_id} - Amount: {one_day_salary}")
+            
+        except Exception as e:
+            logger.error(f"Error creating absent ticket: {e}")
+            
     # endregion
 
     # ---------- Mark Attendance ---------
@@ -277,6 +358,7 @@ class AttendanceService:
             # Initialize variables
             late_minutes = 0
             initial_status = AttendanceStatus.CHECKED_IN
+            is_late = False
             
             # Calculate shift times and late minutes only if we have shift info and check-in time
             if user_shift and check_in_time and not is_weekend and not is_holiday:
@@ -293,6 +375,7 @@ class AttendanceService:
                     diff = check_in_time - shift_start
                     late_minutes = int(diff.total_seconds() / 60)
                     initial_status = AttendanceStatus.LATE
+                    is_late = True
 
             # Determine final initial status
             if is_weekend:
@@ -330,7 +413,12 @@ class AttendanceService:
 
             await self.session.commit()
             await self.session.refresh(attendance, attribute_names=["employee", "created_at", "updated_at"])
-            logger.info(f"Checked in: Employee {employee.id} - Status: {initial_status}, Date: {data.attendance_date}")
+            
+            # Create late ticket if employee is late and has user_shift
+            if is_late and user_shift and not is_weekend and not is_holiday:
+                await self._create_late_ticket(data.employee_id, user_shift, data.attendance_date)
+            
+            logger.info(f"Checked in: Employee {employee.id} - Status: {initial_status}, Date: {data.attendance_date}, Late: {is_late}")
             return AttendanceResponse.model_validate(attendance, from_attributes=True)
 
         except HTTPException:
@@ -530,6 +618,10 @@ class AttendanceService:
                         remarks="Auto-marked as absent"
                     ))
                     absent_marked += 1
+                    
+                    # Create absent ticket after marking absent
+                    await self.session.flush()  # Flush to ensure attendance is saved before creating ticket
+                    await self._create_absent_ticket(emp.id, process_date)
 
             await self.session.commit()
 
