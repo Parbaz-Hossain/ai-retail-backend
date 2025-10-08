@@ -3,7 +3,7 @@ from typing import Any, Optional, List, Dict
 from decimal import Decimal
 from datetime import date, datetime, timedelta
 from calendar import monthrange
-from sqlalchemy import delete, select, extract, func
+from sqlalchemy import delete, select, extract, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -37,21 +37,49 @@ class SalaryService:
         if not employee:
             raise HTTPException(status_code=404, detail="Employee not found")
 
-        # Check if salary already generated
+        # Check if salary already generated for this month (improved check)
         salary_res = await self.session.execute(
-            select(Salary).where(Salary.employee_id == employee_id, Salary.salary_month == salary_month)
+            select(Salary).where(
+                Salary.employee_id == employee_id,
+                extract('year', Salary.salary_month) == salary_month.year,
+                extract('month', Salary.salary_month) == salary_month.month
+            )
         )
         if salary_res.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Salary already generated for this month")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Salary already generated for {salary_month.strftime('%B %Y')}"
+            )
 
-        # Calculate attendance summary
+        # Calculate attendance summary with proper working days calculation
         summary = await self._attendance_summary(employee_id, salary_month)
+        
+        # Calculate per-day salary rates
+        monthly_basic = employee.basic_salary or Decimal('0')
+        monthly_housing = employee.housing_allowance or Decimal('0')
+        monthly_transport = employee.transport_allowance or Decimal('0')
+        logger.info(f"Monthly Salary Components for {employee.employee_id}: Basic={monthly_basic}, Housing={monthly_housing}, Transport={monthly_transport}")
+        
+        # Calculate daily rates based on working days
+        working_days = summary['working_days']
+        if working_days > 0:
+            daily_basic = monthly_basic / Decimal(str(working_days))
+            daily_housing = monthly_housing / Decimal(str(working_days))
+            daily_transport = monthly_transport / Decimal(str(working_days))
+        else:
+            daily_basic = daily_housing = daily_transport = Decimal('0')
+        
+        # Calculate prorated salary based on actual present days
+        present_days = summary['present_days']
+        prorated_basic = daily_basic * Decimal(str(present_days))
+        prorated_housing = daily_housing * Decimal(str(present_days))
+        prorated_transport = daily_transport * Decimal(str(present_days))
         
         # Calculate overtime
         overtime = await self._calculate_overtime(employee_id, salary_month)
         
-        # Calculate gross salary
-        gross = (employee.basic_salary or 0) + (employee.housing_allowance or 0) + (employee.transport_allowance or 0) + overtime
+        # Calculate gross salary (prorated base + overtime)
+        gross = prorated_basic + prorated_housing + prorated_transport + overtime
         
         # Calculate deductions using updated deduction service (handles carryover automatically)
         total_deductions, deduction_details = await self.deduction_service.calculate_monthly_deductions(
@@ -66,13 +94,13 @@ class SalaryService:
         # Calculate net salary
         net = gross - total_deductions
 
-        # Create salary record
+        # Create salary record with prorated amounts
         salary = Salary(
             employee_id=employee_id,
             salary_month=salary_month,
-            basic_salary=employee.basic_salary,
-            housing_allowance=employee.housing_allowance,
-            transport_allowance=employee.transport_allowance,
+            basic_salary=monthly_basic,
+            housing_allowance=monthly_housing,
+            transport_allowance=monthly_transport,
             overtime_amount=overtime,
             late_deductions=late_deductions,
             absent_deductions=absent_deductions,
@@ -97,12 +125,22 @@ class SalaryService:
             salary.id, employee_id, salary_month, deduction_details
         )
         
-        logger.info(f"Salary generated for {employee.employee_id} on {salary_month} with total deductions: {total_deductions}")
+        logger.info(
+            f"Salary generated for {employee.employee_id} on {salary_month} | "
+            f"Working Days: {working_days} | Present: {present_days} | "
+            f"Gross: {gross} | Deductions: {total_deductions} | Net: {net}"
+        )
         return salary
     
     async def _attendance_summary(self, employee_id: int, salary_month: date) -> Dict:
-        """Calculate attendance summary for the month"""
+        """
+        Calculate attendance summary with proper working days calculation.
+        Working days = Total days - Weekends - Holidays
+        Present days = Actual days worked (PRESENT, LATE, LEFT_EARLY, CHECKED_OUT statuses)
+        """
         start, end = self._month_range(salary_month)
+        
+        # Get all attendance records for the month
         res = await self.session.execute(
             select(Attendance).where(
                 Attendance.employee_id == employee_id,
@@ -110,16 +148,56 @@ class SalaryService:
             )
         )
         records = res.scalars().all()
+        
+        # Calculate total calendar days
+        total_days = (end - start).days + 1
+        
+        # Count weekends and holidays
+        weekend_days = len([r for r in records if r.status == AttendanceStatus.WEEKEND or r.is_weekend])
+        holiday_days = len([r for r in records if r.status == AttendanceStatus.HOLIDAY or r.is_holiday])
+        
+        # Working days = Total days - Weekends - Holidays
+        working_days = total_days - weekend_days - holiday_days
+        
+        # Present days = Days actually worked (excluding weekends/holidays/absents)
+        present_days = len([
+            r for r in records 
+            if r.status in [
+                AttendanceStatus.PRESENT, 
+                AttendanceStatus.LATE, 
+                AttendanceStatus.LEFT_EARLY, 
+                AttendanceStatus.CHECKED_OUT
+            ]
+        ])
+        
+        # Absent days (excluding weekends and holidays)
+        absent_days = len([
+            r for r in records 
+            if r.status == AttendanceStatus.ABSENT and not r.is_weekend and not r.is_holiday
+        ])
+        
+        # Late days
+        late_days = len([r for r in records if r.status == AttendanceStatus.LATE])
+        
+        # Validation: present + absent should not exceed working days
+        # If there are unrecorded days, they're considered absent
+        unrecorded_absent = max(0, working_days - present_days - absent_days)
+        total_absent = absent_days + unrecorded_absent
+        
         return {
-            "working_days": (end - start).days + 1,
-            "present_days": len([r for r in records if r.status in [AttendanceStatus.PRESENT, AttendanceStatus.LATE, AttendanceStatus.LEFT_EARLY, AttendanceStatus.CHECKED_OUT]]),
-            "absent_days": len([r for r in records if r.status == AttendanceStatus.ABSENT]),
-            "late_days": len([r for r in records if r.status == AttendanceStatus.LATE])
+            "total_days": total_days,
+            "working_days": working_days,
+            "weekend_days": weekend_days,
+            "holiday_days": holiday_days,
+            "present_days": present_days,
+            "absent_days": total_absent,
+            "late_days": late_days
         }
 
     async def _calculate_overtime(self, employee_id: int, salary_month: date) -> Decimal:
         """Calculate overtime amount for the month"""
         start, end = self._month_range(salary_month)
+        
         overtime_res = await self.session.execute(
             select(func.sum(Attendance.overtime_hours)).where(
                 Attendance.employee_id == employee_id,
@@ -131,14 +209,25 @@ class SalaryService:
         emp_res = await self.session.execute(select(Employee).where(Employee.id == employee_id))
         emp = emp_res.scalar_one_or_none()
 
-        if emp and emp.basic_salary:
-            hourly = emp.basic_salary / Decimal('30') / Decimal('8')
-            return Decimal(str(total_ot)) * hourly * Decimal('1.5')
+        if emp and emp.basic_salary and total_ot > 0:
+            # Calculate hourly rate based on basic salary
+            # Assuming 30 days/month and 8 hours/day
+            hourly_rate = emp.basic_salary / Decimal('30') / Decimal('8')
+            # Overtime is typically 1.5x hourly rate
+            return Decimal(str(total_ot)) * hourly_rate * Decimal('1.5')
+        
         return Decimal('0')
 
-    async def generate_bulk_salary(self, salary_month: date, location_id: Optional[int], department_id: Optional[int], current_user_id: int) -> Dict:
+    async def generate_bulk_salary(
+        self, 
+        salary_month: date, 
+        location_id: Optional[int], 
+        department_id: Optional[int], 
+        current_user_id: int
+    ) -> Dict:
         """Generate salary for multiple employees with integrated deduction calculation"""
         query = select(Employee).where(Employee.is_active == True)
+        
         if location_id:
             query = query.where(Employee.location_id == location_id)
         if department_id:
@@ -146,29 +235,71 @@ class SalaryService:
 
         res = await self.session.execute(query)
         employees = res.scalars().all()
-        stats = {"successful": 0, "failed": 0, "errors": [], "total_deductions": 0}
+        
+        stats = {
+            "successful": 0, 
+            "failed": 0, 
+            "skipped": 0,
+            "errors": [], 
+            "total_deductions": 0,
+            "total_gross": 0,
+            "total_net": 0
+        }
 
         for emp in employees:
             try:
+                # Check if salary already exists for this employee in this month
+                existing_salary_res = await self.session.execute(
+                    select(Salary).where(
+                        Salary.employee_id == emp.id,
+                        extract('year', Salary.salary_month) == salary_month.year,
+                        extract('month', Salary.salary_month) == salary_month.month
+                    )
+                )
+                
+                if existing_salary_res.scalar_one_or_none():
+                    stats["skipped"] += 1
+                    logger.info(f"Skipped {emp.employee_id} - salary already exists for {salary_month.strftime('%B %Y')}")
+                    continue
+                
+                # Generate salary
                 salary = await self.generate_monthly_salary(emp.id, salary_month, current_user_id)
                 stats["successful"] += 1
                 stats["total_deductions"] += float(salary.total_deductions)
+                stats["total_gross"] += float(salary.gross_salary)
+                stats["total_net"] += float(salary.net_salary)
+                
+            except HTTPException as he:
+                stats["failed"] += 1
+                stats["errors"].append(f"{emp.employee_id}: {he.detail}")
             except Exception as e:
                 stats["failed"] += 1
                 stats["errors"].append(f"{emp.employee_id}: {str(e)}")
 
         stats.update({
-            "total_employees": len(employees), 
-            "salary_month": salary_month.isoformat(), 
-            "errors": stats["errors"][:10]
+            "total_employees": len(employees),
+            "salary_month": salary_month.isoformat(),
+            "errors": stats["errors"][:10]  # Limit errors shown
         })
-        logger.info(f"Bulk salary generated: {stats}")
+        
+        logger.info(
+            f"Bulk salary generated for {salary_month.strftime('%B %Y')} | "
+            f"Success: {stats['successful']} | Failed: {stats['failed']} | Skipped: {stats['skipped']}"
+        )
         return stats
 
-    async def mark_salary_paid(self, salary_id: int, payment_date: datetime, method: str, reference: str, user_id: int) -> Salary:
+    async def mark_salary_paid(
+        self, 
+        salary_id: int, 
+        payment_date: datetime, 
+        method: str, 
+        reference: str, 
+        user_id: int
+    ) -> Salary:
         """Mark salary as paid"""
         res = await self.session.execute(select(Salary).where(Salary.id == salary_id))
         salary = res.scalar_one_or_none()
+        
         if not salary:
             raise HTTPException(status_code=404, detail="Salary not found")
         if salary.payment_status == SalaryPaymentStatus.PAID:
@@ -232,7 +363,13 @@ class SalaryService:
                 "data": []
             }
 
-    async def get_salary_reports(self, month: int, year: int, location_id: Optional[int], department_id: Optional[int]) -> Dict:
+    async def get_salary_reports(
+        self, 
+        month: int, 
+        year: int, 
+        location_id: Optional[int], 
+        department_id: Optional[int]
+    ) -> Dict:
         """Get salary reports with deduction breakdown"""
         salary_date = date(year, month, 1)
         query = (
@@ -245,6 +382,7 @@ class SalaryService:
                 Employee.is_active == True
             )
         )
+        
         if location_id:
             query = query.where(Employee.location_id == location_id)
         if department_id:
