@@ -444,7 +444,7 @@ class DeductionService:
         )
         
         late_type = await self.session.scalar(
-            select(DeductionType).where(DeductionType.name == 'late')
+            select(DeductionType).where(DeductionType.name.ilike('late'))
         )
         
         amount_per_late = late_type.default_amount if late_type else Decimal('50')
