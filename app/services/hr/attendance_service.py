@@ -275,7 +275,9 @@ class AttendanceService:
                         existing.check_in_time,
                         check_out_time
                     )
-                    
+                    logger.info(f"Shift times for employee {employee.id} on {existing.attendance_date}: Start: {shift_start}, End: {shift_end}")
+                    logger.info(f"Check-in time: {existing.check_in_time} Check-out time: {check_out_time}")
+
                     existing.check_out_time = check_out_time
                     existing.bio_check_out = data.bio_check_out or False
                     

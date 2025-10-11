@@ -77,6 +77,7 @@ class POPaymentService:
 
             self.session.add(payment)
             await self.session.commit()
+            await self.session.refresh(payment, attribute_names=["purchase_order"])
 
             logger.info(f"PO payment created: {payment.id} for PO {payment_data.purchase_order_id}")
             return payment
