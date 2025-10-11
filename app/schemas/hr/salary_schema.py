@@ -21,31 +21,44 @@ class SalaryPaymentUpdate(BaseModel):
     payment_method: str
     payment_reference: str
 
-class SalaryResponse(SalaryBase):
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional
+from pydantic import BaseModel
+from enum import Enum
+
+
+class SalaryPaymentStatus(str, Enum):
+    PENDING = "Pending"
+    PAID = "Paid"
+    FAILED = "Failed"
+
+
+class SalaryResponse(BaseModel):
     id: int
-    basic_salary: Decimal
-    housing_allowance: Decimal
-    transport_allowance: Decimal
-    overtime_amount: Decimal
-    bonus: Decimal
-    total_deductions: Decimal
-    late_deductions: Decimal
-    absent_deductions: Decimal
-    other_deductions: Decimal
-    gross_salary: Decimal
-    net_salary: Decimal
-    working_days: int
-    present_days: int
-    absent_days: int
-    late_days: int
-    payment_status: SalaryPaymentStatus
-    payment_date: Optional[datetime]
-    payment_method: Optional[str]
-    payment_reference: Optional[str]
-    generated_by: int
-    approved_by: Optional[int]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    
+    basic_salary: Optional[Decimal] = None
+    housing_allowance: Optional[Decimal] = None
+    transport_allowance: Optional[Decimal] = None
+    overtime_amount: Optional[Decimal] = None
+    bonus: Optional[Decimal] = None
+    total_deductions: Optional[Decimal] = None
+    late_deductions: Optional[Decimal] = None
+    absent_deductions: Optional[Decimal] = None
+    other_deductions: Optional[Decimal] = None
+    gross_salary: Optional[Decimal] = None
+    net_salary: Optional[Decimal] = None  # <-- negative allowed
+    working_days: Optional[int] = None
+    present_days: Optional[int] = None
+    absent_days: Optional[int] = None
+    late_days: Optional[int] = None
+    payment_status: Optional[SalaryPaymentStatus] = None
+    payment_date: Optional[datetime] = None
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+    generated_by: Optional[int] = None
+    approved_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
