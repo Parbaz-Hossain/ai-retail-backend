@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from app.api.v1.endpoints.approval import approvals
 from app.api.v1.endpoints.auth import login, register, roles, users
 from app.api.v1.endpoints.biometric import fingerprint
 from app.api.v1.endpoints.dashboard import dashboard
@@ -20,6 +21,9 @@ api_router.include_router(login.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(register.router, prefix="/register", tags=["Register"])
 api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(roles.router, prefix="/roles", tags=["Roles"])
+
+# Approval routes
+api_router.include_router(approvals.router, prefix="/approval", tags=["Approval"])
 
 # Main application routes
 # Organization routes

@@ -171,3 +171,22 @@ class PaymentStatus(Enum):
 class PaymentType(Enum):
     REGULAR = "REGULAR"
     CLOSE = "CLOSE"
+
+# region Approval System Enums
+
+class ApprovalRequestType(str, Enum):
+    SHIFT = "SHIFT"
+    SALARY = "SALARY"
+    OFFDAY = "OFFDAY"
+
+class ApprovalStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class ApprovalResponseStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+# endregion
