@@ -60,6 +60,7 @@ class ApprovalActionRequest(BaseModel):
     comments: Optional[str] = None
 
 class ApprovalSettingsResponse(BaseModel):
+    id: int
     is_enabled: bool
     updated_at: Optional[datetime] = None
     

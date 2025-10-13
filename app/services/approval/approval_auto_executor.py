@@ -15,6 +15,7 @@ from app.services.hr.salary_service import SalaryService
 from app.services.hr.offday_service import OffdayService
 from app.schemas.hr.shift_schema import UserShiftCreate, UserShiftUpdate
 from app.schemas.hr.offday_schema import OffdayCreate, OffdayBulkCreate
+from app.utils.date_time_serializer import deserialize_dates
 
 logger = logging.getLogger(__name__)
 
@@ -55,13 +56,16 @@ class ApprovalAutoExecutor:
                 logger.info(f"Request {approval_request_id} already executed")
                 return True
             
+            # Deserialize dates in request_data from ISO format strings back to date objects
+            deserialized_data = deserialize_dates(approval_request.request_data)
+
             # Execute based on request type
             if approval_request.request_type == ApprovalRequestType.SHIFT:
-                await self._execute_shift_request(approval_request, user_id)
+                await self._execute_shift_request(approval_request, deserialized_data, user_id)
             elif approval_request.request_type == ApprovalRequestType.SALARY:
-                await self._execute_salary_request(approval_request, user_id)
+                await self._execute_salary_request(approval_request, deserialized_data, user_id)
             elif approval_request.request_type == ApprovalRequestType.OFFDAY:
-                await self._execute_offday_request(approval_request, user_id)
+                await self._execute_offday_request(approval_request, deserialized_data, user_id)
             
             logger.info(f"Successfully executed approval request {approval_request_id}")
             return True
@@ -72,10 +76,9 @@ class ApprovalAutoExecutor:
         
     # region ============== HR Execution Methods ==============
 
-    async def _execute_shift_request(self, approval_request: ApprovalRequest, user_id: int):
+    async def _execute_shift_request(self, approval_request: ApprovalRequest, request_data: dict, user_id: int):
         """Execute an approved shift request"""
         shift_service = ShiftService(self.session)
-        request_data = approval_request.request_data
         
         if "user_shift_id" in request_data:
             # This is an update
@@ -87,6 +90,7 @@ class ApprovalAutoExecutor:
             approval_request.reference_id = user_shift_id
         else:
             # This is a new assignment
+            logger.info(f"Assigning new shift with data: {request_data}")
             shift_create = UserShiftCreate(**request_data)
             result = await shift_service.assign_shift_to_employee(shift_create, user_id)
             
@@ -96,13 +100,12 @@ class ApprovalAutoExecutor:
         await self.session.commit()
         logger.info(f"Executed shift request {approval_request.id}")
     
-    async def _execute_salary_request(self, approval_request: ApprovalRequest, user_id: int):
+    async def _execute_salary_request(self, approval_request: ApprovalRequest, request_data: dict, user_id: int):
         """Execute an approved salary request"""
         salary_service = SalaryService(self.session)
-        request_data = approval_request.request_data
         
         employee_id = request_data["employee_id"]
-        salary_month = date.fromisoformat(request_data["salary_month"])
+        salary_month = request_data["salary_month"]
         
         # Generate the salary
         salary = await salary_service.generate_monthly_salary(employee_id, salary_month, user_id)
@@ -113,18 +116,13 @@ class ApprovalAutoExecutor:
         await self.session.commit()
         logger.info(f"Executed salary request {approval_request.id}")
     
-    async def _execute_offday_request(self, approval_request: ApprovalRequest, user_id: int):
+    async def _execute_offday_request(self, approval_request: ApprovalRequest, request_data: dict, user_id: int):
         """Execute an approved offday request"""
         offday_service = OffdayService(self.session)
-        request_data = approval_request.request_data
         
         # Check if this is bulk or single offday
         if "offday_dates" in request_data:
-            # Bulk offdays
-            request_data["offday_dates"] = [
-                date.fromisoformat(d) for d in request_data["offday_dates"]
-            ]
-            
+            # Bulk offdays            
             bulk_create = OffdayBulkCreate(**request_data)
             result = await offday_service.create_bulk_offdays(bulk_create, user_id)
             
@@ -135,7 +133,6 @@ class ApprovalAutoExecutor:
             if "offday_id" in request_data:
                 # This is an update
                 offday_id = request_data.pop("offday_id")
-                request_data["offday_date"] = date.fromisoformat(request_data["offday_date"])
                 
                 from app.schemas.hr.offday_schema import OffdayUpdate
                 offday_update = OffdayUpdate(**request_data)
@@ -144,7 +141,6 @@ class ApprovalAutoExecutor:
                 approval_request.reference_id = offday_id
             else:
                 # This is a new creation
-                request_data["offday_date"] = date.fromisoformat(request_data["offday_date"])
                 offday_create = OffdayCreate(**request_data)
                 result = await offday_service.create_offday(offday_create, user_id)
                 

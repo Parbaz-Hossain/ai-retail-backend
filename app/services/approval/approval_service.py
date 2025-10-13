@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from fastapi import HTTPException, status
 
 from app.models.approval.approval_member import ApprovalMember
@@ -19,6 +19,7 @@ from app.schemas.approval.approval_member_schema import ApprovalMemberCreate, Ap
 from app.schemas.approval.approval_request_schema import ApprovalRequestCreate, ApprovalRequestResponse
 from app.services.communication.whatsapp_service import WhatsAppClient
 from app.services.approval.approval_auto_executor import ApprovalAutoExecutor
+from app.utils.date_time_serializer import serialize_dates
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class ApprovalService:
             await self.session.refresh(settings)
         
         return {
+            "id": settings.id,
             "is_enabled": settings.is_enabled,
             "updated_at": settings.updated_at
         }
@@ -68,6 +70,7 @@ class ApprovalService:
         
         logger.info(f"Approval system {'enabled' if is_enabled else 'disabled'} by user {user_id}")
         return {
+            "id": settings.id,
             "is_enabled": settings.is_enabled,
             "updated_at": settings.updated_at
         }
@@ -119,8 +122,8 @@ class ApprovalService:
             approval_member = ApprovalMember(
                 employee_id=data.employee_id,
                 module=data.module,
-                action_types=data.action_types,
-                added_by=added_by
+                added_by=added_by,
+                created_by=added_by
             )
             self.session.add(approval_member)
             await self.session.commit()
@@ -334,6 +337,9 @@ class ApprovalService:
                     detail="Approval system is not enabled"
                 )
             
+            # Serialize dates in request_data to ISO format strings
+            serialized_request_data = serialize_dates(request_data)
+            
             # Get approval members for this specific module and action type
             members_result = await self.session.execute(
                 select(ApprovalMember)
@@ -356,7 +362,7 @@ class ApprovalService:
                 request_type=request_type,
                 employee_id=employee_id,
                 requested_by=requested_by,
-                request_data=request_data,
+                request_data=serialized_request_data,
                 remarks=remarks,
                 status=ApprovalStatus.PENDING
             )
@@ -415,11 +421,11 @@ class ApprovalService:
             # Get the approval request with all relationships
             result = await self.session.execute(
                 select(ApprovalRequest)
-                .options(
-                    selectinload(ApprovalRequest.employee),
+                .options(   
+                    joinedload(ApprovalRequest.employee),
                     selectinload(ApprovalRequest.approval_responses)
-                    .selectinload(ApprovalResponse.approval_member)
-                    .selectinload(ApprovalMember.employee)
+                    .joinedload(ApprovalResponse.approval_member)
+                    .joinedload(ApprovalMember.employee)
                 )
                 .where(ApprovalRequest.id == request_id)
             )
@@ -444,6 +450,7 @@ class ApprovalService:
                     member_response = response
                     break
             
+            logger.info(f"Member response found: {member_response} member_employee_id={member_employee_id}")
             if not member_response:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -496,12 +503,26 @@ class ApprovalService:
                     logger.info(f"Approval request {request_id} fully approved")
             
             await self.session.commit()
-            await self.session.refresh(request)
-            
+                       
             # Auto-execute if fully approved
             if request.status == ApprovalStatus.APPROVED:
                 executor = ApprovalAutoExecutor(self.session)
-                await executor.execute_if_fully_approved(request_id, member_employee_id, user_id)
+                await executor.execute_if_fully_approved(request_id, user_id)
+
+                result = await self.session.execute(
+                select(ApprovalRequest)
+                .options(
+                    selectinload(ApprovalRequest.employee),
+                    selectinload(ApprovalRequest.approval_responses)
+                    .selectinload(ApprovalResponse.approval_member)
+                    .selectinload(ApprovalMember.employee)
+                    )
+                    .where(ApprovalRequest.id == request_id)
+                )
+
+                request = result.scalar_one_or_none()
+            else: 
+                await self.session.refresh(request, attribute_names=["updated_at"])
             
             return ApprovalRequestResponse.model_validate(request, from_attributes=True)
             

@@ -5,7 +5,7 @@ from app.db.base import BaseModel
 class ApprovalMember(BaseModel):
     __tablename__ = 'approval_members'
     
-    module = Column(String(50), nullable=False, unique=True)  # HR, INVENTORY, PURCHASE, etc.
+    module = Column(String(50), nullable=False)  # HR, INVENTORY, PURCHASE, etc.
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     added_by = Column(Integer, nullable=False)  # HR Manager user ID
     is_active = Column(Boolean, default=True)
