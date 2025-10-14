@@ -419,6 +419,86 @@ class SalaryService:
             "average_salary": float(net / total) if total else 0
         }
 
+    async def get_all_salaries(
+        self,
+        page_index: int = 1,
+        page_size: int = 20,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
+        location_id: Optional[int] = None,
+        department_id: Optional[int] = None,
+        payment_status: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get paginated list of all employee salaries with filters
+        """
+        try:
+            # Build base query with employee join
+            query = (
+                select(Salary)
+                .join(Employee, Salary.employee_id == Employee.id)
+                .options(selectinload(Salary.employee))
+                .where(Employee.is_active == True)
+            )
+            
+            # Apply filters
+            conditions = []
+            
+            if month:
+                conditions.append(extract('month', Salary.salary_month) == month)
+            
+            if year:
+                conditions.append(extract('year', Salary.salary_month) == year)
+            
+            if location_id:
+                conditions.append(Employee.location_id == location_id)
+            
+            if department_id:
+                conditions.append(Employee.department_id == department_id)
+            
+            if payment_status:
+                try:
+                    status_enum = SalaryPaymentStatus[payment_status.upper()]
+                    conditions.append(Salary.payment_status == status_enum)
+                except KeyError:
+                    pass  # Invalid status, ignore filter
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count(Salary.id)).select_from(Salary).join(Employee)
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            query = query.order_by(Salary.salary_month.desc(), Salary.created_at.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
+            salaries = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": salaries
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting all salaries: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+
     def _month_range(self, month_date: date) -> tuple:
         """Get first and last day of the month"""
         last_day = monthrange(month_date.year, month_date.month)[1]
