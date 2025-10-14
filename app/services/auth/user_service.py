@@ -85,6 +85,24 @@ class UserService:
 
         return filtered_users
     
+    async def get_role_names_by_user(self, user_id: int) -> List[str]:
+        """Get all active role names assigned to a user."""
+        try:
+            result = await self.session.execute(
+                select(Role.name)
+                .join(UserRole, UserRole.role_id == Role.id)
+                .where(
+                    UserRole.user_id == user_id,
+                    Role.is_active == True,
+                    Role.is_deleted == False,
+                    UserRole.is_active == True
+                )
+            )
+            return result.scalars().all()
+        except Exception as e:
+            logger.error(f"Error getting roles for user {user_id}: {str(e)}")
+            return []
+    
     async def create_user(self, user_create: UserCreate, created_by: Optional[int] = None) -> User:
         """Create new user"""
         try:
