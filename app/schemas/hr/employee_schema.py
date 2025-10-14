@@ -46,6 +46,7 @@ class EmployeeCreateForm:
         first_name: str = Form(...),
         last_name: str = Form(...),
         email: str = Form(...),
+        user_id: Optional[int] = Form(None),
         phone: Optional[str] = Form(None),
         date_of_birth: Optional[date] = Form(None),
         hire_date: date = Form(...),
@@ -63,6 +64,7 @@ class EmployeeCreateForm:
         self.first_name = first_name
         self.last_name = last_name
         self.email = email
+        self.user_id = user_id
         self.phone = phone
         self.date_of_birth = date_of_birth
         self.hire_date = hire_date
@@ -83,6 +85,7 @@ class EmployeeCreateForm:
             first_name=self.first_name,
             last_name=self.last_name,
             email=self.email,
+            user_id=self.user_id,
             phone=self.phone,
             date_of_birth=self.date_of_birth,
             hire_date=self.hire_date,
@@ -101,6 +104,7 @@ class EmployeeCreateForm:
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    user_id: Optional[int] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     date_of_birth: Optional[date] = None
@@ -123,6 +127,7 @@ class EmployeeUpdateForm:
         self,
         first_name: Optional[str] = Form(None),
         last_name: Optional[str] = Form(None),
+        user_id: Optional[int] = Form(None),
         email: Optional[str] = Form(None),
         phone: Optional[str] = Form(None),
         date_of_birth: Optional[date] = Form(None),
@@ -141,6 +146,7 @@ class EmployeeUpdateForm:
         self.first_name = first_name
         self.last_name = last_name
         self.email = email
+        self.user_id = user_id
         self.phone = phone
         self.date_of_birth = date_of_birth
         self.department_id = department_id
@@ -161,6 +167,7 @@ class EmployeeUpdateForm:
             first_name=self.first_name,
             last_name=self.last_name,
             email=self.email,
+            user_id=self.user_id,
             phone=self.phone,
             date_of_birth=self.date_of_birth,
             department_id=self.department_id,

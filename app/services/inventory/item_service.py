@@ -171,17 +171,6 @@ class ItemService:
         if not item:
             raise NotFoundError("Item not found")
 
-        # Check for duplicate item code if being changed
-        if item_data.item_code and item_data.item_code != item.item_code:
-            existing = await self.db.execute(
-                select(Item).where(and_(
-                    Item.item_code == item_data.item_code,
-                    Item.id != item_id
-                ))
-            )
-            if existing.scalar_one_or_none():
-                raise ValidationError("Item code already exists")
-
         for field, value in item_data.dict(exclude_unset=True).items():
             setattr(item, field, value)
         

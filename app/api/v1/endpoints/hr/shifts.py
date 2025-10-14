@@ -6,6 +6,8 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.shift_service import ShiftService
+from app.services.approval.approval_service import ApprovalService
+from app.models.shared.enums import ApprovalRequestType, ApprovalStatus
 from app.schemas.hr.shift_schema import (
     EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, ShiftTypeResponse,
     UserShiftCreate, UserShiftUpdate, UserShiftResponse
@@ -88,28 +90,102 @@ async def get_employee_shift_history(
 
 # endregion 
 
-# region User Shift Endpoints
+# region User Shift Endpoints with Approval System
 
-@router.post("/assign", response_model=UserShiftResponse)
+@router.post("/assign")
 async def assign_shift_to_employee(
     assignment: UserShiftCreate,
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Assign shift to employee"""
-    service = ShiftService(session)
-    return await service.assign_shift_to_employee(assignment, current_user.id)
+    """
+    Assign shift to employee - goes through approval system if enabled
+    """
+    approval_service = ApprovalService(session)
+    shift_service = ShiftService(session)
+    
+    # Check if approval system is enabled
+    if await approval_service.is_approval_enabled():
+        # Create approval request
+        request_data = assignment.dict()
+        approval_request = await approval_service.create_approval_request(
+            request_type=ApprovalRequestType.SHIFT,
+            employee_id=assignment.employee_id,
+            request_data=request_data,
+            requested_by=current_user.id,
+            module="HR",
+            remarks="Shift assignment request"
+        )
+        
+        return {
+            "message": "Shift assignment sent for approval",
+            "approval_request_id": approval_request.id,
+            "status": "pending_approval",
+            "approval_request": approval_request
+        }
+    else:
+        # Direct assignment without approval
+        user_shift = await shift_service.assign_shift_to_employee(assignment, current_user.id)
+        return {
+            "message": "Shift assigned successfully",
+            "status": "completed",
+            "data": user_shift
+        }
 
-@router.put("/assign/{user_shift_id}", response_model=UserShiftResponse)
+@router.put("/assign/{user_shift_id}")
 async def update_user_shift(
     user_shift_id: int,
     shift_update: UserShiftUpdate,
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Update user shift assignment (e.g., set end_date or deactivate)"""
-    service = ShiftService(session)
-    return await service.update_user_shift(user_shift_id, shift_update, current_user.id)
+    """
+    Update user shift assignment - goes through approval system if enabled
+    """
+    approval_service = ApprovalService(session)
+    shift_service = ShiftService(session)
+    
+    # Check if approval system is enabled
+    if await approval_service.is_approval_enabled():
+        # Get the existing shift to include employee_id
+        from sqlalchemy import select
+        from app.models.hr.user_shift import UserShift
+        
+        result = await session.execute(
+            select(UserShift).where(UserShift.id == user_shift_id)
+        )
+        existing_shift = result.scalar_one_or_none()
+        
+        if not existing_shift:
+            raise HTTPException(status_code=404, detail="Shift not found")
+        
+        # Create approval request
+        request_data = shift_update.dict(exclude_unset=True)
+        request_data["user_shift_id"] = user_shift_id
+        
+        approval_request = await approval_service.create_approval_request(
+            request_type=ApprovalRequestType.SHIFT,
+            employee_id=existing_shift.employee_id,
+            request_data=request_data,
+            requested_by=current_user.id,
+            module="HR",
+            remarks="Shift update request"
+        )
+        
+        return {
+            "message": "Shift update sent for approval",
+            "approval_request_id": approval_request.id,
+            "status": "pending_approval",
+            "approval_request": approval_request
+        }
+    else:
+        # Direct update without approval
+        updated_shift = await shift_service.update_user_shift(user_shift_id, shift_update, current_user.id)
+        return {
+            "message": "Shift updated successfully",
+            "status": "completed",
+            "data": updated_shift
+        }
 
 @router.get("/employees/shifts", response_model=PaginatedResponse[EmployeeShiftSummary])
 async def get_employee_shifts(
@@ -123,7 +199,7 @@ async def get_employee_shifts(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get employee shifts grouped by employee (one row per employee).
+    Get employee shifts summary grouped by employee (one row per employee).
     """
     service = ShiftService(session)
     return await service.get_employee_shifts(
