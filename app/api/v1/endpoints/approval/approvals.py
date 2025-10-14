@@ -86,24 +86,24 @@ async def add_approval_member(
 @router.delete("/members/{member_id}")
 async def remove_approval_member(
     member_id: int = Path(...),
+    module: str = Query(..., description="Module to remove member from (HR, INVENTORY, PURCHASE, LOGISTICS)"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Remove an approval member (HR Manager only)"""
-    # TODO: Add role check for HR Manager
+    """Remove an approval member from a specific module (HR Manager only)"""
     user_service = UserService(session)
     user_role_names = await user_service.get_role_names_by_user(current_user.id)
     logger.info(f"User roles: {user_role_names}")
     if "hr_manager" not in user_role_names:
         raise HTTPException(
             status_code=403,
-            detail="Only HR Managers can update approval settings"
+            detail="Only HR Managers can remove approval members"
         )
     
     service = ApprovalService(session)
-    success = await service.remove_approval_member(member_id, current_user.id)
+    success = await service.remove_approval_member(member_id, module, current_user.id)
     return {
-        "message": "Approval member removed successfully",
+        "message": f"Approval member removed successfully from {module} module",
         "success": success
     }
 

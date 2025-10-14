@@ -353,20 +353,20 @@ class ShiftService:
             
             for employee in employees:
                 # Get current shift
-                current_shift_result = await self.session.execute(
-                    select(UserShift)
-                    .options(selectinload(UserShift.shift_type))
-                    .where(
-                        UserShift.employee_id == employee.id,
-                        UserShift.is_active == True,
-                        UserShift.effective_date <= today,
-                        or_(
-                            UserShift.end_date.is_(None),
-                            UserShift.end_date >= today
-                        )
-                    )
-                )
-                current_shift = current_shift_result.scalar_one_or_none()
+                # current_shift_result = await self.session.execute(
+                #     select(UserShift)
+                #     .options(selectinload(UserShift.shift_type))
+                #     .where(
+                #         UserShift.employee_id == employee.id,
+                #         UserShift.is_active == True,
+                #         UserShift.effective_date <= today,
+                #         or_(
+                #             UserShift.end_date.is_(None),
+                #             UserShift.end_date >= today
+                #         )
+                #     )
+                # )
+                # current_shift = current_shift_result.scalar_one_or_none()
                 
                 # Get total shift count
                 shift_count_conditions = [UserShift.employee_id == employee.id]
@@ -391,7 +391,7 @@ class ShiftService:
                     employee_code=employee.employee_id,
                     employee_name=f"{employee.first_name} {employee.last_name}".strip(),
                     department=getattr(employee.department, 'name', None) if hasattr(employee, 'department') else None,
-                    current_shift=current_shift,
+                    # current_shift=current_shift,
                     total_shift_changes=total_shifts or 0,
                     latest_effective_date=latest_date
                 )

@@ -187,73 +187,6 @@ async def update_user_shift(
             "data": updated_shift
         }
 
-@router.post("/approval/{approval_id}/execute", response_model=UserShiftResponse)
-async def execute_approved_shift(
-    approval_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Execute an approved shift assignment/update (called after all approvals)
-    This endpoint should be called automatically when approval status changes to APPROVED
-    """
-    approval_service = ApprovalService(session)
-    shift_service = ShiftService(session)
-    
-    # Get the approval request
-    approval_request = await approval_service.get_approval_request(approval_id)
-    
-    if not approval_request:
-        raise HTTPException(status_code=404, detail="Approval request not found")
-    
-    if approval_request.status != ApprovalStatus.APPROVED:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot execute. Request status is {approval_request.status.value}"
-        )
-    
-    # Check if already executed
-    if approval_request.reference_id:
-        raise HTTPException(status_code=400, detail="This request has already been executed")
-    
-    request_data = approval_request.request_data
-    
-    # Execute based on whether it's a new assignment or update
-    if "user_shift_id" in request_data:
-        # This is an update
-        user_shift_id = request_data.pop("user_shift_id")
-        shift_update = UserShiftUpdate(**request_data)
-        result = await shift_service.update_user_shift(user_shift_id, shift_update, current_user.id)
-        
-        # Update approval request with reference
-        from sqlalchemy import select, update
-        from app.models.hr.approval_request import ApprovalRequest
-        
-        await session.execute(
-            update(ApprovalRequest)
-            .where(ApprovalRequest.id == approval_id)
-            .values(reference_id=user_shift_id)
-        )
-        await session.commit()
-        
-    else:
-        # This is a new assignment
-        shift_create = UserShiftCreate(**request_data)
-        result = await shift_service.assign_shift_to_employee(shift_create, current_user.id)
-        
-        # Update approval request with reference
-        from sqlalchemy import select, update
-        from app.models.hr.approval_request import ApprovalRequest
-        
-        await session.execute(
-            update(ApprovalRequest)
-            .where(ApprovalRequest.id == approval_id)
-            .values(reference_id=result.id)
-        )
-        await session.commit()
-    
-    return result
-
 @router.get("/employees/shifts", response_model=PaginatedResponse[EmployeeShiftSummary])
 async def get_employee_shifts(
     page_index: int = Query(1, ge=1),
@@ -266,7 +199,7 @@ async def get_employee_shifts(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get employee shifts grouped by employee (one row per employee).
+    Get employee shifts summary grouped by employee (one row per employee).
     """
     service = ShiftService(session)
     return await service.get_employee_shifts(

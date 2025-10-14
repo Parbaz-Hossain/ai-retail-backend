@@ -187,25 +187,27 @@ class ApprovalService:
                 detail="Error updating approval member"
             )
 
-    async def remove_approval_member(self, member_id: int, removed_by: int) -> bool:
-        """Remove an approval member and their pending responses"""
+    async def remove_approval_member(self, member_id: int, module: str, removed_by: int) -> bool:
+        """Remove an approval member for a specific module and their pending responses"""
         try:
             result = await self.session.execute(
-                select(ApprovalMember).where(ApprovalMember.id == member_id)
+                select(ApprovalMember).where(
+                    ApprovalMember.id == member_id,
+                    ApprovalMember.module == module.upper()
+                )
             )
             member = result.scalar_one_or_none()
             
             if not member:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Approval member not found"
+                    detail=f"Approval member not found for module {module}"
                 )
             
-            # Delete all pending approval responses for this member
+            # Delete all pending approval responses for this member and module
             await self.session.execute(
                 delete(ApprovalResponse).where(
-                    ApprovalResponse.approval_member_id == member_id,
-                    ApprovalResponse.status == ApprovalResponseStatus.PENDING
+                    ApprovalResponse.approval_member_id == member_id
                 )
             )
             
@@ -213,17 +215,17 @@ class ApprovalService:
             await self.session.delete(member)
             await self.session.commit()
             
-            logger.info(f"Approval member {member_id} removed by user {removed_by}")
+            logger.info(f"Approval member {member_id} for module {module} removed by user {removed_by}")
             return True
             
         except HTTPException:
             raise
         except Exception as e:
             await self.session.rollback()
-            logger.error(f"Error removing approval member: {e}")
+            logger.error(f"Error removing approval member for module {module}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error removing approval member"
+                detail=f"Error removing approval member for module {module}"
             )
 
     async def get_approval_members(

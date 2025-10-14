@@ -102,19 +102,24 @@ class ApprovalAutoExecutor:
     
     async def _execute_salary_request(self, approval_request: ApprovalRequest, request_data: dict, user_id: int):
         """Execute an approved salary request"""
-        salary_service = SalaryService(self.session)
-        
-        employee_id = request_data["employee_id"]
-        salary_month = request_data["salary_month"]
-        
-        # Generate the salary
-        salary = await salary_service.generate_monthly_salary(employee_id, salary_month, user_id)
-        
-        # Update approval request with reference
-        approval_request.reference_id = salary.id
-        
-        await self.session.commit()
-        logger.info(f"Executed salary request {approval_request.id}")
+        try:
+            salary_service = SalaryService(self.session)
+            
+            employee_id = request_data["employee_id"]
+            salary_month = request_data["salary_month"]
+            
+            # Generate the salary
+            logger.info(f"Generating salary for employee {employee_id} for month {salary_month}")
+            salary = await salary_service.generate_monthly_salary(employee_id, salary_month, user_id)
+            
+            # Update approval request with reference
+            approval_request.reference_id = salary.id
+            
+            await self.session.commit()
+            logger.info(f"Executed salary request {approval_request.id}")
+        except Exception as e:
+            logger.error(f"Error executing salary request {approval_request.id}: {e}")
+            raise
     
     async def _execute_offday_request(self, approval_request: ApprovalRequest, request_data: dict, user_id: int):
         """Execute an approved offday request"""
