@@ -43,8 +43,7 @@ class UserService:
         try:
             result = await self.session.execute(
                 select(User).where(
-                    User.email == email,
-                    User.is_deleted == False
+                    User.email == email
                 )
             )
             return result.scalar_one_or_none()
@@ -57,8 +56,7 @@ class UserService:
         try:
             result = await self.session.execute(
                 select(User).where(
-                    User.username == username,
-                    User.is_deleted == False
+                    User.username == username
                 )
             )
             return result.scalar_one_or_none()
