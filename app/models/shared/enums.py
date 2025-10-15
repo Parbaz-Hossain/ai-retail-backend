@@ -63,6 +63,12 @@ class SalaryPaymentStatus(str, Enum):
     PAID = "PAID"
     UNPAID = "UNPAID"
 
+class SalaryPaymentStatus(str, Enum):
+    PENDING = "Pending"
+    PAID = "Paid"
+    UNPAID = "UNPAID"
+    FAILED = "Failed"
+
 class ReorderRequestStatus(str, Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"

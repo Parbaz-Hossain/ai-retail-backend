@@ -13,7 +13,7 @@ from app.services.hr.salary_service import SalaryService
 from app.services.hr.deduction_service import DeductionService
 from app.services.approval.approval_service import ApprovalService
 from app.models.shared.enums import ApprovalRequestType, ApprovalStatus
-from app.schemas.hr.salary_schema import SalaryCreate, SalaryUpdate, SalaryResponse, SalaryPaymentUpdate
+from app.schemas.hr.salary_schema import SalaryCreate, SalaryDetailedResponse, SalaryUpdate, SalaryResponse, SalaryPaymentUpdate
 from app.models.auth.user import User
 
 router = APIRouter()
@@ -231,6 +231,34 @@ async def get_salary_reports(
     """Get salary reports for management with deduction breakdown"""
     service = SalaryService(session)
     return await service.get_salary_reports(month, year, location_id, department_id)
+
+@router.get("/", response_model=PaginatedResponse[SalaryDetailedResponse])
+async def get_all_salaries(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=100),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2020),
+    location_id: Optional[int] = Query(None),
+    department_id: Optional[int] = Query(None),
+    payment_status: Optional[str] = Query(None),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get paginated list of all employee salaries with filters
+    - Filter by month, year, location, department, and payment status
+    - Returns detailed salary information for each employee
+    """
+    service = SalaryService(session)
+    return await service.get_all_salaries(
+        page_index=page_index,
+        page_size=page_size,
+        month=month,
+        year=year,
+        location_id=location_id,
+        department_id=department_id,
+        payment_status=payment_status
+    )
 
 @router.get("/{salary_id}/deductions")
 async def get_salary_deduction_details(

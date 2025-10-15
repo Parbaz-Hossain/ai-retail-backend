@@ -280,7 +280,10 @@ class ShipmentService:
                     selectinload(Shipment.to_location),
                     selectinload(Shipment.driver)
                         .selectinload(Driver.employee)
-                        .selectinload(Employee.department),
+                        .options(
+                            selectinload(Employee.location),  
+                            selectinload(Employee.department)
+                        ),
                     selectinload(Shipment.vehicle),
                     selectinload(Shipment.items).selectinload(ShipmentItem.item),
                     selectinload(Shipment.tracking_updates)
