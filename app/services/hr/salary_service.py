@@ -375,11 +375,13 @@ class SalaryService:
         query = (
             select(Salary)
             .join(Employee)
-            .options(selectinload(Salary.deduction_details))
+            .options(
+                selectinload(Salary.deduction_details).selectinload(SalaryDeduction.deduction_type)
+            )
             .where(
-                extract("month", Salary.salary_month) == month,
-                extract("year", Salary.salary_month) == year,
-                Employee.is_active == True
+            extract("month", Salary.salary_month) == month,
+            extract("year", Salary.salary_month) == year,
+            Employee.is_active == True
             )
         )
         
