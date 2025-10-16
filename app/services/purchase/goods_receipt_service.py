@@ -543,7 +543,8 @@ class GoodsReceiptService:
                 .where(
                     and_(
                         PurchaseOrder.id == po_id,
-                        PurchaseOrder.is_deleted == False
+                        PurchaseOrder.is_deleted == False,
+                        PurchaseOrderItem.is_deleted == False
                     )
                 )
             )
