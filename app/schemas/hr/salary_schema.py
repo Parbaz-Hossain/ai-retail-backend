@@ -25,14 +25,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel
-from enum import Enum
-
-
-class SalaryPaymentStatus(str, Enum):
-    PENDING = "Pending"
-    PAID = "Paid"
-    FAILED = "Failed"
-
 
 class SalaryResponse(BaseModel):
     id: int
@@ -60,5 +52,24 @@ class SalaryResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+    class Config:
+        from_attributes = True
+
+class EmployeeBasicInfo(BaseModel):
+    id: int
+    employee_id: str
+    first_name: str
+    last_name: str
+    email: str
+    
+    class Config:
+        from_attributes = True
+
+
+class SalaryDetailedResponse(SalaryResponse):
+    employee: Optional[EmployeeBasicInfo] = None
+    salary_month: date
+    employee_id: int
+    
     class Config:
         from_attributes = True
