@@ -17,6 +17,8 @@ class Item(BaseModel):
     selling_price = Column(Numeric(10, 2))
     barcode = Column(String(100))
     qr_code = Column(String(255))
+    has_ingredient = Column(Boolean, default=False) # need for track is this item has any ingredients or not
+    is_it_kitchen = Column(Boolean, default=False) # we will deduct only if the branch/location is kitchen otherwise we will deduct from item
     image_url = Column(String(255))
     is_perishable = Column(Boolean, default=False)
     shelf_life_days = Column(Integer)

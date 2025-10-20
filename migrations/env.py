@@ -14,7 +14,7 @@ from app.models.auth import audit_log, permission, refresh_token, role_permissio
 from app.models.communication import email_log, whatsapp_log
 from app.models.hr import attendance, employee, holiday, salary, shift_type, user_shift, offday, deduction, ticket
 from app.models.approval import approval_member, approval_request, approval_response, approval_settings
-from app. models.inventory import category, inventory_count_item, inventory_count, item, reorder_request_item, reorder_request, stock_analytics, stock_level, stock_movement, stock_type, transfer_item, transfer, inventory_mismatch_reason
+from app. models.inventory import category, inventory_count_item, inventory_count, item, reorder_request_item, reorder_request, stock_analytics, stock_level, stock_movement, stock_type, transfer_item, transfer, inventory_mismatch_reason, product, product_item
 from app.models.logistics import driver, shipment_item, shipment_tracking, shipment, vehicle
 from app.models.organization import department, location
 from app.models.purchase import goods_receipt_item, goods_receipt, item_supplier, purchase_order_item, purchase_order, supplier, po_payment
