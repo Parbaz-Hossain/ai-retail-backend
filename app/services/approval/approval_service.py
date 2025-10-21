@@ -506,6 +506,10 @@ class ApprovalService:
             
             await self.session.commit()
                        
+             # If approved and more members are pending, notify next member
+            if member_response.status == ApprovalResponseStatus.APPROVED and pending_count > 0:
+                await self._notify_next_pending_member(request_id)
+
             # Auto-execute if fully approved
             if request.status == ApprovalStatus.APPROVED:
                 executor = ApprovalAutoExecutor(self.session)
@@ -670,7 +674,7 @@ class ApprovalService:
 
     # endregion
 
-    # ========== WhatsApp Notifications ==========
+    # region ========== WhatsApp Notifications ==========
     async def _notify_approval_members(
         self,
         members: List[ApprovalMember],
@@ -702,3 +706,60 @@ class ApprovalService:
         except Exception as e:
             # Don't fail the whole process if WhatsApp fails
             logger.error(f"Error sending WhatsApp notifications: {e}")
+
+    async def _notify_next_pending_member(self, request_id: int):
+        """
+        Notify the next pending approval member after current one approves
+        This is called after an approval is processed
+        """
+        try:
+            # Get the approval request with all responses
+            result = await self.session.execute(
+                select(ApprovalRequest)
+                .options(
+                    selectinload(ApprovalRequest.approval_responses)
+                    .joinedload(ApprovalResponse.approval_member)
+                    .joinedload(ApprovalMember.employee)
+                )
+                .where(ApprovalRequest.id == request_id)
+            )
+            request = result.scalar_one_or_none()
+            
+            if not request:
+                logger.error(f"Approval request {request_id} not found")
+                return
+            
+            # Find the first pending response
+            next_pending_response = None
+            for response in request.approval_responses:
+                if response.status == ApprovalResponseStatus.PENDING:
+                    next_pending_response = response
+                    break
+            
+            if next_pending_response and next_pending_response.approval_member.employee:
+                member = next_pending_response.approval_member
+                message = (
+                    f"Dear {member.employee.first_name},\n\n"
+                    f"An approval request has been approved by the previous reviewer and now requires your attention.\n\n"
+                    f"Type: {request.request_type.value}\n"
+                    f"Request ID: {request.id}\n\n"
+                    f"Please login to the system to review and approve or reject this request."
+                )
+                
+                await self.whatsapp_client.send(
+                    phone=member.employee.phone,
+                    body=message
+                )
+                
+                logger.info(
+                    f"WhatsApp notification sent to next reviewer {member.employee.phone} "
+                    f"for request {request_id}"
+                )
+            else:
+                logger.info(f"No more pending members for request {request_id}")
+                
+        except Exception as e:
+            # Don't fail the whole process if WhatsApp fails
+            logger.error(f"Error sending next member notification: {e}")
+
+    # endregion

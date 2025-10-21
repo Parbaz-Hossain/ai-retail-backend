@@ -30,6 +30,8 @@ class ItemBase(BaseModel):
     unit_cost: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
     barcode: Optional[str] = None
+    has_ingredient: Optional[bool] = None
+    is_it_kitchen: Optional[bool] = None
     image_url: Optional[str] = None
     is_perishable: bool = False
     shelf_life_days: Optional[int] = None
@@ -57,6 +59,8 @@ class ItemCreateForm:
         unit_cost: Optional[Decimal] = Form(None),
         selling_price: Optional[Decimal] = Form(None),
         barcode: Optional[str] = Form(None),
+        has_ingredient: Optional[bool] = Form(None),
+        is_it_kitchen: Optional[bool] = Form(None),
         is_perishable: bool = Form(False),
         shelf_life_days: Optional[int] = Form(None),
         minimum_stock_level: Decimal = Form(0),
@@ -71,6 +75,8 @@ class ItemCreateForm:
         self.unit_cost = unit_cost
         self.selling_price = selling_price
         self.barcode = barcode
+        self.has_ingredient = has_ingredient
+        self.is_it_kitchen = is_it_kitchen
         self.is_perishable = is_perishable
         self.shelf_life_days = shelf_life_days
         self.minimum_stock_level = minimum_stock_level
@@ -88,6 +94,8 @@ class ItemCreateForm:
             unit_cost=self.unit_cost,
             selling_price=self.selling_price,
             barcode=self.barcode,
+            has_ingredient=self.has_ingredient,
+            is_it_kitchen=self.is_it_kitchen,
             is_perishable=self.is_perishable,
             shelf_life_days=self.shelf_life_days,
             minimum_stock_level=self.minimum_stock_level,
@@ -104,6 +112,8 @@ class ItemUpdate(BaseModel):
     unit_cost: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
     barcode: Optional[str] = None
+    has_ingredient: Optional[bool] = None
+    is_it_kitchen: Optional[bool] = None
     image_url: Optional[str] = None
     is_perishable: Optional[bool] = None
     shelf_life_days: Optional[int] = None
@@ -123,6 +133,8 @@ class ItemUpdateForm:
         unit_cost: Optional[Decimal] = Form(None),
         selling_price: Optional[Decimal] = Form(None),
         barcode: Optional[str] = Form(None),
+        has_ingredient: Optional[bool] = Form(None),
+        is_it_kitchen: Optional[bool] = Form(None),
         is_perishable: Optional[bool] = Form(None),
         shelf_life_days: Optional[int] = Form(None),
         minimum_stock_level: Optional[Decimal] = Form(None),
@@ -138,6 +150,8 @@ class ItemUpdateForm:
         self.unit_cost = unit_cost
         self.selling_price = selling_price
         self.barcode = barcode
+        self.has_ingredient = has_ingredient
+        self.is_it_kitchen = is_it_kitchen
         self.is_perishable = is_perishable
         self.shelf_life_days = shelf_life_days
         self.minimum_stock_level = minimum_stock_level
@@ -156,6 +170,8 @@ class ItemUpdateForm:
             unit_cost=self.unit_cost,
             selling_price=self.selling_price,
             barcode=self.barcode,
+            has_ingredient=self.has_ingredient,
+            is_it_kitchen=self.is_it_kitchen,
             is_perishable=self.is_perishable,
             shelf_life_days=self.shelf_life_days,
             minimum_stock_level=self.minimum_stock_level,
