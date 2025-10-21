@@ -18,6 +18,7 @@ class EmployeeInfo(BaseModel):
     first_name: str
     last_name: str
     email: str
+    profile_image: Optional[str] = None
     
     class Config:
         from_attributes = True
