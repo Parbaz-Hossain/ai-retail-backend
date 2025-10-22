@@ -58,8 +58,7 @@ class EmployeeService:
             # unique email (active)
             email_res = await self.session.execute(
                 select(Employee.id).where(
-                    Employee.email == data.email,
-                    Employee.is_active == True
+                    Employee.email == data.email
                 ).limit(1)
             )
             if email_res.scalar_one_or_none() is not None:

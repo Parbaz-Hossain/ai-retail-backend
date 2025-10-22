@@ -60,7 +60,7 @@ async def get_roles(
 @router.get("/all-permissions", response_model=PaginatedResponse[PermissionResponse])
 async def get_permissions(
     page_index: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=1000),
+    page_size: int = Query(100, ge=1, le=1000),
     resource: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
