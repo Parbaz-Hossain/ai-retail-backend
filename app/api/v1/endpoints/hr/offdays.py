@@ -34,7 +34,7 @@ async def create_offday(
         request_data["offday_date"] = request_data["offday_date"].isoformat()
         
         approval_request = await approval_service.create_approval_request(
-            request_type=ApprovalRequestType.OFFDAY,
+            request_type=ApprovalRequestType.DAYOFF,
             employee_id=offday.employee_id,
             request_data=request_data,
             requested_by=current_user.id,
@@ -76,7 +76,7 @@ async def create_bulk_offdays(
         request_data["offday_dates"] = [d.isoformat() for d in request_data["offday_dates"]]
         
         approval_request = await approval_service.create_approval_request(
-            request_type=ApprovalRequestType.OFFDAY,
+            request_type=ApprovalRequestType.DAYOFF,
             employee_id=bulk_offdays.employee_id,
             request_data=request_data,
             requested_by=current_user.id,
@@ -250,7 +250,7 @@ async def update_offday(
             request_data["offday_date"] = request_data["offday_date"].isoformat()
         
         approval_request = await approval_service.create_approval_request(
-            request_type=ApprovalRequestType.OFFDAY,
+            request_type=ApprovalRequestType.DAYOFF,
             employee_id=existing_offday.employee_id,
             request_data=request_data,
             requested_by=current_user.id,

@@ -64,7 +64,7 @@ class ApprovalAutoExecutor:
                 await self._execute_shift_request(approval_request, deserialized_data, user_id)
             elif approval_request.request_type == ApprovalRequestType.SALARY:
                 await self._execute_salary_request(approval_request, deserialized_data, user_id)
-            elif approval_request.request_type == ApprovalRequestType.OFFDAY:
+            elif approval_request.request_type == ApprovalRequestType.DAYOFF:
                 await self._execute_offday_request(approval_request, deserialized_data, user_id)
             
             logger.info(f"Successfully executed approval request {approval_request_id}")
