@@ -28,7 +28,7 @@ class Item(BaseModel):
     is_active = Column(Boolean, default=True)
     
     # Relationships
-    # product_items = relationship("ProductItem", back_populates="item")
+    product_items = relationship("ProductItem", back_populates="item")
     category = relationship("Category", back_populates="items")
     stock_type = relationship("StockType", back_populates="items")
     stock_levels = relationship("StockLevel", back_populates="item")

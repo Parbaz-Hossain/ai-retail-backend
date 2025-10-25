@@ -183,7 +183,7 @@ class PaymentType(Enum):
 class ApprovalRequestType(str, Enum):
     SHIFT = "SHIFT"
     SALARY = "SALARY"
-    OFFDAY = "OFFDAY"
+    DAYOFF = "DAYOFF"
 
 class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
