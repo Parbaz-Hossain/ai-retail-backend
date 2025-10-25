@@ -13,8 +13,7 @@ class Product(BaseModel):
     name = Column(String(1000), nullable=False)
     description = Column(Text)
     category_id = Column(Integer, ForeignKey('categories.id'))
-    unit_type = Column(SQLEnum(UnitType, name='product_unit_type'), nullable=False)  # Unit for selling (e.g., PCS, PLATE)
-    selling_price = Column(Numeric(10, 2), nullable=False)
+    selling_price = Column(Numeric(10, 2))
     cost_price = Column(Numeric(10, 2))  # Calculated from ingredients
     preparation_time = Column(Integer)  # In minutes
     barcode = Column(String(100))
