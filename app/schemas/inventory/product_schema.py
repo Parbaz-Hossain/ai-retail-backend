@@ -54,8 +54,7 @@ class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     category_id: Optional[int] = None
-    unit_type: UnitType
-    selling_price: Decimal
+    selling_price: Optional[Decimal] = None
     preparation_time: Optional[int] = None
     barcode: Optional[str] = None
     image_url: Optional[str] = None
@@ -74,7 +73,7 @@ class ProductBase(BaseModel):
         return v
 
 class ProductCreate(ProductBase):
-    product_items: List[ProductItemCreate] = []
+    pass
 
 class ProductCreateForm:
     def __init__(
@@ -82,60 +81,40 @@ class ProductCreateForm:
         name: str = Form(...),
         description: Optional[str] = Form(None),
         category_id: Optional[int] = Form(None),
-        unit_type: UnitType = Form(...),
-        selling_price: Decimal = Form(...),
+        selling_price: Optional[Decimal] = Form(None),
         preparation_time: Optional[int] = Form(None),
         barcode: Optional[str] = Form(None),
-        is_available: Optional[bool] = Form(None),
-        # Product items as JSON string (will be parsed)
-        product_items_json: Optional[str] = Form(None)
+        is_available: Optional[bool] = Form(None)
     ):
         self.name = name
         self.description = description
         self.category_id = category_id
-        self.unit_type = unit_type
         self.selling_price = selling_price
         self.preparation_time = preparation_time
         self.barcode = barcode
         self.is_available = is_available
-        self.product_items_json = product_items_json
     
-    def to_product_create(self) -> ProductCreate:
-        """Convert form data to ProductCreate schema"""
-        import json
-        
-        product_items = []
-        if self.product_items_json:
-            try:
-                items_data = json.loads(self.product_items_json)
-                product_items = [ProductItemCreate(**item) for item in items_data]
-            except (json.JSONDecodeError, ValueError):
-                pass
-        
+    def to_product_create(self) -> ProductCreate:        
         return ProductCreate(
             name=self.name,
             description=self.description,
             category_id=self.category_id,
-            unit_type=self.unit_type,
             selling_price=self.selling_price,
             preparation_time=self.preparation_time,
             barcode=self.barcode,
-            is_available=self.is_available,
-            product_items=product_items
+            is_available=self.is_available
         )
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[int] = None
-    unit_type: Optional[UnitType] = None
     selling_price: Optional[Decimal] = None
     preparation_time: Optional[int] = None
     barcode: Optional[str] = None
     image_url: Optional[str] = None
     is_available: Optional[bool] = None
     is_active: Optional[bool] = None
-    product_items: Optional[List[ProductItemCreate]] = None
 
 class ProductUpdateForm:
     def __init__(
@@ -143,49 +122,31 @@ class ProductUpdateForm:
         name: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
         category_id: Optional[int] = Form(None),
-        unit_type: Optional[UnitType] = Form(None),
         selling_price: Optional[Decimal] = Form(None),
         preparation_time: Optional[int] = Form(None),
         barcode: Optional[str] = Form(None),
         is_available: Optional[bool] = Form(None),
-        is_active: Optional[bool] = Form(None),
-        # Product items as JSON string (will be parsed)
-        product_items_json: Optional[str] = Form(None)
+        is_active: Optional[bool] = Form(None)
     ):
         self.name = name
         self.description = description
         self.category_id = category_id
-        self.unit_type = unit_type
         self.selling_price = selling_price
         self.preparation_time = preparation_time
         self.barcode = barcode
         self.is_available = is_available
         self.is_active = is_active
-        self.product_items_json = product_items_json
     
-    def to_product_update(self) -> ProductUpdate:
-        """Convert form data to ProductUpdate schema"""
-        import json
-        
-        product_items = None
-        if self.product_items_json:
-            try:
-                items_data = json.loads(self.product_items_json)
-                product_items = [ProductItemCreate(**item) for item in items_data]
-            except (json.JSONDecodeError, ValueError):
-                pass
-        
+    def to_product_update(self) -> ProductUpdate:        
         return ProductUpdate(
             name=self.name,
             description=self.description,
             category_id=self.category_id,
-            unit_type=self.unit_type,
             selling_price=self.selling_price,
             preparation_time=self.preparation_time,
             barcode=self.barcode,
             is_available=self.is_available,
-            is_active=self.is_active,
-            product_items=product_items
+            is_active=self.is_active
         )
 
 class ProductInDB(ProductBase):
@@ -208,5 +169,7 @@ class ProductInDB(ProductBase):
 
 class ProductResponse(ProductInDB):
     category: Optional[CategoryRef] = None
+    product_items: Optional[List[ProductItem]] = None
+
 
 ProductResponse.model_rebuild()

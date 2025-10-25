@@ -62,14 +62,7 @@ class ProductService:
             if not category.scalar_one_or_none():
                 raise ValidationError("Category not found")
 
-        # Validate product items
-        if product_data.product_items:
-            await self._validate_product_items(product_data.product_items)
-            
-            # Calculate cost price
-            cost_price = await self._calculate_cost_price(product_data.product_items)
-        else:
-            cost_price = Decimal('0.00')
+        cost_price = Decimal('0.00')
 
         # Generate QR code
         qr_code = f"PROD-{uuid.uuid4().hex[:8].upper()}"
@@ -82,24 +75,6 @@ class ProductService:
         )
         
         self.db.add(product)
-        await self.db.flush()
-
-        # Create product items
-        for item_data in product_data.product_items:
-            # Get item's unit cost if not provided
-            if item_data.unit_cost is None:
-                item_result = await self.db.execute(
-                    select(Item).where(Item.id == item_data.item_id)
-                )
-                item = item_result.scalar_one_or_none()
-                item_data.unit_cost = item.unit_cost if item else Decimal('0.00')
-            
-            product_item = ProductItem(
-                product_id=product.id,
-                **item_data.dict()
-            )
-            self.db.add(product_item)
-        
         await self.db.flush()
         
         # Return product with relationships loaded
@@ -223,44 +198,6 @@ class ProductService:
             if not category.scalar_one_or_none():
                 raise ValidationError("Category not found")
 
-        # Handle product items update if provided
-        if product_data.product_items is not None:
-            # Validate new product items
-            await self._validate_product_items(product_data.product_items)
-            
-            # Delete existing product items
-            await self.db.execute(
-                select(ProductItem).where(ProductItem.product_id == product_id)
-            )
-            existing_items = (await self.db.execute(
-                select(ProductItem).where(ProductItem.product_id == product_id)
-            )).scalars().all()
-            
-            for item in existing_items:
-                await self.db.delete(item)
-            
-            await self.db.flush()
-            
-            # Create new product items
-            for item_data in product_data.product_items:
-                # Get item's unit cost if not provided
-                if item_data.unit_cost is None:
-                    item_result = await self.db.execute(
-                        select(Item).where(Item.id == item_data.item_id)
-                    )
-                    item = item_result.scalar_one_or_none()
-                    item_data.unit_cost = item.unit_cost if item else Decimal('0.00')
-                
-                product_item = ProductItem(
-                    product_id=product.id,
-                    **item_data.dict()
-                )
-                self.db.add(product_item)
-            
-            # Recalculate cost price
-            cost_price = await self._calculate_cost_price(product_data.product_items)
-            product.cost_price = cost_price
-
         # Update product fields
         for field, value in product_data.dict(exclude_unset=True, exclude={'product_items'}).items():
             setattr(product, field, value)
@@ -291,32 +228,3 @@ class ProductService:
         product.updated_by = current_user_id
         await self.db.commit()
         return True
-
-    async def recalculate_product_cost(self, product_id: int) -> Product:
-        """Recalculate product cost price based on current item costs"""
-        product = await self.get_product_by_id(product_id)
-        if not product:
-            raise NotFoundError("Product not found")
-
-        if not product.product_items:
-            return product
-
-        total_cost = Decimal('0.00')
-        for product_item in product.product_items:
-            # Get current item unit cost
-            item_result = await self.db.execute(
-                select(Item).where(Item.id == product_item.item_id)
-            )
-            item = item_result.scalar_one_or_none()
-            
-            if item and item.unit_cost:
-                item_cost = item.unit_cost * product_item.quantity
-                total_cost += item_cost
-                
-                # Update product_item unit_cost to current
-                product_item.unit_cost = item.unit_cost
-
-        product.cost_price = total_cost
-        await self.db.commit()
-        await self.db.refresh(product)
-        return product

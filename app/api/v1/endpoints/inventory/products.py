@@ -201,23 +201,3 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="Product not found")
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-# @router.post("/{product_id}/recalculate-cost", response_model=Product)
-# async def recalculate_product_cost(
-#     product_id: int,
-#     db: AsyncSession = Depends(get_async_session),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     """Recalculate product cost price based on current item costs"""
-#     try:
-#         service = ProductService(db)
-#         product = await service.recalculate_product_cost(product_id)
-#         return product
-#     except NotFoundError:
-#         raise HTTPException(status_code=404, detail="Product not found")
-#     except Exception as e:
-#         logger.error(f"Recalculate cost error: {str(e)}")
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail="Failed to recalculate product cost"
-#         )

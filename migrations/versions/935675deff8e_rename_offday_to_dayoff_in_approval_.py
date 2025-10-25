@@ -24,7 +24,7 @@ def upgrade():
     
     # We need to commit this change before we can use the new value
     connection.execute(sa.text("ALTER TYPE approvalrequesttype ADD VALUE IF NOT EXISTS 'DAYOFF'"))
-    connection.commit()
+    # connection.commit()
     
     # Step 2: Now update existing data (now 'DAYOFF' is a valid value and committed)
     op.execute("""
