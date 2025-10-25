@@ -208,6 +208,5 @@ class ProductInDB(ProductBase):
 
 class ProductResponse(ProductInDB):
     category: Optional[CategoryRef] = None
-    product_items: Optional[List[ProductItem]] = None
 
 ProductResponse.model_rebuild()
