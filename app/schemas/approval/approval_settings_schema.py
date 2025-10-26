@@ -25,16 +25,3 @@ class ApprovalSettingsResponse(ApprovalSettingsBase):
     
     class Config:
         from_attributes = True
-
-class ApprovalSettingsBulkUpdate(BaseModel):
-    """Bulk update settings for multiple module-action combinations"""
-    settings: List[ApprovalSettingsCreate]
-
-class ApprovalSettingsGroupedResponse(BaseModel):
-    """Grouped settings by module for easier UI display"""
-    module: str
-    settings: Dict[str, bool]  # {action_type: is_enabled}
-    
-class ApprovalSettingsListResponse(BaseModel):
-    """List all settings grouped by module"""
-    data: List[ApprovalSettingsGroupedResponse]

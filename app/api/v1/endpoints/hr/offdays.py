@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.offday_service import OffdayService
 from app.services.approval.approval_service import ApprovalService
-from app.models.shared.enums import ApprovalRequestType, ApprovalStatus
+from app.models.shared.enums import ApprovalRequestType
 from app.schemas.hr.offday_schema import (
     OffdayCreate, OffdayBulkCreate, OffdayUpdate,
     OffdayResponse, OffdayListResponse
@@ -27,8 +28,8 @@ async def create_offday(
     approval_service = ApprovalService(session)
     offday_service = OffdayService(session)
     
-    # Check if approval system is enabled
-    if await approval_service.is_approval_enabled():
+    # Check if approval system is enabled for HR.DAYOFF
+    if await approval_service.is_approval_enabled("HR", ApprovalRequestType.DAYOFF):
         # Create approval request
         request_data = offday.dict()
         request_data["offday_date"] = request_data["offday_date"].isoformat()
@@ -69,8 +70,8 @@ async def create_bulk_offdays(
     approval_service = ApprovalService(session)
     offday_service = OffdayService(session)
     
-    # Check if approval system is enabled
-    if await approval_service.is_approval_enabled():
+    # Check if approval system is enabled for HR.DAYOFF
+    if await approval_service.is_approval_enabled("HR", ApprovalRequestType.DAYOFF):
         # Create approval request
         request_data = bulk_offdays.dict()
         request_data["offday_dates"] = [d.isoformat() for d in request_data["offday_dates"]]
@@ -98,84 +99,6 @@ async def create_bulk_offdays(
             "status": "completed",
             "data": result
         }
-
-# @router.post("/approval/{approval_id}/execute")
-# async def execute_approved_offday(
-#     approval_id: int,
-#     session: AsyncSession = Depends(get_async_session),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     """
-#     Execute an approved offday creation (called after all approvals)
-#     """
-#     approval_service = ApprovalService(session)
-#     offday_service = OffdayService(session)
-    
-#     # Get the approval request
-#     approval_request = await approval_service.get_approval_request(approval_id)
-    
-#     if not approval_request:
-#         raise HTTPException(status_code=404, detail="Approval request not found")
-    
-#     if approval_request.status != ApprovalStatus.APPROVED:
-#         raise HTTPException(
-#             status_code=400,
-#             detail=f"Cannot execute. Request status is {approval_request.status.value}"
-#         )
-    
-#     # Check if already executed
-#     if approval_request.reference_id:
-#         raise HTTPException(status_code=400, detail="This request has already been executed")
-    
-#     request_data = approval_request.request_data
-    
-#     # Check if this is bulk or single offday
-#     if "offday_dates" in request_data:
-#         # Bulk offdays
-#         from datetime import date
-#         request_data["offday_dates"] = [
-#             date.fromisoformat(d) for d in request_data["offday_dates"]
-#         ]
-#         bulk_create = OffdayBulkCreate(**request_data)
-#         result = await offday_service.create_bulk_offdays(bulk_create, current_user.id)
-        
-#         # Update approval request - for bulk, store the count in reference_id
-#         from sqlalchemy import update
-#         from app.models.hr.approval_request import ApprovalRequest
-        
-#         await session.execute(
-#             update(ApprovalRequest)
-#             .where(ApprovalRequest.id == approval_id)
-#             .values(reference_id=result.total_offdays)
-#         )
-#         await session.commit()
-        
-#         return {
-#             "message": "Bulk offdays created successfully",
-#             "data": result
-#         }
-#     else:
-#         # Single offday
-#         from datetime import date
-#         request_data["offday_date"] = date.fromisoformat(request_data["offday_date"])
-#         offday_create = OffdayCreate(**request_data)
-#         result = await offday_service.create_offday(offday_create, current_user.id)
-        
-#         # Update approval request with reference
-#         from sqlalchemy import update
-#         from app.models.hr.approval_request import ApprovalRequest
-        
-#         await session.execute(
-#             update(ApprovalRequest)
-#             .where(ApprovalRequest.id == approval_id)
-#             .values(reference_id=result.id)
-#         )
-#         await session.commit()
-        
-#         return {
-#             "message": "Offday created successfully",
-#             "data": result
-#         }
 
 @router.get("/employee/{employee_id}", response_model=OffdayListResponse)
 async def get_employee_offdays(
@@ -235,8 +158,8 @@ async def update_offday(
     approval_service = ApprovalService(session)
     offday_service = OffdayService(session)
     
-    # Check if approval system is enabled
-    if await approval_service.is_approval_enabled():
+    # Check if approval system is enabled for HR.DAYOFF
+    if await approval_service.is_approval_enabled("HR", ApprovalRequestType.DAYOFF):
         # Get the existing offday to include employee_id
         existing_offday = await offday_service.get_offday(offday_id)
         
@@ -295,4 +218,7 @@ async def delete_employee_month_offdays(
     """Delete all offdays for an employee in a specific month"""
     service = OffdayService(session)
     result = await service.delete_employee_month_offdays(employee_id, year, month, current_user.id)
-    return {"message": f"All offdays deleted for employee {employee_id} in {year}-{month}", "success": result}
+    return {
+        "message": f"All offdays deleted for employee {employee_id} in {year}-{month}", 
+        "success": result
+    }

@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import List, Optional
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
@@ -13,43 +13,48 @@ from app.services.auth.user_service import UserService
 from app.schemas.approval.approval_member_schema import (
     ApprovalMemberCreate,
     ApprovalMemberResponse,
-    ApprovalMemberListResponse,
     ApprovalMemberUpdate
 )
 from app.schemas.approval.approval_request_schema import (
     ApprovalRequestResponse,
-    ApprovalActionRequest,
-    ApprovalSettingsResponse,
-    ApprovalSettingsUpdate
+    ApprovalActionRequest
+)
+from app.schemas.approval.approval_settings_schema import (
+    ApprovalSettingsCreate,
+    ApprovalSettingsResponse
 )
 from app.models.shared.enums import ApprovalStatus, ApprovalRequestType
 from app.models.auth.user import User
 
 router = APIRouter()
-
 logger = logging.getLogger(__name__)
 
 # region ========== Approval Settings ==========
 
-@router.get("/settings", response_model=ApprovalSettingsResponse)
+@router.get("/settings", response_model=List[ApprovalSettingsResponse])
 async def get_approval_settings(
+    module: Optional[str] = Query(None, description="Filter by module"),
+    action_type: Optional[ApprovalRequestType] = Query(None, description="Filter by action type"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get current approval system settings"""
+    """Get approval settings grouped by module"""
     service = ApprovalService(session)
-    return await service.get_approval_settings()
+    return await service.get_approval_settings(
+        module=module,
+        action_type=action_type     
+    )
 
-@router.put("/settings", response_model=ApprovalSettingsResponse)
-async def update_approval_settings(
-    settings: ApprovalSettingsUpdate,
+@router.post("/settings", response_model=ApprovalSettingsResponse)
+async def create_or_update_approval_setting(
+    setting: ApprovalSettingsCreate,
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Enable or disable approval system (HR Manager only)"""
+    """Create or update approval setting for specific module and action type (HR Manager only)"""
     user_service = UserService(session)
     user_role_names = await user_service.get_role_names_by_user(current_user.id)
-    logger.info(f"User roles: {user_role_names}")
+    
     if "hr_manager" not in user_role_names:
         raise HTTPException(
             status_code=403,
@@ -57,7 +62,7 @@ async def update_approval_settings(
         )
 
     service = ApprovalService(session)
-    return await service.update_approval_settings(settings.is_enabled, current_user.id)
+    return await service.create_or_update_approval_setting(setting, current_user.id)
 
 # endregion
 
@@ -69,11 +74,10 @@ async def add_approval_member(
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Add a new approval member for specific module (HR Manager only)"""
-    # TODO: Add role check for HR Manager
+    """Add approval member for specific module and action types (HR Manager only)"""
     user_service = UserService(session)
     user_role_names = await user_service.get_role_names_by_user(current_user.id)
-    logger.info(f"User roles: {user_role_names}")
+    
     if "hr_manager" not in user_role_names:
         raise HTTPException(
             status_code=403,
@@ -83,17 +87,37 @@ async def add_approval_member(
     service = ApprovalService(session)
     return await service.add_approval_member(member, current_user.id)
 
-@router.delete("/members/{member_id}")
-async def remove_approval_member(
+@router.put("/members/{member_id}", response_model=ApprovalMemberResponse)
+async def update_approval_member(
     member_id: int = Path(...),
-    module: str = Query(..., description="Module to remove member from (HR, INVENTORY, PURCHASE, LOGISTICS)"),
+    member_update: ApprovalMemberUpdate = ...,
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Remove an approval member from a specific module (HR Manager only)"""
+    """Update approval member (HR Manager only)"""
     user_service = UserService(session)
     user_role_names = await user_service.get_role_names_by_user(current_user.id)
-    logger.info(f"User roles: {user_role_names}")
+    
+    if "hr_manager" not in user_role_names:
+        raise HTTPException(
+            status_code=403,
+            detail="Only HR Managers can update approval members"
+        )
+    
+    service = ApprovalService(session)
+    return await service.update_approval_member(member_id, member_update, current_user.id)
+
+@router.delete("/members/{member_id}")
+async def remove_approval_member(
+    member_id: int = Path(...),
+    module: str = Query(..., description="Module to remove member from"),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove approval member (HR Manager only)"""
+    user_service = UserService(session)
+    user_role_names = await user_service.get_role_names_by_user(current_user.id)
+    
     if "hr_manager" not in user_role_names:
         raise HTTPException(
             status_code=403,
@@ -111,20 +135,21 @@ async def remove_approval_member(
 async def get_approval_members(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=100),
-    module: Optional[str] = Query(None, description="Filter by module (HR, INVENTORY, PURCHASE)"),
+    module: Optional[str] = Query(None, description="Filter by module"),
+    action_type: Optional[ApprovalRequestType] = Query(None, description="Filter by action type"),
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get paginated list of active approval members"""
+    """Get paginated list of approval members"""
     service = ApprovalService(session)
-    paginated_result = await service.get_approval_members(
+    return await service.get_approval_members(
         page_index=page_index,
         page_size=page_size,
         module=module,
+        action_type=action_type,
         is_active=is_active
     )
-    return paginated_result
 
 # endregion
 
