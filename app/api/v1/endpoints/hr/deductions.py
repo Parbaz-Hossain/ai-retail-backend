@@ -17,7 +17,8 @@ from app.models.shared.enums import DeductionStatus
 
 router = APIRouter()
 
-# ===================================== Deduction Type Endpoints ===================================== #
+# region ===================================== Deduction Type Endpoints ===================================== #
+
 @router.post("/types", response_model=DeductionTypeResponse)
 async def create_deduction_type(
     data: DeductionTypeCreate,
@@ -67,7 +68,10 @@ async def update_deduction_type(
     service = DeductionService(session)
     return await service.update_deduction_type(type_id, data)
 
-# ====================================== Employee Deduction Endpoints ================================== #
+# endregion
+
+# region ====================================== Employee Deduction Endpoints ================================== #
+
 @router.post("/employee", response_model=EmployeeDeductionResponse)
 async def create_employee_deduction(
     data: EmployeeDeductionCreate,
@@ -153,3 +157,5 @@ async def calculate_monthly_deductions(
         "total_deduction": float(total_deduction),
         "deduction_breakdown": deduction_details
     }
+
+# endregion

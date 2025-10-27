@@ -1,8 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from decimal import Decimal
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 from fastapi import HTTPException, status
@@ -15,8 +14,13 @@ from app.models.hr.employee import Employee
 from app.models.shared.enums import (
     ApprovalRequestType, ApprovalStatus, ApprovalResponseStatus
 )
-from app.schemas.approval.approval_member_schema import ApprovalMemberCreate, ApprovalMemberResponse, ApprovalMemberUpdate, ApprovalMembersByModule
-from app.schemas.approval.approval_request_schema import ApprovalRequestCreate, ApprovalRequestResponse
+from app.schemas.approval.approval_member_schema import (
+    ApprovalMemberCreate, ApprovalMemberResponse, ApprovalMemberUpdate, ApprovalMembersByModule
+)
+from app.schemas.approval.approval_request_schema import ApprovalRequestResponse
+from app.schemas.approval.approval_settings_schema import (
+    ApprovalSettingsCreate, ApprovalSettingsResponse
+)
 from app.services.communication.whatsapp_service import WhatsAppClient
 from app.services.approval.approval_auto_executor import ApprovalAutoExecutor
 from app.utils.date_time_serializer import serialize_dates
@@ -30,62 +34,108 @@ class ApprovalService:
 
     # region ========== Approval Settings ==========
 
-    async def get_approval_settings(self) -> Dict[str, Any]:
-        """Get current approval system settings"""
+    async def get_approval_settings(
+        self, 
+        module: Optional[str] = None, 
+        action_type: Optional[ApprovalRequestType] = None
+    ) -> List[ApprovalSettingsResponse]:
+        """Get approval settings with optional filters"""
+        conditions = []
+        
+        if module:
+            conditions.append(ApprovalSettings.module == module.upper())
+        if action_type:
+            conditions.append(ApprovalSettings.action_type == action_type)
+        
         result = await self.session.execute(
-            select(ApprovalSettings).where(ApprovalSettings.id == 1)
+            select(ApprovalSettings).where(*conditions)
         )
-        settings = result.scalar_one_or_none()
+        settings = result.scalars().all()
         
-        if not settings:
-            # Create default settings if not exists
-            settings = ApprovalSettings(id=1, is_enabled=False, updated_by=1)
-            self.session.add(settings)
-            await self.session.commit()
-            await self.session.refresh(settings)
+        return [
+            ApprovalSettingsResponse.model_validate(s, from_attributes=True) 
+            for s in settings
+        ]
+    
+    async def get_approval_setting(
+        self, 
+        setting_id: int
+    ) -> Optional[ApprovalSettingsResponse]:
+        """Get a specific approval setting by ID"""
+        result = await self.session.execute(
+            select(ApprovalSettings).where(ApprovalSettings.id == setting_id)
+        )
+        setting = result.scalar_one_or_none()
         
-        return {
-            "id": settings.id,
-            "is_enabled": settings.is_enabled,
-            "updated_at": settings.updated_at
-        }
+        if setting:
+            return ApprovalSettingsResponse.model_validate(setting, from_attributes=True)
+        return None
 
-    async def update_approval_settings(self, is_enabled: bool, user_id: int) -> Dict[str, Any]:
-        """Enable or disable approval system"""
+    async def create_or_update_approval_setting(
+        self, 
+        setting_data: ApprovalSettingsCreate, 
+        user_id: int
+    ) -> ApprovalSettingsResponse:
+        """Create or update a specific approval setting"""
+        # Check if setting exists
         result = await self.session.execute(
-            select(ApprovalSettings).where(ApprovalSettings.id == 1)
+            select(ApprovalSettings).where(
+                ApprovalSettings.module == setting_data.module,
+                ApprovalSettings.action_type == setting_data.action_type
+            )
         )
-        settings = result.scalar_one_or_none()
+        setting = result.scalar_one_or_none()
         
-        if not settings:
-            settings = ApprovalSettings(id=1, is_enabled=is_enabled, updated_by=user_id)
-            self.session.add(settings)
+        if setting:
+            # Update existing
+            setting.is_enabled = setting_data.is_enabled
+            setting.updated_by = user_id
+            setting.updated_at = datetime.now(timezone.utc)
         else:
-            settings.is_enabled = is_enabled
-            settings.updated_by = user_id
-            settings.updated_at = datetime.now(timezone.utc)
+            # Create new
+            setting = ApprovalSettings(
+                module=setting_data.module,
+                action_type=setting_data.action_type,
+                is_enabled=setting_data.is_enabled,
+                updated_by=user_id
+            )
+            self.session.add(setting)
         
         await self.session.commit()
-        await self.session.refresh(settings)
+        await self.session.refresh(setting)
         
-        logger.info(f"Approval system {'enabled' if is_enabled else 'disabled'} by user {user_id}")
-        return {
-            "id": settings.id,
-            "is_enabled": settings.is_enabled,
-            "updated_at": settings.updated_at
-        }
+        logger.info(
+            f"Approval setting {'enabled' if setting_data.is_enabled else 'disabled'} "
+            f"for {setting_data.module}.{setting_data.action_type.value} by user {user_id}"
+        )
+        return ApprovalSettingsResponse.model_validate(setting, from_attributes=True)
 
-    async def is_approval_enabled(self) -> bool:
-        """Check if approval system is enabled"""
-        settings = await self.get_approval_settings()
-        return settings["is_enabled"]
+    async def is_approval_enabled(
+        self, 
+        module: str, 
+        action_type: ApprovalRequestType
+    ) -> bool:
+        """Check if approval is enabled for specific module and action type"""
+        result = await self.session.execute(
+            select(ApprovalSettings).where(
+                ApprovalSettings.module == module.upper(),
+                ApprovalSettings.action_type == action_type,
+                ApprovalSettings.is_enabled == True
+            )
+        )
+        setting = result.scalar_one_or_none()
+        return setting is not None
     
     # endregion
 
     # region ========== Approval Members ==========
 
-    async def add_approval_member(self, data: ApprovalMemberCreate, added_by: int) -> ApprovalMemberResponse:
-        """Add a new approval member for specific module"""
+    async def add_approval_member(
+        self, 
+        data: ApprovalMemberCreate, 
+        added_by: int
+    ) -> ApprovalMemberResponse:
+        """Add a new approval member for specific module and action types"""
         try:
             # Validate employee exists and is active
             emp_result = await self.session.execute(
@@ -102,7 +152,7 @@ class ApprovalService:
                     detail="Employee not found or inactive"
                 )
             
-            # Check if already a member for this module with overlapping action types
+            # Check if already a member for this module
             existing_result = await self.session.execute(
                 select(ApprovalMember).where(
                     ApprovalMember.employee_id == data.employee_id,
@@ -113,15 +163,28 @@ class ApprovalService:
             existing = existing_result.scalar_one_or_none()
             
             if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Employee is already an approval member for {data.module}"
+                # Update action types if member already exists
+                existing_action_types = set(existing.action_types or [])
+                new_action_types = set(data.action_types)
+                combined_action_types = list(existing_action_types | new_action_types)
+                
+                existing.action_types = combined_action_types
+                existing.updated_at = datetime.now(timezone.utc)
+                
+                await self.session.commit()
+                await self.session.refresh(existing, attribute_names=["employee"])
+                
+                logger.info(
+                    f"Approval member updated: Employee {data.employee_id} "
+                    f"for {data.module} with action types {combined_action_types}"
                 )
+                return ApprovalMemberResponse.model_validate(existing, from_attributes=True)
             
-            # Create approval member
+            # Create new approval member
             approval_member = ApprovalMember(
                 employee_id=data.employee_id,
                 module=data.module,
+                action_types=data.action_types,
                 added_by=added_by,
                 created_by=added_by
             )
@@ -130,7 +193,8 @@ class ApprovalService:
             await self.session.refresh(approval_member, attribute_names=["employee"])
             
             logger.info(
-                f"Approval member added: Employee {data.employee_id} for {data.module} by user {added_by}"
+                f"Approval member added: Employee {data.employee_id} "
+                f"for {data.module} with action types {data.action_types}"
             )
             return ApprovalMemberResponse.model_validate(approval_member, from_attributes=True)
             
@@ -150,7 +214,7 @@ class ApprovalService:
         data: ApprovalMemberUpdate, 
         updated_by: int
     ) -> ApprovalMemberResponse:
-        """Update approval member's module or active status"""
+        """Update approval member's module, action types, or active status"""
         try:
             result = await self.session.execute(
                 select(ApprovalMember)
@@ -168,8 +232,12 @@ class ApprovalService:
             # Update fields
             if data.module is not None:
                 member.module = data.module
+            if data.action_types is not None:
+                member.action_types = data.action_types
             if data.is_active is not None:
                 member.is_active = data.is_active
+            
+            member.updated_at = datetime.now(timezone.utc)
             
             await self.session.commit()
             await self.session.refresh(member)
@@ -187,8 +255,13 @@ class ApprovalService:
                 detail="Error updating approval member"
             )
 
-    async def remove_approval_member(self, member_id: int, module: str, removed_by: int) -> bool:
-        """Remove an approval member for a specific module and their pending responses"""
+    async def remove_approval_member(
+        self, 
+        member_id: int, 
+        module: str, 
+        removed_by: int
+    ) -> bool:
+        """Remove an approval member for a specific module"""
         try:
             result = await self.session.execute(
                 select(ApprovalMember).where(
@@ -204,7 +277,7 @@ class ApprovalService:
                     detail=f"Approval member not found for module {module}"
                 )
             
-            # Delete all pending approval responses for this member and module
+            # Delete all pending approval responses for this member
             await self.session.execute(
                 delete(ApprovalResponse).where(
                     ApprovalResponse.approval_member_id == member_id
@@ -215,17 +288,20 @@ class ApprovalService:
             await self.session.delete(member)
             await self.session.commit()
             
-            logger.info(f"Approval member {member_id} for module {module} removed by user {removed_by}")
+            logger.info(
+                f"Approval member {member_id} for module {module} "
+                f"removed by user {removed_by}"
+            )
             return True
             
         except HTTPException:
             raise
         except Exception as e:
             await self.session.rollback()
-            logger.error(f"Error removing approval member for module {module}: {e}")
+            logger.error(f"Error removing approval member: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error removing approval member for module {module}"
+                detail="Error removing approval member"
             )
 
     async def get_approval_members(
@@ -233,9 +309,10 @@ class ApprovalService:
         page_index: int = 1,
         page_size: int = 100,
         module: Optional[str] = None,
+        action_type: Optional[ApprovalRequestType] = None,
         is_active: Optional[bool] = True
     ) -> Dict[str, Any]:
-        """Get paginated approval members filtered by module and/or active status"""
+        """Get paginated approval members with filtering"""
         try:
             conditions = []
             if is_active is not None:
@@ -260,6 +337,13 @@ class ApprovalService:
             )
             members = result.scalars().all()
 
+            # Filter by action_type if specified
+            if action_type:
+                members = [
+                    m for m in members 
+                    if action_type.value in (m.action_types or [])
+                ]
+
             return {
                 "page_index": page_index,
                 "page_size": page_size,
@@ -277,42 +361,6 @@ class ApprovalService:
                 "count": 0,
                 "data": []
             }
-
-    async def get_approval_members_by_module(self) -> Dict[str, ApprovalMembersByModule]:
-        """Get approval members grouped by module"""
-        try:
-            result = await self.session.execute(
-                select(ApprovalMember)
-                .options(selectinload(ApprovalMember.employee))
-                .where(ApprovalMember.is_active == True)
-                .order_by(ApprovalMember.module, ApprovalMember.created_at.desc())
-            )
-            members = result.scalars().all()
-            
-            # Group by module
-            grouped = {}
-            for member in members:
-                module = member.module
-                if module not in grouped:
-                    grouped[module] = []
-                grouped[module].append(
-                    ApprovalMemberResponse.model_validate(member, from_attributes=True)
-                )
-            
-            # Convert to response format
-            response = {}
-            for module, member_list in grouped.items():
-                response[module] = ApprovalMembersByModule(
-                    module=module,
-                    members=member_list,
-                    total=len(member_list)
-                )
-            
-            return response
-            
-        except Exception as e:
-            logger.error(f"Error getting members by module: {e}")
-            return {}
     
     # endregion
 
@@ -328,21 +376,20 @@ class ApprovalService:
         remarks: Optional[str] = None,
     ) -> ApprovalRequestResponse:
         """
-        Create a new approval request and notify members
-        NOW FILTERS MEMBERS BY MODULE AND ACTION TYPE
+        Create a new approval request filtered by module AND action type
         """
         try:
-            # Check if approval system is enabled
-            if not await self.is_approval_enabled():
+            # Check if approval system is enabled for this module and action type
+            if not await self.is_approval_enabled(module, request_type):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Approval system is not enabled"
+                    detail=f"Approval system is not enabled for {module}.{request_type.value}"
                 )
             
-            # Serialize dates in request_data to ISO format strings
+            # Serialize dates in request_data
             serialized_request_data = serialize_dates(request_data)
             
-            # Get approval members for this specific module and action type
+            # Get approval members for this module who can approve this action type
             members_result = await self.session.execute(
                 select(ApprovalMember)
                 .options(selectinload(ApprovalMember.employee))
@@ -353,10 +400,16 @@ class ApprovalService:
             )
             all_members = members_result.scalars().all()
             
-            if not all_members:
+            # Filter members who have this action type in their action_types
+            eligible_members = [
+                m for m in all_members 
+                if request_type.value in (m.action_types or [])
+            ]
+            
+            if not eligible_members:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"No approval members configured for {module}"
+                    detail=f"No approval members configured for {module}.{request_type.value}"
                 )
             
             # Create approval request
@@ -371,8 +424,8 @@ class ApprovalService:
             self.session.add(approval_request)
             await self.session.flush()
             
-            # Create approval responses for each member
-            for member in all_members:
+            # Create approval responses for eligible members
+            for member in eligible_members:
                 response = ApprovalResponse(
                     approval_request_id=approval_request.id,
                     approval_member_id=member.id,
@@ -386,13 +439,17 @@ class ApprovalService:
                 attribute_names=["employee", "approval_responses"]
             )
             
-            # Send WhatsApp notifications to all members
-            await self._notify_approval_members(all_members, request_type, approval_request.id)
+            # Send WhatsApp notifications
+            await self._notify_approval_members(
+                eligible_members, 
+                request_type, 
+                approval_request.id
+            )
             
             logger.info(
-                f"Approval request created: Type={request_type}, Module={module}, "
-                f"Employee={employee_id}, RequestID={approval_request.id}, "
-                f"Members={len(all_members)}"
+                f"Approval request created: Type={request_type.value}, "
+                f"Module={module}, Employee={employee_id}, "
+                f"RequestID={approval_request.id}, Members={len(eligible_members)}"
             )
             
             return ApprovalRequestResponse.model_validate(
@@ -452,7 +509,6 @@ class ApprovalService:
                     member_response = response
                     break
             
-            logger.info(f"Member response found: {member_response} member_employee_id={member_employee_id}")
             if not member_response:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -490,7 +546,10 @@ class ApprovalService:
             if member_response.status == ApprovalResponseStatus.REJECTED:
                 request.status = ApprovalStatus.REJECTED
                 request.rejected_at = datetime.now(timezone.utc)
-                logger.info(f"Approval request {request_id} rejected by member {member_employee_id}")
+                logger.info(
+                    f"Approval request {request_id} rejected by "
+                    f"member {member_employee_id}"
+                )
             
             # If all approved, mark request as approved
             elif pending_count == 0:
@@ -506,8 +565,9 @@ class ApprovalService:
             
             await self.session.commit()
                        
-             # If approved and more members are pending, notify next member
-            if member_response.status == ApprovalResponseStatus.APPROVED and pending_count > 0:
+            # If approved and more members pending, notify next member
+            if (member_response.status == ApprovalResponseStatus.APPROVED 
+                and pending_count > 0):
                 await self._notify_next_pending_member(request_id)
 
             # Auto-execute if fully approved
@@ -516,16 +576,15 @@ class ApprovalService:
                 await executor.execute_if_fully_approved(request_id, user_id)
 
                 result = await self.session.execute(
-                select(ApprovalRequest)
-                .options(
-                    selectinload(ApprovalRequest.employee),
-                    selectinload(ApprovalRequest.approval_responses)
-                    .selectinload(ApprovalResponse.approval_member)
-                    .selectinload(ApprovalMember.employee)
+                    select(ApprovalRequest)
+                    .options(
+                        selectinload(ApprovalRequest.employee),
+                        selectinload(ApprovalRequest.approval_responses)
+                        .selectinload(ApprovalResponse.approval_member)
+                        .selectinload(ApprovalMember.employee)
                     )
                     .where(ApprovalRequest.id == request_id)
                 )
-
                 request = result.scalar_one_or_none()
             else: 
                 await self.session.refresh(request, attribute_names=["updated_at"])
@@ -548,17 +607,19 @@ class ApprovalService:
     ) -> List[ApprovalRequestResponse]:
         """Get all pending approval requests for a specific member"""
         try:
-            # First get the approval member
+            # Get all approval members for this employee
             member_result = await self.session.execute(
                 select(ApprovalMember).where(
                     ApprovalMember.employee_id == member_employee_id,
                     ApprovalMember.is_active == True
                 )
             )
-            member = member_result.scalar_one_or_none()
+            members = member_result.scalars().all()
             
-            if not member:
+            if not members:
                 return []
+            
+            member_ids = [m.id for m in members]
             
             # Get all pending requests where this member hasn't responded
             result = await self.session.execute(
@@ -572,7 +633,7 @@ class ApprovalService:
                 )
                 .where(
                     ApprovalRequest.status == ApprovalStatus.PENDING,
-                    ApprovalResponse.approval_member_id == member.id,
+                    ApprovalResponse.approval_member_id.in_(member_ids),
                     ApprovalResponse.status == ApprovalResponseStatus.PENDING
                 )
                 .order_by(ApprovalRequest.created_at.desc())
@@ -649,7 +710,10 @@ class ApprovalService:
                 "data": []
             }
 
-    async def get_approval_request(self, request_id: int) -> Optional[ApprovalRequestResponse]:
+    async def get_approval_request(
+        self, 
+        request_id: int
+    ) -> Optional[ApprovalRequestResponse]:
         """Get a specific approval request"""
         try:
             result = await self.session.execute(
@@ -665,7 +729,10 @@ class ApprovalService:
             request = result.scalar_one_or_none()
             
             if request:
-                return ApprovalRequestResponse.model_validate(request, from_attributes=True)
+                return ApprovalRequestResponse.model_validate(
+                    request, 
+                    from_attributes=True
+                )
             return None
             
         except Exception as e:
@@ -675,6 +742,7 @@ class ApprovalService:
     # endregion
 
     # region ========== WhatsApp Notifications ==========
+    
     async def _notify_approval_members(
         self,
         members: List[ApprovalMember],
@@ -704,16 +772,11 @@ class ApprovalService:
                     )
                     
         except Exception as e:
-            # Don't fail the whole process if WhatsApp fails
             logger.error(f"Error sending WhatsApp notifications: {e}")
 
     async def _notify_next_pending_member(self, request_id: int):
-        """
-        Notify the next pending approval member after current one approves
-        This is called after an approval is processed
-        """
+        """Notify the next pending approval member"""
         try:
-            # Get the approval request with all responses
             result = await self.session.execute(
                 select(ApprovalRequest)
                 .options(
@@ -726,24 +789,27 @@ class ApprovalService:
             request = result.scalar_one_or_none()
             
             if not request:
-                logger.error(f"Approval request {request_id} not found")
                 return
             
-            # Find the first pending response
-            next_pending_response = None
+            # Find first pending response
+            next_pending = None
             for response in request.approval_responses:
                 if response.status == ApprovalResponseStatus.PENDING:
-                    next_pending_response = response
+                    next_pending = response
                     break
             
-            if next_pending_response and next_pending_response.approval_member.employee:
-                member = next_pending_response.approval_member
+            if (next_pending and 
+                next_pending.approval_member.employee and
+                next_pending.approval_member.employee.phone):
+                member = next_pending.approval_member
                 message = (
                     f"Dear {member.employee.first_name},\n\n"
-                    f"An approval request has been approved by the previous reviewer and now requires your attention.\n\n"
+                    f"An approval request has been approved by the previous "
+                    f"reviewer and now requires your attention.\n\n"
                     f"Type: {request.request_type.value}\n"
                     f"Request ID: {request.id}\n\n"
-                    f"Please login to the system to review and approve or reject this request."
+                    f"Please login to the system to review and approve or "
+                    f"reject this request."
                 )
                 
                 await self.whatsapp_client.send(
@@ -752,14 +818,11 @@ class ApprovalService:
                 )
                 
                 logger.info(
-                    f"WhatsApp notification sent to next reviewer {member.employee.phone} "
-                    f"for request {request_id}"
+                    f"WhatsApp notification sent to next reviewer "
+                    f"{member.employee.phone} for request {request_id}"
                 )
-            else:
-                logger.info(f"No more pending members for request {request_id}")
                 
         except Exception as e:
-            # Don't fail the whole process if WhatsApp fails
             logger.error(f"Error sending next member notification: {e}")
 
     # endregion

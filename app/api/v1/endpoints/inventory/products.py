@@ -11,7 +11,7 @@ from app.models.inventory.product import Product
 from app.models.inventory.product_item import ProductItem
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.product_service import ProductService
-from app.schemas.inventory.product_schema import ProductResponse, ProductCreateForm, ProductUpdateForm
+from app.schemas.inventory.product_schema import ProductItemCreate, ProductResponse, ProductCreateForm, ProductUpdateForm
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
 
@@ -74,6 +74,44 @@ async def create_product(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create product"
         )
+
+@router.post("/{product_id}/items", response_model=dict)
+async def add_item_to_product(
+    product_id: int,
+    item_data: ProductItemCreate,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Add item (ingredient) to existing product"""
+    try:
+        service = ProductService(db)
+        success = await service.add_item_to_product(product_id, item_data, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to add item to product")
+        return {"message": "Item added to product successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Product not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{product_id}/items/{item_id}")
+async def remove_item_from_product(
+    product_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove item (ingredient) from product"""
+    try:
+        service = ProductService(db)
+        success = await service.remove_item_from_product(product_id, item_id, current_user.id)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to remove item from product")
+        return {"message": "Item removed from product successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Product not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/", response_model=PaginatedResponse[ProductResponse])
 async def get_products(

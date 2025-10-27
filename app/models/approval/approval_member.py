@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, String
+from sqlalchemy import JSON, Column, Integer, Boolean, ForeignKey, String
 from sqlalchemy.orm import relationship
 from app.db.base import BaseModel
 
@@ -6,6 +6,7 @@ class ApprovalMember(BaseModel):
     __tablename__ = 'approval_members'
     
     module = Column(String(50), nullable=False)  # HR, INVENTORY, PURCHASE, etc.
+    action_types = Column(JSON, nullable=False)  # ["SALARY", "SHIFT", "DAYOFF", etc.]
     employee_id = Column(Integer, ForeignKey('employees.id'), nullable=False)
     added_by = Column(Integer, nullable=False)  # HR Manager user ID
     is_active = Column(Boolean, default=True)

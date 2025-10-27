@@ -1,17 +1,21 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.shift_service import ShiftService
 from app.services.approval.approval_service import ApprovalService
-from app.models.shared.enums import ApprovalRequestType, ApprovalStatus
+from app.models.shared.enums import ApprovalRequestType
 from app.schemas.hr.shift_schema import (
-    EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, ShiftTypeResponse,
+    EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, 
+    ShiftTypeUpdate, ShiftTypeResponse,
     UserShiftCreate, UserShiftUpdate, UserShiftResponse
 )
+from app.models.hr.user_shift import UserShift
 from app.models.auth.user import User
 
 router = APIRouter()
@@ -78,16 +82,6 @@ async def get_employee_current_shift(
     service = ShiftService(session)
     return await service.get_employee_current_shift(employee_id)
 
-@router.get("/employee/{employee_id}/history", response_model=List[UserShiftResponse])
-async def get_employee_shift_history(
-    employee_id: int,
-    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
-):
-    """Get employee's shift history"""
-    service = ShiftService(session)
-    return await service.get_employee_shift_history(employee_id)
-
 # endregion 
 
 # region User Shift Endpoints with Approval System
@@ -104,8 +98,8 @@ async def assign_shift_to_employee(
     approval_service = ApprovalService(session)
     shift_service = ShiftService(session)
     
-    # Check if approval system is enabled
-    if await approval_service.is_approval_enabled():
+    # Check if approval system is enabled for HR.SHIFT
+    if await approval_service.is_approval_enabled("HR", ApprovalRequestType.SHIFT):
         # Create approval request
         request_data = assignment.dict()
         approval_request = await approval_service.create_approval_request(
@@ -145,12 +139,9 @@ async def update_user_shift(
     approval_service = ApprovalService(session)
     shift_service = ShiftService(session)
     
-    # Check if approval system is enabled
-    if await approval_service.is_approval_enabled():
+    # Check if approval system is enabled for HR.SHIFT
+    if await approval_service.is_approval_enabled("HR", ApprovalRequestType.SHIFT):
         # Get the existing shift to include employee_id
-        from sqlalchemy import select
-        from app.models.hr.user_shift import UserShift
-        
         result = await session.execute(
             select(UserShift).where(UserShift.id == user_shift_id)
         )
@@ -180,7 +171,9 @@ async def update_user_shift(
         }
     else:
         # Direct update without approval
-        updated_shift = await shift_service.update_user_shift(user_shift_id, shift_update, current_user.id)
+        updated_shift = await shift_service.update_user_shift(
+            user_shift_id, shift_update, current_user.id
+        )
         return {
             "message": "Shift updated successfully",
             "status": "completed",
@@ -191,16 +184,14 @@ async def update_user_shift(
 async def get_employee_shifts(
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
-    search: Optional[str] = Query(None, description="Search by employee name or employee ID"),
-    start_date: Optional[date] = Query(None, description="Filter shifts by effective_date >= start_date"),
-    end_date: Optional[date] = Query(None, description="Filter shifts by effective_date <= end_date"),
+    search: Optional[str] = Query(None, description="Search by employee name or ID"),
+    start_date: Optional[date] = Query(None, description="Filter by effective_date >= start_date"),
+    end_date: Optional[date] = Query(None, description="Filter by effective_date <= end_date"),
     is_active: Optional[bool] = Query(None, description="Filter by employee active status"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get employee shifts summary grouped by employee (one row per employee).
-    """
+    """Get employee shifts summary grouped by employee"""
     service = ShiftService(session)
     return await service.get_employee_shifts(
         page_index=page_index,
@@ -217,9 +208,7 @@ async def get_employee_shift_details(
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Get detailed shift information for a specific employee.
-    """
+    """Get detailed shift information for a specific employee"""
     service = ShiftService(session)
     detail = await service.get_employee_shift_details(employee_id)
     if not detail:

@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, func, or_, update
 from decimal import Decimal
 from app.models.inventory.product import Product
 from app.models.inventory.product_item import ProductItem
@@ -88,6 +88,121 @@ class ProductService:
         )
         return result.scalars().unique().one()
 
+    async def add_item_to_product(self, product_id: int, item_data: ProductItemCreate, current_user_id: int) -> bool:
+        """Add item (ingredient) to existing product"""
+        product = await self.get_product_by_id(product_id)
+        if not product:
+            raise NotFoundError("Product not found")
+
+        # Validate item exists and is active
+        item_result = await self.db.execute(
+            select(Item).where(
+                and_(
+                    Item.id == item_data.item_id,
+                    Item.is_active == True
+                )
+            )
+        )
+        item = item_result.scalar_one_or_none()
+        if not item:
+            raise ValidationError(f"Item {item_data.item_id} not found or inactive")
+
+        # Check if item already exists in product
+        existing_item = await self.db.execute(
+            select(ProductItem).where(
+                and_(
+                    ProductItem.product_id == product_id,
+                    ProductItem.item_id == item_data.item_id,
+                    ProductItem.is_deleted == False
+                )
+            )
+        )
+        if existing_item.scalar_one_or_none():
+            raise ValidationError("Item already exists in this product")
+
+        # Use provided unit_cost or item's current unit_cost
+        unit_cost = item_data.unit_cost or item.unit_cost or Decimal('0.00')
+
+        # Create product item
+        product_item = ProductItem(
+            product_id=product_id,
+            item_id=item_data.item_id,
+            quantity=item_data.quantity,
+            unit_cost=unit_cost,
+            notes=item_data.notes,
+            created_by=current_user_id
+        )
+        
+        self.db.add(product_item)
+        
+        # Recalculate cost price
+        await self._recalculate_product_cost(product_id)
+        
+        await self.db.commit()
+        return True
+
+    async def remove_item_from_product(self, product_id: int, item_id: int, current_user_id: int) -> bool:
+        """Remove item (ingredient) from product"""
+        product = await self.get_product_by_id(product_id)
+        if not product:
+            raise NotFoundError("Product not found")
+
+        # Find the product item to remove
+        product_item_result = await self.db.execute(
+            select(ProductItem).where(
+                and_(
+                    ProductItem.product_id == product_id,
+                    ProductItem.id == item_id,
+                    ProductItem.is_deleted == False
+                )
+            )
+        )
+        product_item = product_item_result.scalar_one_or_none()
+        
+        if not product_item:
+            raise NotFoundError("Product item not found")
+
+        # Delete the product item
+        await self.db.execute(
+            ProductItem.__table__.delete().where(
+                and_(
+                    ProductItem.product_id == product_id,
+                    ProductItem.id == item_id
+                )
+            )
+        )
+        
+        # Recalculate cost price
+        await self._recalculate_product_cost(product_id)
+        
+        await self.db.commit()
+        return True
+
+    async def _recalculate_product_cost(self, product_id: int):
+        """Recalculate and update product cost price based on current product items"""
+        # Get all product items for this product
+        result = await self.db.execute(
+            select(ProductItem).where(
+                and_(
+                    ProductItem.product_id == product_id,
+                    ProductItem.is_deleted == False
+                )
+            )
+        )
+        product_items = result.scalars().all()
+        
+        total_cost = Decimal('0.00')
+        for product_item in product_items:
+            item_cost = product_item.unit_cost * product_item.quantity
+            total_cost += item_cost
+        
+        # Update product cost price
+        await self.db.execute(
+            update(Product)
+            .where(Product.id == product_id)
+            .values(cost_price=total_cost)
+        )    
+    
     async def get_product_by_id(self, product_id: int) -> Optional[Product]:
         """Get product by ID with all relationships"""
         result = await self.db.execute(
