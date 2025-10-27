@@ -184,6 +184,9 @@ class ApprovalRequestType(str, Enum):
     SHIFT = "SHIFT"
     SALARY = "SALARY"
     DAYOFF = "DAYOFF"
+    EMPLOYEE="EMPLOYEE"
+    ATTENDANCE="ATTENDANCE"
+    EMPLOYEE_DEDUCTION="EMPLOYEE_DEDUCTION"
 
 class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
