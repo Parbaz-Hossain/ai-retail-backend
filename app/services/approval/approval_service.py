@@ -56,6 +56,20 @@ class ApprovalService:
             ApprovalSettingsResponse.model_validate(s, from_attributes=True) 
             for s in settings
         ]
+    
+    async def get_approval_setting(
+        self, 
+        setting_id: int
+    ) -> Optional[ApprovalSettingsResponse]:
+        """Get a specific approval setting by ID"""
+        result = await self.session.execute(
+            select(ApprovalSettings).where(ApprovalSettings.id == setting_id)
+        )
+        setting = result.scalar_one_or_none()
+        
+        if setting:
+            return ApprovalSettingsResponse.model_validate(setting, from_attributes=True)
+        return None
 
     async def create_or_update_approval_setting(
         self, 

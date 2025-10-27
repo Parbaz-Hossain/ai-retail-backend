@@ -45,6 +45,21 @@ async def get_approval_settings(
         action_type=action_type     
     )
 
+@router.get("/settings/{setting_id}", response_model=ApprovalSettingsResponse)
+async def get_approval_setting(
+    setting_id: int = Path(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get specific approval setting by ID"""
+    service = ApprovalService(session)
+    setting = await service.get_approval_setting(setting_id) 
+    
+    if not setting:
+        raise HTTPException(status_code=404, detail="Approval setting not found")
+    
+    return setting
+
 @router.post("/settings", response_model=ApprovalSettingsResponse)
 async def create_or_update_approval_setting(
     setting: ApprovalSettingsCreate,
