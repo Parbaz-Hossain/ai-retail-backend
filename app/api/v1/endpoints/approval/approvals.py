@@ -166,6 +166,21 @@ async def get_approval_members(
         is_active=is_active
     )
 
+@router.get("/members/{member_id}", response_model=ApprovalMemberResponse)
+async def get_approval_member(
+    member_id: int = Path(...),
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get specific approval member by ID"""
+    service = ApprovalService(session)
+    member = await service.get_approval_member(member_id)
+    
+    if not member:
+        raise HTTPException(status_code=404, detail="Approval member not found")
+    
+    return member
+
 # endregion
 
 # region ========== Approval Requests ==========
