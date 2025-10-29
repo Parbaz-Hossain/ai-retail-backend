@@ -362,6 +362,27 @@ class ApprovalService:
                 "data": []
             }
     
+    async def get_approval_member(
+        self, 
+        member_id: int
+    ) -> Optional[ApprovalMemberResponse]:
+        """Get a specific approval member by ID"""
+        try:
+            result = await self.session.execute(
+                select(ApprovalMember)
+                .options(selectinload(ApprovalMember.employee))
+                .where(ApprovalMember.id == member_id)
+            )
+            member = result.scalar_one_or_none()
+            
+            if member:
+                return ApprovalMemberResponse.model_validate(member, from_attributes=True)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting approval member: {e}")
+            return None
+
     # endregion
 
     # region ========== Approval Requests ==========
