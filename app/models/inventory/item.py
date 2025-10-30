@@ -38,3 +38,7 @@ class Item(BaseModel):
     reorder_request_items = relationship("ReorderRequestItem", back_populates="item")
     transfer_items = relationship("TransferItem", back_populates="item")
     inventory_count_items = relationship("InventoryCountItem", back_populates="item")
+    # Ingredients relationship
+    ingredients = relationship("ItemIngredient", foreign_keys="[ItemIngredient.item_id]", back_populates="item", cascade="all, delete-orphan")   
+    used_as_ingredient_in = relationship("ItemIngredient", foreign_keys="[ItemIngredient.ingredient_item_id]", back_populates="ingredient_item")
+    

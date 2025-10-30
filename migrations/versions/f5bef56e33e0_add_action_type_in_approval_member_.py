@@ -22,7 +22,7 @@ def upgrade() -> None:
     # Check and add action_types to approval_members
     columns = [col['name'] for col in inspector.get_columns('approval_members')]
     if 'action_types' not in columns:
-        op.add_column('approval_members', sa.Column('action_types', sa.JSON(), nullable=True))
+        op.add_column('approval_members', sa.Column('action_types', sa.JSON(), nullable=False))
         print("✓ [f5bef56e33e0] Added action_types to approval_members")
     else:
         print("✓ [f5bef56e33e0] action_types already exists - skipping")
@@ -31,7 +31,7 @@ def upgrade() -> None:
     columns = [col['name'] for col in inspector.get_columns('approval_settings')]
     
     if 'module' not in columns:
-        op.add_column('approval_settings', sa.Column('module', sa.String(length=50), nullable=True))
+        op.add_column('approval_settings', sa.Column('module', sa.String(length=50), nullable=False))
         print("✓ [f5bef56e33e0] Added module to approval_settings")
     else:
         print("✓ [f5bef56e33e0] module already exists - skipping")
@@ -39,7 +39,7 @@ def upgrade() -> None:
     if 'action_type' not in columns:
         op.add_column('approval_settings', sa.Column('action_type', 
             sa.Enum('SHIFT', 'SALARY', 'DAYOFF', 'EMPLOYEE', 'ATTENDANCE', 'EMPLOYEE_DEDUCTION', 
-                    name='approvalrequesttype'), nullable=True))
+                    name='approvalrequesttype'), nullable=False))
         print("✓ [f5bef56e33e0] Added action_type to approval_settings")
     else:
         print("✓ [f5bef56e33e0] action_type already exists - skipping")
