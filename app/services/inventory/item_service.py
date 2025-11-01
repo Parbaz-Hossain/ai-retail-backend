@@ -4,12 +4,15 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_, func, or_
 from app.models.inventory.item import Item
+from app.models.inventory.item_ingredient import ItemIngredient
 from app.models.inventory.stock_level import StockLevel
 from app.models.inventory.category import Category
 from app.models.inventory.stock_type import StockType
 from app.schemas.inventory.item import ItemCreate, ItemUpdate
 from app.core.exceptions import NotFoundError, ValidationError
 import uuid
+
+from app.schemas.inventory.item_ingredient_schema import ItemIngredientCreate
 
 class ItemService:
     def __init__(self, db: AsyncSession):
@@ -135,6 +138,104 @@ class ItemService:
                 "count": 0,
                 "data": []
             }
+
+    async def add_ingredient_to_item(
+        self,
+        item_id: int,
+        ingredient_data: ItemIngredientCreate,
+        current_user_id: int
+    ) -> ItemIngredient:
+        """Add a single ingredient to an item"""
+        
+        # Validate parent item exists
+        item = await self.get_item_by_id(item_id)
+        if not item:
+            raise NotFoundError("Item not found")
+        
+        # Validate ingredient item exists
+        ingredient_item_result = await self.db.execute(
+            select(Item).where(
+                and_(
+                    Item.id == ingredient_data.ingredient_item_id,
+                    Item.is_active == True
+                )
+            )
+        )
+        ingredient_item = ingredient_item_result.scalar_one_or_none()
+        if not ingredient_item:
+            raise NotFoundError("Ingredient item not found")
+        
+        # Prevent self-reference
+        if item_id == ingredient_data.ingredient_item_id:
+            raise ValidationError("Item cannot be its own ingredient")
+        
+        # Check if ingredient already exists
+        existing = await self.db.execute(
+            select(ItemIngredient).where(
+                and_(
+                    ItemIngredient.item_id == item_id,
+                    ItemIngredient.ingredient_item_id == ingredient_data.ingredient_item_id,
+                    ItemIngredient.is_active == True
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise ValidationError("This ingredient already exists for this item")
+        
+        # Create ingredient
+        ingredient = ItemIngredient(
+            item_id=item_id,
+            ingredient_item_id=ingredient_data.ingredient_item_id,
+            quantity=ingredient_data.quantity,
+            unit_type=ingredient_data.unit_type,
+            description=ingredient_data.description,
+            created_by=current_user_id
+        )
+        
+        self.db.add(ingredient)
+        await self.db.commit()
+        await self.db.flush()
+        
+        # Fetch with relationships
+        result = await self.db.execute(
+            select(ItemIngredient)
+            .options(selectinload(ItemIngredient.ingredient_item))
+            .where(ItemIngredient.id == ingredient.id)
+        )
+        
+        return result.scalar_one()
+
+    async def remove_ingredient_from_item(
+        self,
+        item_id: int,
+        ingredient_id: int,
+        current_user_id: int
+    ) -> bool:
+        """Remove a single ingredient from an item (soft delete)"""
+        
+        # Validate item exists
+        item = await self.get_item_by_id(item_id)
+        if not item:
+            raise NotFoundError("Item not found")
+        
+        # Get ingredient
+        ingredient_result = await self.db.execute(
+            select(ItemIngredient).where(
+                and_(
+                    ItemIngredient.id == ingredient_id,
+                    ItemIngredient.item_id == item_id,
+                    ItemIngredient.is_active == True
+                )
+            )
+        )
+        ingredient = ingredient_result.scalar_one_or_none()
+        if not ingredient:
+            raise NotFoundError("Ingredient not found")
+        
+        # Hard delete
+        await self.db.delete(ingredient)
+        await self.db.commit()
+        return True
 
     async def get_items_by_location_with_stock(self, location_id: int, include_zero: Optional[bool] = False) -> List[Item]:
         """
