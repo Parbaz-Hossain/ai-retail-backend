@@ -8,6 +8,7 @@ from typing import List, Optional
 from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
+from app.schemas.inventory.item_ingredient_schema import ItemIngredientCreate, ItemIngredientResponse
 from app.services.inventory.item_service import ItemService
 from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdateForm
 from app.schemas.inventory.stock_level import LowStockItem
@@ -104,6 +105,52 @@ async def get_items(
         low_stock_only=low_stock_only
     )
     return items
+
+@router.post("/{item_id}/ingredients", response_model=ItemIngredientResponse, status_code=status.HTTP_201_CREATED)
+async def add_ingredient_to_item(
+    item_id: int,
+    ingredient_data: ItemIngredientCreate,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Add a single ingredient to an item"""
+    try:
+        service = ItemService(db)
+        ingredient = await service.add_ingredient_to_item(item_id, ingredient_data, current_user.id)
+        return ingredient
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Item not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Add ingredient error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add ingredient"
+        )
+
+@router.delete("/{item_id}/ingredients/{ingredient_id}")
+async def remove_ingredient_from_item(
+    item_id: int,
+    ingredient_id: int,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Remove a single ingredient from an item"""
+    try:
+        service = ItemService(db)
+        await service.remove_ingredient_from_item(item_id, ingredient_id, current_user.id)
+        return {"message": "Ingredient removed successfully"}
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Item or ingredient not found")
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Remove ingredient error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove ingredient"
+        )
 
 @router.get("/by-location/{location_id}/dropdown", response_model=List[Item])
 async def get_items_by_location_for_dropdown(
