@@ -112,6 +112,24 @@ async def get_users_count(
             detail="Failed to get users count"
         )
 
+@router.get("/user_roles")
+async def get_user_roles(
+    session: AsyncSession = Depends(get_async_session),
+    current_user = Depends(get_current_user)
+):
+    """Get roles assigned to a user"""
+    try:
+        user_service = UserService(session)
+        user_role_names = await user_service.get_role_names_by_user(current_user.id)
+        return {"roles": user_role_names}       
+        
+    except Exception as e:
+        logger.error(f"Get user roles error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get user roles"
+        )
+
 # Export users to Excel
 @router.get("/export", response_class=StreamingResponse)
 async def export_users(
