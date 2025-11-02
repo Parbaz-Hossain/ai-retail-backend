@@ -19,6 +19,19 @@ class StockLevelRef(BaseModel):
     location_id: int
     current_stock: Decimal
     available_stock: Decimal
+
+class IngredientItemRef(BaseModel):
+    id: int
+    name: str
+    unit_type: UnitType
+
+class ItemIngredientsRef(BaseModel):
+    ingredient_item_id: int
+    ingredient_item: Optional[IngredientItemRef] = None
+    quantity: Optional[int] = None
+    unit_type: UnitType
+    description: Optional[str] = None
+
 # ---------------------------------------------------
 
 class ItemBase(BaseModel):
@@ -196,5 +209,12 @@ class Item(ItemInDB):
     category: Optional[CategoryRef] = None
     stock_type: Optional[StockTypeRef] = None
     stock_levels: Optional[List[StockLevelRef]] = None
+
+class ItemWithIngredient(ItemInDB):
+    # Use local Ref models to avoid importing other modules
+    category: Optional[CategoryRef] = None
+    stock_type: Optional[StockTypeRef] = None
+    stock_levels: Optional[List[StockLevelRef]] = None
+    ingredients: Optional[List[ItemIngredientsRef]] = None
 
 Item.model_rebuild() 

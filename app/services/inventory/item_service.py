@@ -63,7 +63,8 @@ class ItemService:
             .options(
                 selectinload(Item.category),
                 selectinload(Item.stock_type),
-                selectinload(Item.stock_levels).selectinload(StockLevel.location)
+                selectinload(Item.stock_levels).selectinload(StockLevel.location),
+                selectinload(Item.ingredients).selectinload(ItemIngredient.ingredient_item)
             )
             .where(and_(Item.id == item_id, Item.is_active == True))
         )
