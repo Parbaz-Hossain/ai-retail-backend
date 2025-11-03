@@ -26,6 +26,7 @@ class IngredientItemRef(BaseModel):
     unit_type: UnitType
 
 class ItemIngredientsRef(BaseModel):
+    id: int
     ingredient_item_id: int
     ingredient_item: Optional[IngredientItemRef] = None
     quantity: Optional[int] = None

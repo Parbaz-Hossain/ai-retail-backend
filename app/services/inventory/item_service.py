@@ -87,16 +87,16 @@ class ItemService:
         stock_type_id: Optional[int] = None,
         low_stock_only: bool = False
     ) -> Dict[str, Any]:
-        """Get items with pagination"""
+        """Get items with pagination (ordered by created_at desc)"""
         try:
-            query = select(Item).options(
+            base_query = select(Item).options(
                 selectinload(Item.category),
                 selectinload(Item.stock_type),
                 selectinload(Item.stock_levels)
             ).where(Item.is_active == True)
             
             if search:
-                query = query.where(
+                base_query = base_query.where(
                     or_(
                         Item.name.ilike(f"%{search}%"),
                         Item.item_code.ilike(f"%{search}%"),
@@ -105,25 +105,25 @@ class ItemService:
                 )
             
             if category_id:
-                query = query.where(Item.category_id == category_id)
+                base_query = base_query.where(Item.category_id == category_id)
                 
             if stock_type_id:
-                query = query.where(Item.stock_type_id == stock_type_id)
+                base_query = base_query.where(Item.stock_type_id == stock_type_id)
 
             if low_stock_only:
-                query = query.join(StockLevel).where(
+                base_query = base_query.join(StockLevel).where(
                     StockLevel.current_stock <= Item.reorder_point
                 )
             
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
+            # Get total count from base_query
+            count_query = select(func.count()).select_from(base_query.subquery())
             total_result = await self.db.execute(count_query)
             total = total_result.scalar() or 0
             
-            # Calculate offset and get data
+            # Calculate offset and get data (order by created_at desc)
             skip = (page_index - 1) * page_size
-            query = query.offset(skip).limit(page_size)
-            result = await self.db.execute(query)
+            data_query = base_query.order_by(Item.created_at.desc()).offset(skip).limit(page_size)
+            result = await self.db.execute(data_query)
             items = result.scalars().all()
             
             return {
@@ -132,7 +132,7 @@ class ItemService:
                 "count": total,
                 "data": items
             }
-        except Exception as e:
+        except Exception:
             return {
                 "page_index": page_index,
                 "page_size": page_size,
