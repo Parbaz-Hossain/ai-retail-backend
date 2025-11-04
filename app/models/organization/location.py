@@ -1,10 +1,13 @@
 from sqlalchemy import Boolean, Column, Numeric, String, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Uuid
+from uuid import uuid4
 from app.db.base import BaseModel
 
 class Location(BaseModel):
     __tablename__ = 'locations'
     
+    foodics_guid = Column(Uuid(as_uuid=True), unique=True, nullable=True)  # Foodics branch ID
     name = Column(String(100), nullable=False)
     location_type = Column(SQLEnum('WAREHOUSE', 'BRANCH', 'CENTRAL_KITCHEN', name='location_type', create_type=False), nullable=False)
     address = Column(Text)
@@ -29,3 +32,4 @@ class Location(BaseModel):
     inventory_counts = relationship("InventoryCount", back_populates="location")
     shipments_from = relationship("Shipment", foreign_keys="Shipment.from_location_id", back_populates="from_location")
     shipments_to = relationship("Shipment", foreign_keys="Shipment.to_location_id", back_populates="to_location")
+    orders = relationship("Order", back_populates="location")

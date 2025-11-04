@@ -5,7 +5,7 @@ from app.api.v1.endpoints.biometric import fingerprint
 from app.api.v1.endpoints.dashboard import dashboard
 from app.api.v1.endpoints.engagement import chat, faq, user_history
 from app.api.v1.endpoints.hr import attendance, deductions, employees, holidays, offdays, salary, shifts, tickets
-from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, inventory_mismatch_reasons, items, products, refill_kitchen, reorder_requests, stock_levels, stock_movements, stock_types, transfers
+from app.api.v1.endpoints.inventory import analytics, categories, inventory_counts, inventory_mismatch_reasons, items, orders, products, refill_kitchen, reorder_requests, stock_levels, stock_movements, stock_types, transfers
 from app.api.v1.endpoints.logistics import drivers, shipments, vehicles
 from app.api.v1.endpoints.notification import notifications
 from app.api.v1.endpoints.organization import departments, locations
@@ -53,6 +53,7 @@ api_router.include_router(stock_movements.router, prefix="/inventory/stock-movem
 api_router.include_router(stock_types.router, prefix="/inventory/stock-type", tags=["Inventory"])
 api_router.include_router(transfers.router, prefix="/inventory/transfer", tags=["Inventory"])
 api_router.include_router(refill_kitchen.router, prefix="/inventory/refill-kitchen", tags=["Inventory"])
+api_router.include_router(orders.router, prefix="/inventory/order", tags=["Inventory"])
 
 # Purchase routes
 api_router.include_router(goods_receipts.router, prefix="/purchase/goods-receipt", tags=["Purchase"])
