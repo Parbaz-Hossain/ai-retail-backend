@@ -103,6 +103,9 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
 
+    # === Foodics API ===
+    FOODICS_API_TOKEN: str
+
 
 # Create a global settings instance
 settings = Settings()

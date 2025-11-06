@@ -10,7 +10,7 @@ from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.inventory.item_ingredient_schema import ItemIngredientCreate, ItemIngredientResponse
 from app.services.inventory.item_service import ItemService
-from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdateForm
+from app.schemas.inventory.item import Item, ItemCreateForm, ItemUpdateForm, ItemWithIngredient
 from app.schemas.inventory.stock_level import LowStockItem
 from app.models.auth.user import User
 from app.core.exceptions import NotFoundError, ValidationError
@@ -199,13 +199,13 @@ async def get_item_by_code(
         raise HTTPException(status_code=404, detail="Item not found")
     return item
 
-@router.get("/{item_id}", response_model=Item)
+@router.get("/{item_id}", response_model=ItemWithIngredient)
 async def get_item(
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get item by ID"""
+    """Get item by ID with ingredients"""
     service = ItemService(db)
     item = await service.get_item_by_id(item_id)
     if not item:
