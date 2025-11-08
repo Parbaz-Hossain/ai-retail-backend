@@ -377,7 +377,7 @@ class FoodicsOrderService:
         
         query = select(Order).options(
             selectinload(Order.location),
-            selectinload(Order.order_products)
+            selectinload(Order.order_products).selectinload(OrderProduct.product)
         )
         
         filters = []
