@@ -112,3 +112,16 @@ class FoodicsSyncResponse(BaseModel):
     message: str
     orders_synced: int
     errors: List[str] = []
+
+# Order Summary Statistics
+class OrderSummary(BaseModel):
+    """Summary statistics for orders"""
+    total_payments: Decimal = 0  # Sum of total_price
+    total_sales: Decimal = 0  # Sum of subtotal_price
+    total_discount_amount: Decimal = 0  # Sum of discount_amount
+    orders_count: int = 0  # Total number of orders
+    returned_orders_count: int = 0  # Count of returned orders (status = 5)
+    returned_orders_amount: Decimal = 0  # Sum of total_price for returned orders
+    
+    class Config:
+        from_attributes = True

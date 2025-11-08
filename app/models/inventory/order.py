@@ -21,7 +21,7 @@ class Order(BaseModel):
     # Order details
     order_type = Column(Integer, default=0)  # Dine-in, Takeaway, Delivery, etc.
     source = Column(Integer, default=0)  # POS, Mobile App, Web, etc.
-    status = Column(Integer, default=0)  # 0=Open, 1=Closed, 7=Cancelled, etc.
+    status = Column(Integer, default=0)  # 0=Open, 1=Closed, 7=Cancelled, 5=Returned etc.
     delivery_status = Column(Integer, nullable=True)
     guests = Column(Integer, default=0)
     

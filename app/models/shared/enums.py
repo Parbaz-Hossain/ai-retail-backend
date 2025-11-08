@@ -1,5 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
-from enum import Enum
+from enum import Enum, IntEnum
 
 Base = declarative_base()
 
@@ -199,3 +199,17 @@ class ApprovalResponseStatus(str, Enum):
     REJECTED = "REJECTED"
 
 # endregion
+
+class OrderStatus(IntEnum):
+    """
+    Order status values from Foodics API
+    These match the status field in the Order model
+    """
+    PENDING = 1
+    ACTIVE = 2
+    DECLINED = 3
+    CLOSED = 4
+    RETURNED = 5
+    JOINED = 6
+    VOID = 7
+    DRAFT = 8
