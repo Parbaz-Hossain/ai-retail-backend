@@ -12,7 +12,8 @@ celery_app = Celery(
         "app.workers.celery_tasks.hr_tasks",
         # "app.workers.celery_tasks.email_tasks",
         # "app.workers.celery_tasks.report_tasks",
-        "app.workers.celery_tasks.task_management_tasks"  
+        "app.workers.celery_tasks.task_management_tasks",
+        "app.workers.celery_tasks.order_sync_tasks"  
     ]
 )
 
@@ -38,7 +39,9 @@ if sys.platform == 'win32':
 
 # Combined beat schedule from both files
 celery_app.conf.beat_schedule = {
-    # Original schedules
+    
+    # region HR task schedules
+
     "generate-monthly-salaries": {
         "task": "app.workers.celery_tasks.hr_tasks.generate_monthly_salaries",
         "schedule": 86400.0 * 30,  # Every 30 days
@@ -63,7 +66,10 @@ celery_app.conf.beat_schedule = {
         'schedule': crontab(hour=8, minute=0),  # 10 AM daily
     },
 
-    # Task management schedules (from task_management_tasks.py)
+    # endregion
+
+    # region Task management schedules
+
     'check-low-stock-every-hour': {
         'task': 'app.workers.celery_tasks.task_management_tasks.check_low_stock_and_create_tasks',
         'schedule': 3600.0,  # Every hour
@@ -100,6 +106,17 @@ celery_app.conf.beat_schedule = {
         'task': 'app.workers.celery_tasks.task_management_tasks.cleanup_completed_tasks',
         'schedule': 604800.0,  # Weekly
     },
+
+    # endregion
+
+    # region Order sync schedules
+    
+    'sync-foodics-orders-hourly': {
+        'task': 'app.workers.celery_tasks.order_sync_tasks.sync_foodics_orders_hourly',
+        'schedule': 3600.0,  # Every hour
+    },
+
+    # endregion
 }
 
 celery_app.conf.timezone = 'UTC'

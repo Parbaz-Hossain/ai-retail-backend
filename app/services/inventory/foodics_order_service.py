@@ -344,26 +344,87 @@ class FoodicsOrderService:
             stock_level.available_stock = stock_level.current_stock - stock_level.reserved_stock
             
             # Optional: Check if below minimum and send alert
-            if (stock_level.current_stock < stock_level.par_level_min and 
-                stock_level.par_level_min > 0):
-                logger.warning(
-                    f"Low stock alert: {product_item.item.name} at {location.name} "
-                    f"is below minimum level ({stock_level.current_stock} < {stock_level.par_level_min})"
-                )
-                # You could implement notification logic here
+            # if (stock_level.current_stock < stock_level.par_level_min and 
+            #     stock_level.par_level_min > 0):
+            #     logger.warning(
+            #         f"Low stock alert: {product_item.item.name} at {location.name} "
+            #         f"is below minimum level ({stock_level.current_stock} < {stock_level.par_level_min})"
+            #     )
+            # You could implement notification logic here
     
-    async def get_order_by_id(self, order_id: int) -> Optional[Order]:
-        """Get order with all relationships"""
-        result = await self.db.execute(
-            select(Order)
-            .options(
-                selectinload(Order.location),
-                selectinload(Order.order_products).selectinload(OrderProduct.product)
-            )
-            .where(Order.id == order_id)
-        )
-        return result.scalar_one_or_none()
-    
+    async def get_order_summary(
+        self,
+        location_id: Optional[int] = None,
+        status: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate order summary statistics with filters.
+        Returns: Total Payments, Total Sales, Total Discount, Orders Count, Returned Orders info
+        """
+        try:
+            # Base query
+            filters = []
+            
+            if location_id:
+                filters.append(Order.location_id == location_id)
+            
+            if status is not None:
+                filters.append(Order.status == status)
+            
+            if start_date:
+                filters.append(Order.business_date >= start_date.date())
+            
+            if end_date:
+                filters.append(Order.business_date <= end_date.date())
+            
+            # Build the where clause
+            where_clause = and_(*filters) if filters else True
+            
+            # Get overall statistics
+            overall_stats_query = select(
+                func.coalesce(func.sum(Order.total_price), 0).label('total_payments'),
+                func.coalesce(func.sum(Order.subtotal_price), 0).label('total_sales'),
+                func.coalesce(func.sum(Order.discount_amount), 0).label('total_discount_amount'),
+                func.count(Order.id).label('orders_count')
+            ).where(where_clause)
+            
+            overall_result = await self.db.execute(overall_stats_query)
+            overall_stats = overall_result.first()
+            
+            # Get returned orders statistics (status = 5)
+            returned_filters = filters.copy()
+            returned_filters.append(Order.status == 5)  # Returned status
+            
+            returned_stats_query = select(
+                func.count(Order.reference).label('returned_orders_count'),
+                func.coalesce(func.sum(Order.total_price), 0).label('returned_orders_amount')
+            ).where(and_(*returned_filters))
+            
+            returned_result = await self.db.execute(returned_stats_query)
+            returned_stats = returned_result.first()
+            
+            return {
+                "total_payments": overall_stats.total_payments,
+                "total_sales": overall_stats.total_sales,
+                "total_discount_amount": overall_stats.total_discount_amount,
+                "orders_count": overall_stats.orders_count,
+                "returned_orders_count": returned_stats.returned_orders_count,
+                "returned_orders_amount": returned_stats.returned_orders_amount
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating order summary: {str(e)}")
+            return {
+                "total_payments": 0,
+                "total_sales": 0,
+                "total_discount_amount": 0,
+                "orders_count": 0,
+                "returned_orders_count": 0,
+                "returned_orders_amount": 0
+            }
+
     async def get_orders(
         self,
         page_index: int = 1,
@@ -416,3 +477,16 @@ class FoodicsOrderService:
             "count": total,
             "data": orders
         }
+    
+    async def get_order_by_id(self, order_id: int) -> Optional[Order]:
+        """Get order with all relationships"""
+        result = await self.db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.location),
+                selectinload(Order.order_products).selectinload(OrderProduct.product)
+            )
+            .where(Order.id == order_id)
+        )
+        return result.scalar_one_or_none()
+    
