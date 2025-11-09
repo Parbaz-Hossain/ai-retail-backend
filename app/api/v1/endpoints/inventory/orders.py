@@ -8,11 +8,13 @@ from app.api.dependencies import get_current_user
 from app.core.database import get_async_session
 from app.core.config import settings
 from app.models.auth.user import User
+from app.models.shared.enums import OrderStatus
 from app.services.inventory.foodics_order_service import FoodicsOrderService
 from app.schemas.inventory.order_schema import (
     Order, 
     FoodicsSyncRequest, 
-    FoodicsSyncResponse
+    FoodicsSyncResponse,
+    OrderSummary
 )
 from app.schemas.common.pagination import PaginatedResponse
 
@@ -51,6 +53,43 @@ async def sync_foodics_orders(
             detail=f"Failed to sync orders: {str(e)}"
         )
 
+@router.get("/summary", response_model=OrderSummary)
+async def get_orders_summary(
+    location_id: Optional[int] = Query(None),
+    status: Optional[OrderStatus] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get orders summary statistics with filters.
+    Returns: Total Payments, Total Sales, Total Discount Amount, Orders Count, Returned Orders
+    """
+    try:
+        foodics_token = getattr(settings, 'FOODICS_API_TOKEN', None)
+        if not foodics_token:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Foodics API token not configured"
+            )
+        
+        service = FoodicsOrderService(db, foodics_token)
+        summary = await service.get_order_summary(
+            location_id=location_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        return OrderSummary(**summary)
+        
+    except Exception as e:
+        logger.error(f"Get orders summary error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get orders summary"
+        )
 
 @router.get("/", response_model=PaginatedResponse[Order])
 async def get_orders(
@@ -89,7 +128,6 @@ async def get_orders(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get orders"
         )
-
 
 @router.get("/{order_id}", response_model=Order)
 async def get_order(
