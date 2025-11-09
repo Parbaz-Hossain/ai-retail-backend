@@ -15,7 +15,10 @@ from app.models.hr.deduction import DeductionType, EmployeeDeduction, SalaryDedu
 from app.models.hr.ticket import Ticket
 from app.models.organization.department import Department
 from app.models.organization.location import Location
+from app.models.inventory.item_ingredient import ItemIngredient
 from app.models.inventory.item import Item
+from app.models.inventory.order import Order
+from app.models.inventory.order_product import OrderProduct
 from app.models.inventory.product import Product
 from app.models.inventory.product_item import ProductItem
 from app.models.inventory.stock_level import StockLevel
@@ -30,6 +33,7 @@ from app.models.purchase.item_supplier import ItemSupplier
 from app.models.logistics.shipment import Shipment
 from app.models.purchase.goods_receipt_item import GoodsReceiptItem
 from app.models.purchase.goods_receipt import GoodsReceipt
+from app.models.purchase.po_payment import POPayment
 from app.models.purchase.purchase_order_item import PurchaseOrderItem
 from app.models.purchase.purchase_order import PurchaseOrder
 from app.models.inventory.reorder_request_item import ReorderRequestItem
@@ -73,6 +77,8 @@ __all__ = [
     "Department",
     "Location",
     "Item",
+    "Order",
+    "OrderProduct",
     "Product"
     "ProductItem",
     "StockLevel",
@@ -86,6 +92,7 @@ __all__ = [
     "Shipment",
     "GoodsReceiptItem",
     "GoodsReceipt",
+    "POPayment",
     "PurchaseOrderItem",
     "PurchaseOrder",
     "ReorderRequestItem",

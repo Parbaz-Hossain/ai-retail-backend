@@ -4,10 +4,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api.v1.api import api_router
-# from app.middleware.logging import LoggingMiddleware
-# from app.middleware.auth import AuthMiddleware
-# from app.db.init_db import init_db
-# from app.ai.agent_manager import AIAgentManager
 
 # Create FastAPI app
 app_config = {
@@ -29,8 +25,6 @@ app.add_middleware(
 )
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-# app.add_middleware(LoggingMiddleware)
-# app.add_middleware(AuthMiddleware)
 
 # Mount static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -63,14 +57,45 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    import threading
     import sys
 
-    # Check if --http flag is provided for development
-    if "--http" in sys.argv:
-        print("🚀 Starting server in HTTP mode for development...")
-        uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    def run_https():
+        """Run HTTPS server on port 9105"""
+        print("🔒 Starting HTTPS server on port 9105...")
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=9105,
+            reload=False,
+            ssl_certfile="cert.pem",
+            ssl_keyfile="key.pem"
+        )
+
+    def run_http():
+        """Run HTTP server on port 9106"""
+        print("🚀 Starting HTTP server on port 9106...")
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=9106,
+            reload=False
+        )
+
+    # Check command line arguments
+    if "--https-only" in sys.argv:
+        print("🔒 Starting server in HTTPS-only mode...")
+        run_https()
+    elif "--http-only" in sys.argv:
+        print("🚀 Starting server in HTTP-only mode...")
+        run_http()
     else:
-        print("🔒 Starting server in HTTPS mode...")
-        uvicorn.run("main:app", host="0.0.0.0", port=9105, reload=False, ssl_certfile="cert.pem", ssl_keyfile="key.pem")
-    
-    
+        # Run both HTTP and HTTPS
+        print("🚀 Starting servers in DUAL mode (HTTP + HTTPS)...")
+        
+        # Start HTTPS in a separate thread
+        https_thread = threading.Thread(target=run_https, daemon=True)
+        https_thread.start()
+        
+        # Run HTTP in main thread
+        run_http()
