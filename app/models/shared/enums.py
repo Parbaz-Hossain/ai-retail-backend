@@ -31,6 +31,7 @@ class StockMovementType(str, Enum):
     DAMAGE = "DAMAGE"
     EXPIRED = "EXPIRED"
     ADJUSTMENT = "ADJUSTMENT"
+    CONSUME = "CONSUME"
 
 class PurchaseOrderStatus(str, Enum):
     DRAFT = "DRAFT"

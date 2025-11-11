@@ -327,7 +327,7 @@ class FoodicsOrderService:
             stock_movement = StockMovement(
                 item_id=product_item.item_id,
                 location_id=location.id,
-                movement_type=StockMovementType.OUTBOUND,
+                movement_type=StockMovementType.CONSUME,
                 quantity=total_deduction,
                 unit_cost=product_item.item.unit_cost,
                 total_cost=product_item.item.unit_cost * total_deduction if product_item.item.unit_cost else None,
