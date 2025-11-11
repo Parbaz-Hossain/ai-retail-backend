@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -98,6 +98,8 @@ class RefillKitchenService:
         if not item:
             raise NotFoundError(f"Item with id {item_id} not found")
 
+        logger.info(f"Processing refill for item: {item.name} (ID: {item_id}), Quantity: {refill_quantity}")
+
         raw_materials_used = []
 
         # Check if item has ingredients
@@ -108,8 +110,20 @@ class RefillKitchenService:
                 quantity=refill_quantity
             )
 
+            logger.info(f"Total raw materials calculated: {len(raw_materials)}")
+            
             # Create OUTBOUND movements for each raw material and update stock
             for ingredient_item_id, total_qty, unit_type in raw_materials:
+                # Get ingredient item name
+                ingredient_item_result = await self.db.execute(
+                    select(Item).where(Item.id == ingredient_item_id)
+                )
+                ingredient_item = ingredient_item_result.scalar_one()
+
+                logger.info(
+                    f"  - Deducting {ingredient_item.name}: {total_qty} {unit_type.value}"
+                )
+
                 movement_id = await self._create_outbound_movement(
                     ingredient_item_id=ingredient_item_id,
                     quantity=total_qty,
@@ -119,12 +133,6 @@ class RefillKitchenService:
                     reference_id=item_id,
                     remarks=f"Used for refilling {item.name} (Qty: {refill_quantity})"
                 )
-
-                # Get ingredient item name
-                ingredient_item_result = await self.db.execute(
-                    select(Item).where(Item.id == ingredient_item_id)
-                )
-                ingredient_item = ingredient_item_result.scalar_one()
 
                 raw_materials_used.append(RawMaterialUsage(
                     ingredient_item_id=ingredient_item_id,
@@ -144,6 +152,8 @@ class RefillKitchenService:
             remarks=remarks or f"Kitchen refill: {item.name}"
         )
 
+        logger.info(f"Refill completed for {item.name}. Inbound movement ID: {inbound_movement_id}")
+
         return RefillItemResult(
             item_id=item_id,
             item_name=item.name,
@@ -156,16 +166,42 @@ class RefillKitchenService:
         self,
         item_id: int,
         quantity: Decimal,
-        aggregated_materials: Dict[int, Tuple[Decimal, str]] = None
+        aggregated_materials: Optional[Dict[int, Tuple[Decimal, str]]] = None,
+        depth: int = 0
     ) -> List[Tuple[int, Decimal, str]]:
         """
-        Recursively calculate all raw materials needed.
-        Returns list of (ingredient_item_id, total_quantity, unit_type)
+        PROPERLY FIXED: Calculate raw materials with correct recursive logic.
         
-        This handles the case where an ingredient itself has sub-ingredients.
+        Key Principle: For each ingredient, calculate how much is needed based on
+        the quantity we want to produce, then recursively break down compound ingredients.
+        
+        Example:
+        - Royal Squad (5 plates) needs:
+          * 500g Sugar per plate → 5 × 500g = 2,500g Sugar (direct)
+          * 500g Chocolate Syrup per plate → 5 × 500g = 2,500g Chocolate Syrup (compound)
+          * 1 Box per plate → 5 × 1 = 5 Boxes (direct)
+          * 1 Lid per plate → 5 × 1 = 5 Lids (direct)
+          * 500ml Milk per plate → 5 × 500ml = 2,500ml Milk (direct)
+        
+        - Then for 2,500g Chocolate Syrup:
+          * Recipe: 200g Sugar + 1000g Cacao + 1000ml Milk (base = 2200g output)
+          * Ratio: 2,500g / 2,200g = 1.136363636
+          * Sugar needed: 200g × 1.136 = 227.27g
+          * Cacao needed: 1000g × 1.136 = 1,136.36g
+          * Milk needed: 1000ml × 1.136 = 1,136.36ml
+        
+        - Final totals:
+          * Sugar: 2,500g (direct) + 227.27g (from syrup) = 2,727.27g
+          * Cacao: 1,136.36g (from syrup)
+          * Milk: 2,500ml (direct) + 1,136.36ml (from syrup) = 3,636.36ml
+          * Boxes: 5 PCS
+          * Lids: 5 PCS
         """
         if aggregated_materials is None:
             aggregated_materials = {}
+
+        indent = "  " * depth
+        logger.debug(f"{indent}[Depth {depth}] Calculating for item_id={item_id}, quantity={quantity}")
 
         # Get item with its ingredients
         item_result = await self.db.execute(
@@ -178,44 +214,145 @@ class RefillKitchenService:
         item = item_result.scalar_one_or_none()
 
         if not item:
+            logger.warning(f"{indent}Item {item_id} not found")
             return []
 
-        # Process each ingredient
+        logger.debug(
+            f"{indent}Item: {item.name}, "
+            f"has_ingredient={item.has_ingredient}, "
+            f"ingredients_count={len(item.ingredients) if item.ingredients else 0}"
+        )
+
+        # If no ingredients, this is a raw material (shouldn't reach here in normal flow)
+        if not item.has_ingredient or not item.ingredients:
+            logger.debug(f"{indent}No ingredients for {item.name} - it's a raw material")
+            return []
+
+        # CRITICAL FIX: Different calculation strategies based on depth
+        # 
+        # DEPTH 0 (Parent level, e.g., Royal Squad):
+        #   Use SIMPLE MULTIPLICATION: required_qty = quantity × ingredient.quantity
+        #   Example: 5 plates × 500g/plate = 2,500g
+        # 
+        # DEPTH > 0 (Compound ingredient breakdown, e.g., Chocolate Syrup):
+        #   Use RATIO-BASED SCALING: required_qty = (quantity / recipe_base) × ingredient.quantity
+        #   Example: (2,500g needed / 2,200g recipe) × 200g sugar = 227.27g
+        
+        recipe_base = Decimal(0)
+        
+        # Calculate recipe base only if depth > 0 (we're breaking down a compound ingredient)
+        if depth > 0:
+            # Recipe base = sum of all ingredient quantities
+            # (This represents the total output the recipe produces)
+            for ing in item.ingredients:
+                if ing.is_active:
+                    recipe_base += ing.quantity
+            
+            logger.debug(
+                f"{indent}[Depth {depth}] Recipe base for {item.name}: {recipe_base}"
+            )
+        
+        # Process each ingredient in the recipe
         for ingredient in item.ingredients:
             if not ingredient.is_active:
+                logger.debug(f"{indent}Skipping inactive ingredient")
                 continue
 
             ingredient_item = ingredient.ingredient_item
-            required_qty = ingredient.quantity * quantity
+            
+            # Calculate required quantity based on depth
+            if depth == 0:
+                # Top level: Simple multiplication
+                required_qty = quantity * ingredient.quantity
+                
+                logger.debug(
+                    f"{indent}[Depth 0 - Simple] {ingredient_item.name}\n"
+                    f"{indent}  Formula: {quantity} × {ingredient.quantity} = {required_qty} {ingredient.unit_type.value}"
+                )
+            else:
+                # Compound breakdown: Ratio-based scaling
+                if recipe_base > 0:
+                    ratio = quantity / recipe_base
+                    required_qty = ingredient.quantity * ratio
+                    
+                    logger.debug(
+                        f"{indent}[Depth {depth} - Ratio] {ingredient_item.name}\n"
+                        f"{indent}  Amount needed: {quantity}\n"
+                        f"{indent}  Recipe base: {recipe_base}\n"
+                        f"{indent}  Ratio: {ratio}\n"
+                        f"{indent}  Formula: {ingredient.quantity} × {ratio} = {required_qty} {ingredient.unit_type.value}"
+                    )
+                else:
+                    # Fallback (shouldn't happen)
+                    required_qty = ingredient.quantity * quantity
+                    logger.warning(
+                        f"{indent}WARNING: recipe_base is 0 at depth {depth}, using direct multiplication!"
+                    )
+            
+            logger.debug(
+                f"{indent}  Ingredient: {ingredient_item.name}, "
+                f"Required: {required_qty} {ingredient.unit_type.value}, "
+                f"Has sub-ingredients: {ingredient_item.has_ingredient}"
+            )
 
-            # Check if this ingredient itself has sub-ingredients
+            # Check if this ingredient has sub-ingredients (compound ingredient)
             if ingredient_item.has_ingredient:
-                # Recursive call to get sub-ingredients
+                logger.debug(
+                    f"{indent}  -> {ingredient_item.name} is compound, recursing..."
+                )
+                
+                # Recurse to break down this compound ingredient
+                # Pass the required quantity - the recursion will handle scaling its sub-ingredients
                 await self._calculate_raw_materials_recursive(
                     item_id=ingredient_item.id,
                     quantity=required_qty,
-                    aggregated_materials=aggregated_materials
+                    aggregated_materials=aggregated_materials,
+                    depth=depth + 1
                 )
             else:
-                # This is a raw material (leaf node), add to aggregated materials
+                # This is a raw material - add to aggregates
+                logger.debug(
+                    f"{indent}  -> {ingredient_item.name} is raw material, aggregating"
+                )
+                
                 if ingredient_item.id in aggregated_materials:
-                    # Aggregate quantities for the same ingredient
-                    existing_qty, unit_type = aggregated_materials[ingredient_item.id]
-                    aggregated_materials[ingredient_item.id] = (
-                        existing_qty + required_qty,
-                        unit_type
+                    # Aggregate quantities (must be same unit type)
+                    existing_qty, existing_unit = aggregated_materials[ingredient_item.id]
+                    new_qty = existing_qty + required_qty
+                    
+                    logger.debug(
+                        f"{indent}     Aggregating: {existing_qty} + {required_qty} = {new_qty}"
                     )
+                    
+                    aggregated_materials[ingredient_item.id] = (new_qty, existing_unit)
                 else:
+                    logger.debug(
+                        f"{indent}     Adding new: {required_qty} {ingredient.unit_type.value}"
+                    )
+                    
                     aggregated_materials[ingredient_item.id] = (
                         required_qty,
                         ingredient.unit_type
                     )
 
-        # Convert to list format
-        return [
-            (item_id, qty, unit_type) 
-            for item_id, (qty, unit_type) in aggregated_materials.items()
-        ]
+        # Return results only at top level
+        if depth == 0:
+            result = [
+                (item_id, qty, unit_type) 
+                for item_id, (qty, unit_type) in aggregated_materials.items()
+            ]
+            
+            logger.info(f"Calculation complete: {len(result)} raw materials")
+            for mat_id, mat_qty, mat_unit in result:
+                item_result = await self.db.execute(
+                    select(Item).where(Item.id == mat_id)
+                )
+                mat_item = item_result.scalar_one()
+                logger.info(f"  - {mat_item.name}: {mat_qty} {mat_unit.value}")
+            
+            return result
+        
+        return []
 
     async def _create_outbound_movement(
         self,
@@ -239,6 +376,11 @@ class RefillKitchenService:
         # Calculate total cost
         unit_cost = ingredient_item.unit_cost or Decimal(0)
         total_cost = unit_cost * quantity
+
+        logger.debug(
+            f"Creating OUTBOUND movement: {ingredient_item.name}, "
+            f"Qty: {quantity}, Unit Cost: {unit_cost}, Total Cost: {total_cost}"
+        )
 
         # Create OUTBOUND movement
         movement = StockMovement(
@@ -292,6 +434,11 @@ class RefillKitchenService:
         unit_cost = item.unit_cost or Decimal(0)
         total_cost = unit_cost * quantity
 
+        logger.debug(
+            f"Creating INBOUND movement: {item.name}, "
+            f"Qty: {quantity}, Unit Cost: {unit_cost}, Total Cost: {total_cost}"
+        )
+
         # Create INBOUND movement
         movement = StockMovement(
             item_id=item_id,
@@ -338,6 +485,11 @@ class RefillKitchenService:
                 quantity=refill_item.quantity
             )
 
+            logger.info(
+                f"Validating stock for {refill_item.item_id}, "
+                f"found {len(raw_materials)} raw materials"
+            )
+
             # Check stock availability for each raw material
             for ingredient_item_id, required_qty, unit_type in raw_materials:
                 stock_level = await self.stock_level_service.get_stock_level_by_item_location(
@@ -345,21 +497,34 @@ class RefillKitchenService:
                     location_id=refill_request.location_id
                 )
 
-                if not stock_level or stock_level.available_stock < required_qty:
-                    available = stock_level.available_stock if stock_level else Decimal(0)
-                    
+                available = stock_level.available_stock if stock_level else Decimal(0)
+                
+                logger.debug(
+                    f"  Stock check - Item ID {ingredient_item_id}: "
+                    f"Required={required_qty}, Available={available}"
+                )
+
+                if not stock_level or available < required_qty:
                     # Get item name
                     item_result = await self.db.execute(
                         select(Item).where(Item.id == ingredient_item_id)
                     )
                     item = item_result.scalar_one()
 
+                    shortage = required_qty - available
+                    
+                    logger.warning(
+                        f"  INSUFFICIENT STOCK: {item.name} - "
+                        f"Required: {required_qty}, Available: {available}, "
+                        f"Shortage: {shortage}"
+                    )
+
                     insufficient_items[ingredient_item_id] = {
                         'item_id': ingredient_item_id,
                         'item_name': item.name,
                         'required': float(required_qty),
                         'available': float(available),
-                        'shortage': float(required_qty - available),
+                        'shortage': float(shortage),
                         'unit_type': unit_type.value
                     }
 
