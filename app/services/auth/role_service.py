@@ -267,3 +267,217 @@ class RoleService:
         except Exception as e:
             logger.error(f"Error getting role permissions: {str(e)}")
             return []
+        
+    # Bulk permisson assignment/removal methods
+    async def assign_multiple_permissions_to_role(
+        self, 
+        role_id: int, 
+        permission_ids: List[int]
+    ) -> Dict[str, Any]:
+        """
+        Assign multiple permissions to role at once
+        
+        Args:
+            role_id: ID of the role
+            permission_ids: List of permission IDs to assign
+            
+        Returns:
+            Dict with success status and counts
+        """
+        try:
+            # Verify role exists
+            role = await self.get_role(role_id)
+            if not role:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Role not found"
+                )
+            
+            # Get existing permission assignments
+            result = await self.session.execute(
+                select(RolePermission.permission_id).where(
+                    RolePermission.role_id == role_id
+                )
+            )
+            existing_permission_ids = set(result.scalars().all())
+            
+            # Filter out already assigned permissions
+            new_permission_ids = [
+                pid for pid in permission_ids 
+                if pid not in existing_permission_ids
+            ]
+            
+            if not new_permission_ids:
+                return {
+                    "success": True,
+                    "assigned_count": 0,
+                    "skipped_count": len(permission_ids),
+                    "invalid_count": 0,
+                    "message": "All permissions were already assigned"
+                }
+            
+            # Verify all new permissions exist and are active
+            perm_result = await self.session.execute(
+                select(Permission.id).where(
+                    Permission.id.in_(new_permission_ids),
+                    Permission.is_active == True,
+                    Permission.is_deleted == False
+                )
+            )
+            valid_permission_ids = set(perm_result.scalars().all())
+            
+            invalid_count = len(new_permission_ids) - len(valid_permission_ids)
+            
+            # Create bulk assignments
+            role_permissions = [
+                RolePermission(role_id=role_id, permission_id=pid)
+                for pid in valid_permission_ids
+            ]
+            
+            self.session.add_all(role_permissions)
+            await self.session.commit()
+            
+            logger.info(
+                f"{len(valid_permission_ids)} permissions assigned to role {role_id}"
+            )
+            
+            return {
+                "success": True,
+                "assigned_count": len(valid_permission_ids),
+                "skipped_count": len(existing_permission_ids & set(permission_ids)),
+                "invalid_count": invalid_count,
+                "message": f"Successfully assigned {len(valid_permission_ids)} permissions"
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error assigning multiple permissions: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error assigning permissions"
+            )
+
+    async def remove_multiple_permissions_from_role(
+        self,
+        role_id: int,
+        permission_ids: List[int]
+    ) -> Dict[str, Any]:
+        """
+        Remove multiple permissions from role at once
+        
+        Args:
+            role_id: ID of the role
+            permission_ids: List of permission IDs to remove
+            
+        Returns:
+            Dict with success status and count
+        """
+        try:
+            result = await self.session.execute(
+                select(RolePermission).where(
+                    RolePermission.role_id == role_id,
+                    RolePermission.permission_id.in_(permission_ids)
+                )
+            )
+            role_permissions = result.scalars().all()
+            
+            if not role_permissions:
+                return {
+                    "success": True,
+                    "removed_count": 0,
+                    "message": "No matching permissions found to remove"
+                }
+            
+            # Delete all found assignments
+            for rp in role_permissions:
+                await self.session.delete(rp)
+            
+            await self.session.commit()
+            
+            removed_count = len(role_permissions)
+            logger.info(f"{removed_count} permissions removed from role {role_id}")
+            
+            return {
+                "success": True,
+                "removed_count": removed_count,
+                "message": f"Successfully removed {removed_count} permissions"
+            }
+            
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error removing multiple permissions: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error removing permissions"
+            )
+
+    async def get_unassigned_permissions(self, role_id: int) -> List[Permission]:
+        """
+        Get permissions that are NOT assigned to this role (for dropdown)
+        
+        Args:
+            role_id: ID of the role
+            
+        Returns:
+            List of Permission objects not assigned to the role
+        """
+        try:
+            # Get all assigned permission IDs for this role
+            assigned_result = await self.session.execute(
+                select(RolePermission.permission_id).where(
+                    RolePermission.role_id == role_id
+                )
+            )
+            assigned_ids = set(assigned_result.scalars().all())
+            
+            # Get all active permissions NOT in the assigned list
+            if assigned_ids:
+                result = await self.session.execute(
+                    select(Permission).where(
+                        Permission.is_active == True,
+                        Permission.is_deleted == False,
+                        ~Permission.id.in_(assigned_ids)
+                    ).order_by(Permission.resource, Permission.action)
+                )
+            else:
+                result = await self.session.execute(
+                    select(Permission).where(
+                        Permission.is_active == True,
+                        Permission.is_deleted == False
+                    ).order_by(Permission.resource, Permission.action)
+                )
+            
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting unassigned permissions: {str(e)}")
+            return []
+
+    async def get_assigned_permissions(self, role_id: int) -> List[Permission]:
+        """
+        Get permissions that ARE assigned to this role
+        
+        Args:
+            role_id: ID of the role
+            
+        Returns:
+            List of Permission objects assigned to the role
+        """
+        try:
+            result = await self.session.execute(
+                select(Permission)
+                .join(RolePermission)
+                .where(
+                    RolePermission.role_id == role_id,
+                    Permission.is_active == True,
+                    Permission.is_deleted == False
+                )
+                .order_by(Permission.resource, Permission.action)
+            )
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error getting assigned permissions: {str(e)}")
+            return []
