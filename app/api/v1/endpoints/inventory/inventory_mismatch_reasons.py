@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.inventory_mismatch_reason_service import InventoryMismatchReasonService
@@ -19,7 +19,8 @@ router = APIRouter()
 async def create_mismatch_reason(
     reason_data: InventoryMismatchReasonCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("mismatch_reason", "create"))
 ):
     """Create a new inventory mismatch reason"""
     try:
@@ -64,7 +65,8 @@ async def update_mismatch_reason(
     reason_id: int,
     reason_data: InventoryMismatchReasonUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("mismatch_reason", "update"))
 ):
     """Update mismatch reason"""
     try:
@@ -80,7 +82,8 @@ async def update_mismatch_reason(
 async def delete_mismatch_reason(
     reason_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("mismatch_reason", "delete"))
 ):
     """Delete mismatch reason"""
     try:

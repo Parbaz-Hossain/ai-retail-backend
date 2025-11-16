@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.inventory.item_ingredient_schema import ItemIngredientCreate, ItemIngredientResponse
@@ -23,7 +23,8 @@ async def create_item(
     item_form: ItemCreateForm = Depends(),
     item_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("item", "create"))
 ):
     """Create a new item with optional image and auto-generated QR code"""
     try:
@@ -111,7 +112,8 @@ async def add_ingredient_to_item(
     item_id: int,
     ingredient_data: ItemIngredientCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("item", "create"))
 ):
     """Add a single ingredient to an item"""
     try:
@@ -134,7 +136,8 @@ async def remove_ingredient_from_item(
     item_id: int,
     ingredient_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("item", "delete"))
 ):
     """Remove a single ingredient from an item"""
     try:
@@ -218,7 +221,8 @@ async def update_item(
     item_form: ItemUpdateForm = Depends(),
     item_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("item", "update"))
 ):
     """Update item with optional image"""
     try:
@@ -260,7 +264,8 @@ async def update_item(
 async def delete_item(
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("item", "delete"))
 ):
     """Delete item (soft delete)"""
     try:

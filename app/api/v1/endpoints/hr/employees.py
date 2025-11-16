@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.employee_service import EmployeeService
@@ -17,7 +17,8 @@ async def create_employee(
     employee_form: EmployeeCreateForm = Depends(),
     profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee", "create"))
 ):
     """Create a new employee with optional profile image"""
     try:
@@ -106,7 +107,8 @@ async def update_employee(
     employee_form: EmployeeUpdateForm = Depends(),
     profile_image: UploadFile = File(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee", "update"))
 ):
     """Update employee with optional profile image"""
     try:
@@ -146,7 +148,8 @@ async def update_employee(
 async def delete_employee(
     employee_id: int,
    session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee", "delete"))
 ):
     """Delete employee"""
     service = EmployeeService(session)

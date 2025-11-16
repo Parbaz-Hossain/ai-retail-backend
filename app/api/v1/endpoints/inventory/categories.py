@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.category_service import CategoryService
@@ -15,7 +15,8 @@ router = APIRouter()
 async def create_category(
     category_data: CategoryCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("category", "create"))
 ):
     """Create a new category"""
     try:
@@ -73,7 +74,8 @@ async def update_category(
     category_id: int,
     category_data: CategoryUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("category", "update"))
 ):
     """Update category"""
     try:
@@ -89,7 +91,8 @@ async def update_category(
 async def delete_category(
     category_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("category", "delete"))
 ):
     """Delete category (soft delete)"""
     try:

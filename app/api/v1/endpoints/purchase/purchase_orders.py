@@ -4,7 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Form, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.purchase.purchase_order_service import PurchaseOrderService
 from app.models.shared.enums import PurchaseOrderStatus
@@ -26,7 +26,8 @@ async def create_purchase_order(
     discount_amount: Optional[str] = Form("0"),
     files: List[UploadFile] = File(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "create"))
 ):
     """Create a new purchase order with master data only"""
     try:
@@ -95,7 +96,8 @@ async def update_purchase_order(
     files: List[UploadFile] = File(None),
     replace_files: bool = Form(False),  # If True, replace all existing files; if False, append to existing
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "update"))
 ):
     """Update purchase order"""
     try:
@@ -198,7 +200,8 @@ async def add_item_to_purchase_order(
     po_id: int,
     item_data: PurchaseOrderItemCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "create"))
 ):
     """Add item to existing purchase order"""
     try:
@@ -224,7 +227,8 @@ async def remove_item_from_purchase_order(
     po_id: int,
     item_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "delete"))
 ):
     """Remove item from purchase order"""
     try:
@@ -332,7 +336,8 @@ async def submit_purchase_order(
 async def approve_purchase_order(
     po_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "approve"))
 ):
     """Approve purchase order"""
     try:
@@ -357,7 +362,8 @@ async def approve_purchase_order(
 async def reject_purchase_order(
     po_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "reject"))
 ):
     """Reject purchase order"""
     try:
@@ -382,7 +388,8 @@ async def reject_purchase_order(
 async def cancel_purchase_order(
     po_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "cancel"))
 ):
     """Cancel purchase order"""
     try:
@@ -407,7 +414,8 @@ async def cancel_purchase_order(
 async def delete_purchase_order(
     po_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("purchase_order", "delete"))
 ):
     """Delete purchase order"""
     try:

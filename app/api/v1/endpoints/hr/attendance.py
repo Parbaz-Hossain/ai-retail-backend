@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional, Dict
 from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.attendance_service import AttendanceService
@@ -16,7 +16,8 @@ router = APIRouter()
 async def mark_attendance(
     attendance: AttendanceCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("attendance", "create"))
 ):
     """Mark employee attendance (check-in/check-out)"""
     service = AttendanceService(session)
@@ -60,7 +61,8 @@ async def get_employee_attendance_summary(
 async def process_daily_attendance(
     process_date: date,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("attendance", "create"))
 ):
     """Process daily attendance (AI automation)"""
     service = AttendanceService(session)
