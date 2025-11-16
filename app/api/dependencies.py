@@ -7,8 +7,11 @@ from app.auth.jwt_handler import decode_access_token
 from app.models.auth.user import User
 from app.services.auth.user_service import UserService
 from app.auth.permissions import PermissionChecker, get_permission_checker
+from functools import wraps
+import logging
 
 security = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 async def get_current_user(
     request: Request,
@@ -89,22 +92,135 @@ async def get_current_superuser(
 
 async def get_permission_checker_dependency(
     request: Request
-) -> PermissionChecker:
-    """Get permission checker for current user"""
+) -> "PermissionChecker":
+    """
+    Get permission checker for current user from request state
+    
+    The permissions are already set in request.state by get_current_user
+    """
+    
     user_permissions = getattr(request.state, "user_permissions", [])
-    return get_permission_checker(user_permissions)
+    current_user = getattr(request.state, "current_user", None)
+    
+    # Superusers have system:admin permission (full access)
+    if current_user and current_user.is_superuser:
+        user_permissions = [{
+            "name": "system:admin",
+            "resource": "system",
+            "action": "admin",
+            "description": "Full system access"
+        }]
+    
+    return PermissionChecker(user_permissions)
 
-def require_permissions(*permissions):
-    """Decorator to require specific permissions"""
+def require_permission(resource: str, action: str):
+    """
+    Dependency to require specific permission for an endpoint
+        
+    Examples:
+        require_permission("user", "create")      # user:create
+    """
+    async def permission_dependency(
+        request: Request,
+        current_user = Depends(get_current_user)
+    ):
+        """Check if user has required permission"""
+        try:
+            # Get permission checker
+            checker = await get_permission_checker_dependency(request)
+            
+            # Check permission
+            checker.require(resource, action)
+            
+            return True
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Permission check error: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission check failed: {str(e)}"
+            )
+    
+    return permission_dependency
+
+def require_any_permission(*permissions: tuple):
+    """
+    Require any one of the given permissions (OR logic)
+    """
+    async def permission_dependency(
+        request: Request,
+        current_user = Depends(get_current_user)
+    ):
+        checker = await get_permission_checker_dependency(request)
+        
+        # Try each permission
+        if checker.has_any(*permissions):
+            return True
+        
+        # None of the permissions matched
+        perm_names = [f"{r}:{a}" for r, a in permissions]
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient permissions. Required one of: {', '.join(perm_names)}"
+        )
+    
+    return permission_dependency
+
+def require_all_permissions(*permissions: tuple):
+    """
+    Require all given permissions (AND logic)
+    """
+    async def permission_dependency(
+        request: Request,
+        current_user = Depends(get_current_user)
+    ):
+        checker = await get_permission_checker_dependency(request)
+        
+        # Check all permissions
+        if checker.has_all(*permissions):
+            return True
+        
+        # Find which permissions are missing
+        missing = []
+        for resource, action in permissions:
+            if checker.cannot(resource, action):
+                missing.append(f"{resource}:{action}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient permissions. Missing: {', '.join(missing)}"
+        )
+    
+    return permission_dependency
+
+def check_permission(resource: str, action: str):
+    """
+    Decorator to check permissions (alternative to Depends approach)
+    """
     def decorator(func):
+        @wraps(func)
         async def wrapper(*args, **kwargs):
+            # Extract request from kwargs
             request = kwargs.get("request")
-            if request:
-                checker = await get_permission_checker_dependency(request)
-                for permission in permissions:
-                    resource, action = permission.split(":")
-                    from app.auth.permissions import Resource, Action
-                    checker.require(Action(action), Resource(resource))
+            if not request:
+                # Try to find request in args
+                for arg in args:
+                    if isinstance(arg, Request):
+                        request = arg
+                        break
+            
+            if not request:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Request object not found"
+                )
+            
+            # Get checker and verify permission
+            checker = await get_permission_checker_dependency(request)
+            checker.require(resource, action)
+            
             return await func(*args, **kwargs)
         return wrapper
     return decorator

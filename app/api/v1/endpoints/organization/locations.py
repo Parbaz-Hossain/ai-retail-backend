@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.organization.location_service import LocationService
@@ -15,7 +15,8 @@ router = APIRouter()
 async def create_location(
     location: LocationCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("location", "create"))
 ):
     """Create a new location"""
     service = LocationService(session)
@@ -78,8 +79,9 @@ async def get_location(
 async def update_location(
     location_id: int,
     location: LocationUpdate,
-   session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("location", "update"))
 ):
     """Update location"""
     service = LocationService(session)
@@ -89,7 +91,8 @@ async def update_location(
 async def delete_location(
     location_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("location", "delete"))
 ):
     """Delete location"""
     service = LocationService(session)
