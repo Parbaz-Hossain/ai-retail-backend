@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.organization.department_service import DepartmentService
@@ -14,7 +14,8 @@ router = APIRouter()
 async def create_department(
     department: DepartmentCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("department", "create"))
 ):
     """Create a new department"""
     service = DepartmentService(session)
@@ -56,7 +57,8 @@ async def update_department(
     department_id: int,
     department: DepartmentUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("department", "update"))
 ):
     """Update department"""
     service = DepartmentService(session)
@@ -66,7 +68,8 @@ async def update_department(
 async def delete_department(
     department_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("department", "delete"))
 ):
     """Delete department"""
     service = DepartmentService(session)
