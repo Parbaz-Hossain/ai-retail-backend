@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_type_service import StockTypeService
@@ -15,7 +15,8 @@ router = APIRouter()
 async def create_stock_type(
     stock_type_data: StockTypeCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_type", "create"))
 ):
     """Create a new stock type"""
     try:
@@ -60,7 +61,8 @@ async def update_stock_type(
     stock_type_id: int,
     stock_type_data: StockTypeUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_type", "update"))
 ):
     """Update stock type"""
     try:
@@ -76,7 +78,8 @@ async def update_stock_type(
 async def delete_stock_type(
     stock_type_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_type", "delete"))
 ):
     """Delete stock type (soft delete)"""
     try:

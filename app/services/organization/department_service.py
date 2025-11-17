@@ -48,8 +48,7 @@ class DepartmentService:
             # unique name
             exists = await self.session.execute(
                 select(Department.id).where(
-                    Department.name == data.name,
-                    Department.is_deleted == False
+                    Department.name == data.name
                 ).limit(1)
             )
             if exists.scalar_one_or_none() is not None:

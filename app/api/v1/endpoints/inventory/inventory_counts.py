@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.inventory_count_service import InventoryCountService
@@ -15,7 +15,8 @@ router = APIRouter()
 async def create_inventory_count(
     count_data: InventoryCountCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("inventory_count", "create"))
 ):
     """Create a new inventory count"""
     try:
@@ -30,7 +31,8 @@ async def add_item_to_inventory_count(
     count_id: int,
     item_data: InventoryCountItemCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("inventory_count", "create"))
 ):
     """Add item to existing inventory count"""
     try:
@@ -49,7 +51,8 @@ async def remove_item_from_inventory_count(
     count_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("inventory_count", "delete"))
 ):
     """Remove item from inventory count"""
     try:
@@ -100,7 +103,8 @@ async def update_inventory_count(
     count_id: int,
     count_data: InventoryCountUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("inventory_count", "update"))
 ):
     """Update inventory count"""
     try:
@@ -117,7 +121,8 @@ async def complete_inventory_count(
     count_id: int,
     create_adjustments: bool = Query(True, description="Create stock adjustments for variances"),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("inventory_count", "approve"))
 ):
     """Complete inventory count and optionally create stock adjustments"""
     try:

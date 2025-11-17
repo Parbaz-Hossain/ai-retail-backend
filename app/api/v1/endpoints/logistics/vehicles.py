@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.vehicle_schema import VehicleCreate, VehicleUpdate, VehicleResponse
 from app.services.logistics.vehicle_service import VehicleService
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 async def create_vehicle(
     vehicle_data: VehicleCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("vehicle", "create"))
 ):
     """Create a new vehicle"""
     try:
@@ -145,7 +146,8 @@ async def update_vehicle(
     vehicle_id: int,
     vehicle_data: VehicleUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("vehicle", "update"))
 ):
     """Update vehicle"""
     try:
@@ -170,7 +172,8 @@ async def update_vehicle(
 async def delete_vehicle(
     vehicle_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("vehicle", "delete"))
 ):
     """Delete vehicle"""
     try:
@@ -196,7 +199,8 @@ async def update_vehicle_availability(
     vehicle_id: int,
     is_available: bool,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("vehicle", "update"))
 ):
     """Update vehicle availability status"""
     try:
@@ -226,7 +230,8 @@ async def update_vehicle_mileage(
     vehicle_id: int,
     new_mileage: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("vehicle", "update"))
 ):
     """Update vehicle mileage"""
     try:

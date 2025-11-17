@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.models.hr.employee import Employee
 from app.schemas.common.pagination import PaginatedResponse
@@ -64,7 +64,8 @@ async def get_approval_setting(
 async def create_or_update_approval_setting(
     setting: ApprovalSettingsCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("approval_settings", "create"))
 ):
     """Create or update approval setting for specific module and action type (HR Manager only)"""
     user_service = UserService(session)
@@ -87,7 +88,8 @@ async def create_or_update_approval_setting(
 async def add_approval_member(
     member: ApprovalMemberCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("approval_member", "create"))
 ):
     """Add approval member for specific module and action types (HR Manager only)"""
     user_service = UserService(session)
@@ -107,7 +109,8 @@ async def update_approval_member(
     member_id: int = Path(...),
     member_update: ApprovalMemberUpdate = ...,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("approval_member", "update"))
 ):
     """Update approval member (HR Manager only)"""
     user_service = UserService(session)
@@ -127,7 +130,8 @@ async def remove_approval_member(
     member_id: int = Path(...),
     module: str = Query(..., description="Module to remove member from"),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("approval_member", "delete"))
 ):
     """Remove approval member (HR Manager only)"""
     user_service = UserService(session)

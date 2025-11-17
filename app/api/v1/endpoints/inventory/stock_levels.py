@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_level_service import StockLevelService
@@ -16,7 +16,8 @@ router = APIRouter()
 async def create_stock_level(
     stock_level_data: StockLevelCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_level", "create"))
 ):
     """Create a new stock level"""
     try:
@@ -90,7 +91,8 @@ async def update_stock_level(
     stock_level_id: int,
     stock_level_data: StockLevelUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_level", "update"))
 ):
     """Update stock level"""
     try:

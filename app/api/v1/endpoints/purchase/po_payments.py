@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Form, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.services.purchase.po_payment_service import POPaymentService
 from app.schemas.purchase.po_payment_schema import (
     POPaymentCreate, 
@@ -26,7 +26,8 @@ async def create_po_payment(
     notes: str = Form(None),
     files: List[UploadFile] = File(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("po_payment", "create"))
 ):
     """Create new PO payment"""
     try:
@@ -226,7 +227,8 @@ async def get_po_payment(
 async def approve_po_payment(
     payment_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("po_payment", "approve"))
 ):
     """Approve PO payment (Manager only)"""
     try:

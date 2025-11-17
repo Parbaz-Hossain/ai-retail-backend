@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import date
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.services.hr.deduction_service import DeductionService
 from app.schemas.hr.deduction_schema import (
@@ -23,7 +23,8 @@ router = APIRouter()
 async def create_deduction_type(
     data: DeductionTypeCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("deduction_type", "create"))
 ):
     """Create a new deduction type"""
     service = DeductionService(session)
@@ -62,7 +63,8 @@ async def update_deduction_type(
     type_id: int,
     data: DeductionTypeUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("deduction_type", "update"))
 ):
     """Update deduction type"""
     service = DeductionService(session)
@@ -76,7 +78,8 @@ async def update_deduction_type(
 async def create_employee_deduction(
     data: EmployeeDeductionCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee_deduction", "create"))
 ):
     """Create a new employee deduction"""
     service = DeductionService(session)
@@ -117,7 +120,8 @@ async def update_employee_deduction(
     deduction_id: int,
     data: EmployeeDeductionUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee_deduction", "update"))
 ):
     """Update employee deduction"""
     service = DeductionService(session)
@@ -128,7 +132,8 @@ async def create_bulk_deductions(
     data: BulkDeductionCreate,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee_deduction", "create"))
 ):
     """Create deductions for multiple employees"""
     service = DeductionService(session)

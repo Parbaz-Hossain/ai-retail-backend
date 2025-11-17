@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from datetime import date
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.models.hr.employee import Employee
 from app.schemas.common.pagination import PaginatedResponse
@@ -21,7 +21,8 @@ async def generate_employee_salary(
     employee_id: int,
     salary_month: date = Query(..., description="Salary month in YYYY-MM-dd format"),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("salary", "create"))
 ):
     """
     Generate salary for a specific employee - goes through approval if enabled
@@ -70,7 +71,8 @@ async def generate_bulk_salary(
     location_id: Optional[int] = Query(None),
     department_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("salary", "create"))
 ):
     """
     Generate salary for multiple employees - goes through approval if enabled
@@ -138,7 +140,8 @@ async def mark_salary_paid(
     salary_id: int,
     payment_data: SalaryPaymentUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("salary", "update"))
 ):
     """Mark salary as paid"""
     service = SalaryService(session)

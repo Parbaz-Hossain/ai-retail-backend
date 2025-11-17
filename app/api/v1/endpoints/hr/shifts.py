@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.shift_service import ShiftService
@@ -26,7 +26,8 @@ router = APIRouter()
 async def create_shift_type(
     shift_type: ShiftTypeCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("shift_type", "create"))
 ):
     """Create a new shift type"""
     service = ShiftService(session)
@@ -66,7 +67,8 @@ async def update_shift_type(
     shift_type_id: int,
     shift_type: ShiftTypeUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("shift_type", "update"))
 ):
     """Update shift type"""
     service = ShiftService(session)
@@ -90,7 +92,8 @@ async def get_employee_current_shift(
 async def assign_shift_to_employee(
     assignment: UserShiftCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("shift", "assign"))
 ):
     """
     Assign shift to employee - goes through approval system if enabled
@@ -131,7 +134,8 @@ async def update_user_shift(
     user_shift_id: int,
     shift_update: UserShiftUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("shift", "update"))
 ):
     """
     Update user shift assignment - goes through approval system if enabled

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.models.shared.enums import ShipmentStatus
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.shipment_schema import (
@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 async def create_shipment(
     shipment_data: ShipmentCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "create"))
 ):
     """Create a new shipment"""
     try:
@@ -43,7 +44,8 @@ async def add_item_to_shipment(
     shipment_id: int,
     item_data: ShipmentItemCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "create"))
 ):
     """Add item to existing shipment"""
     try:
@@ -69,7 +71,8 @@ async def remove_item_from_shipment(
     shipment_id: int,
     item_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "delete"))
 ):
     """Remove item from shipment"""
     try:
@@ -194,7 +197,8 @@ async def update_shipment(
     shipment_id: int,
     shipment_data: ShipmentUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "update"))
 ):
     """Update shipment details (only allowed for non-delivered/cancelled shipments)"""
     try:
@@ -220,7 +224,8 @@ async def assign_driver_vehicle(
     shipment_id: int,
     assignment_data: ShipmentAssignment,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "create"))
 ):
     """Assign driver and/or vehicle to a shipment"""
     try:
@@ -248,7 +253,8 @@ async def update_shipment_status(
     shipment_id: int,
     status_data: ShipmentStatusUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "update"))
 ):
     """Update shipment status with optional notes"""
     try:
@@ -332,7 +338,8 @@ async def cancel_shipment(
     shipment_id: int,
     reason: str = Body(..., embed=True, description="Reason for cancellation"),
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("shipment", "cancel"))
 ):
     """Cancel a shipment with reason"""
     try:

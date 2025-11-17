@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.driver_schema import DriverCreate, DriverUpdate, DriverResponse
 from app.schemas.logistics.shipment_schema import ShipmentResponse
@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 async def create_driver(
     driver_data: DriverCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("driver", "create"))
 ):
     """Create a new driver"""
     try:
@@ -126,7 +127,8 @@ async def update_driver(
     driver_id: int,
     driver_data: DriverUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("driver", "update"))
 ):
     """Update driver"""
     try:
@@ -151,7 +153,8 @@ async def update_driver(
 async def delete_driver(
     driver_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("driver", "delete"))
 ):
     """Delete driver"""
     try:
@@ -177,7 +180,8 @@ async def update_driver_availability(
     driver_id: int,
     is_available: bool,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("driver", "update"))
 ):
     """Update driver availability status"""
     try:

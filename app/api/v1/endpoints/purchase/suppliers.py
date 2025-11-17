@@ -3,7 +3,7 @@ from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.purchase.supplier_service import SupplierService
 from app.schemas.purchase.supplier_schema import (SupplierCreate, SupplierUpdate, SupplierResponse)
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 async def create_supplier(
     supplier_data: SupplierCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("supplier", "create"))
 ):
     """Create a new supplier"""
     try:
@@ -88,7 +89,8 @@ async def update_supplier(
     supplier_id: int,
     supplier_data: SupplierUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("supplier", "update"))
 ):
     """Update supplier"""
     try:
@@ -113,7 +115,8 @@ async def update_supplier(
 async def delete_supplier(
     supplier_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("supplier", "delete"))
 ):
     """Delete supplier"""
     try:
@@ -139,7 +142,8 @@ async def add_item_to_supplier(
     supplier_id: int,
     item_data: ItemSupplierCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("supplier", "create"))
 ):
     """Add item to supplier"""
     try:
@@ -169,7 +173,8 @@ async def remove_item_from_supplier(
     supplier_id: int,
     item_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("supplier", "delete"))
 ):
     """Remove item from supplier"""
     try:

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from datetime import date
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.stock_movement_service import StockMovementService
@@ -19,7 +19,8 @@ async def create_stock_movement(
     movement_data: StockMovementCreate,
     auto_update_stock: bool = Query(True),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_movement", "create"))
 ):
     """Create a new stock movement"""
     try:
