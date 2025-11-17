@@ -103,13 +103,13 @@ async def get_permission_checker_dependency(
     current_user = getattr(request.state, "current_user", None)
     
     # Superusers have system:admin permission (full access)
-    if current_user and current_user.is_superuser:
-        user_permissions = [{
-            "name": "system:admin",
-            "resource": "system",
-            "action": "admin",
-            "description": "Full system access"
-        }]
+    # if current_user and current_user.is_superuser:
+    #     user_permissions = [{
+    #         "name": "system:admin",
+    #         "resource": "system",
+    #         "action": "admin",
+    #         "description": "Full system access"
+    #     }]
     
     return PermissionChecker(user_permissions)
 

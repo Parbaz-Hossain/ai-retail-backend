@@ -82,6 +82,7 @@ async def get_roles(
     request: Request,
     page_index: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=1000),
+    search: str = Query(None),
     session: AsyncSession = Depends(get_async_session),
     current_user = Depends(get_current_superuser)
 ):
@@ -92,7 +93,8 @@ async def get_roles(
         role_service = RoleService(session)
         result = await role_service.get_roles(
             page_index=page_index,
-            page_size=page_size
+            page_size=page_size,
+            search=search
         )
         return result
         
