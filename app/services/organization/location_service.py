@@ -8,6 +8,7 @@ from sqlalchemy import select, func, or_
 from app.models.organization.location import Location
 from app.models.hr.employee import Employee
 from app.schemas.organization.location_schema import LocationCreate, LocationUpdate
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 class LocationService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     # ---------- Getters ----------
     async def get_location(self, location_id: int) -> Optional[Location]:
@@ -111,7 +113,8 @@ class LocationService:
         location_type: Optional[str] = None,
         city: Optional[str] = None,
         is_active: Optional[bool] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get locations with pagination"""
         try:
@@ -131,6 +134,16 @@ class LocationService:
                         Location.city.ilike(like)
                     )
                 )
+
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id,"location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                        select(Location).where(Location.manager_id == user_id)
+                    )
+                loc = loc_res.scalar_one_or_none()
+                if loc:
+                    query = query.where(Location.id == loc.id)
             
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())

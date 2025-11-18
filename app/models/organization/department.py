@@ -11,5 +11,6 @@ class Department(BaseModel):
     description = Column(Text)
     is_active = Column(Boolean, default=True)
     
+    
     # Relationships
     employees = relationship("Employee", back_populates="department")

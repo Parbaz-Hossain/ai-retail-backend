@@ -6,6 +6,7 @@ from datetime import datetime
 class LocationBase(BaseModel):
     name: str
     location_type: str  # BRANCH or WAREHOUSE
+    manager_id: Optional[int] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -34,6 +35,7 @@ class LocationCreate(LocationBase):
 class LocationUpdate(BaseModel):
     name: Optional[str] = None
     location_type: Optional[str] = None
+    manager_id: Optional[int] = None
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

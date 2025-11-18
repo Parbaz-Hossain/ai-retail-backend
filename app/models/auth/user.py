@@ -41,6 +41,7 @@ class User(BaseModel):
     )
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     employees = relationship("Employee", back_populates="user")
+    location = relationship("Location", back_populates="users")
 
     def __repr__(self):
         return f"<User {self.username}>"

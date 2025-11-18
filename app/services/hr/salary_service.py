@@ -7,13 +7,16 @@ from sqlalchemy import delete, select, extract, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.auth.role import Role
 from app.models.hr.deduction import SalaryDeduction
 from app.models.hr.salary import Salary
 from app.models.hr.employee import Employee
 from app.models.hr.attendance import Attendance
+from app.models.organization.location import Location
 from app.models.shared.enums import SalaryPaymentStatus, AttendanceStatus
 from app.schemas.hr.salary_schema import SalaryCreate
 from app.services.hr.deduction_service import DeductionService
+from app.services.auth.user_service import UserService
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,7 @@ class SalaryService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.deduction_service = DeductionService(session)
+        self.user_service = UserService(session)
 
     async def generate_monthly_salary(self, employee_id: int, salary_month: date, current_user_id: int) -> Salary:
         """Generate monthly salary with integrated deduction calculation"""
@@ -429,7 +433,8 @@ class SalaryService:
         year: Optional[int] = None,
         location_id: Optional[int] = None,
         department_id: Optional[int] = None,
-        payment_status: Optional[str] = None
+        payment_status: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Get paginated list of all employee salaries with filters
@@ -464,7 +469,17 @@ class SalaryService:
                     conditions.append(Salary.payment_status == status_enum)
                 except KeyError:
                     pass  # Invalid status, ignore filter
-            
+                
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id,"location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                        select(Location).where(Location.manager_id == user_id)
+                    )
+                loc = loc_res.scalar_one_or_none()
+                if loc:
+                    conditions.append(Employee.location_id == loc.id)
+
             if conditions:
                 query = query.where(and_(*conditions))
             

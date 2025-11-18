@@ -10,7 +10,7 @@ from app.schemas.auth.permission import PermissionResponse
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.auth.permission_service import PermissionService
 from app.services.auth.role_service import RoleService
-from app.api.dependencies import get_current_superuser, get_current_user, require_permission
+from app.api.dependencies import get_current_superuser, get_current_user
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
