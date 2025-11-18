@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from decimal import Decimal
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.reorder_request_service import ReorderRequestService
@@ -17,7 +17,8 @@ router = APIRouter()
 async def create_reorder_request(
     request_data: ReorderRequestCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "create"))
 ):
     """Create a new reorder request"""
     try:
@@ -32,7 +33,8 @@ async def add_item_to_reorder_request(
     request_id: int,
     item_data: ReorderRequestItemCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "create"))
 ):
     """Add item to existing reorder request"""
     try:
@@ -51,7 +53,8 @@ async def remove_item_from_reorder_request(
     request_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "delete"))
 ):
     """Remove item from reorder request"""
     try:
@@ -116,7 +119,8 @@ async def update_reorder_request(
     request_id: int,
     request_data: ReorderRequestUpdate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "update"))
 ):
     """Update reorder request"""
     try:
@@ -133,7 +137,8 @@ async def approve_reorder_request(
     request_id: int,
     approved_quantities: Dict[int, Decimal],
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "approve"))
 ):
     """Approve reorder request with specific quantities"""
     try:
@@ -150,7 +155,8 @@ async def reject_reorder_request(
     request_id: int,
     reason: str,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("reorder_request", "reject"))
 ):
     """Reject reorder request"""
     try:

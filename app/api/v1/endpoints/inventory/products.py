@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.models.inventory.product import Product
 from app.models.inventory.product_item import ProductItem
@@ -23,7 +23,8 @@ async def create_product(
     product_form: ProductCreateForm = Depends(),
     product_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("product", "create"))
 ):
     """Create a new product with optional image and auto-generated QR code"""
     try:
@@ -80,7 +81,8 @@ async def add_item_to_product(
     product_id: int,
     item_data: ProductItemCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("product", "create"))
 ):
     """Add item (ingredient) to existing product"""
     try:
@@ -99,7 +101,8 @@ async def remove_item_from_product(
     product_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("product", "delete"))
 ):
     """Remove item (ingredient) from product"""
     try:
@@ -177,7 +180,8 @@ async def update_product(
     product_form: ProductUpdateForm = Depends(),
     product_image: UploadFile = File(None),
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("product", "update"))
 ):
     """Update product with optional image and product items"""
     try:
@@ -228,7 +232,8 @@ async def update_product(
 async def delete_product(
     product_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("product", "delete"))
 ):
     """Delete product (soft delete)"""
     try:

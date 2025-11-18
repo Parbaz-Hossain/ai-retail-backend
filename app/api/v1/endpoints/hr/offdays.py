@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.hr.offday_service import OffdayService
@@ -20,7 +20,8 @@ router = APIRouter()
 async def create_offday(
     offday: OffdayCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("days_off", "create"))
 ):
     """
     Create a single offday - goes through approval if enabled
@@ -62,7 +63,8 @@ async def create_offday(
 async def create_bulk_offdays(
     bulk_offdays: OffdayBulkCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("days_off", "create"))
 ):
     """
     Create multiple offdays for an employee - goes through approval if enabled
@@ -150,7 +152,8 @@ async def update_offday(
     offday_id: int = Path(...),
     offday: OffdayUpdate = ...,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("days_off", "update"))
 ):
     """
     Update an offday - goes through approval if enabled
@@ -200,7 +203,8 @@ async def update_offday(
 async def delete_offday(
     offday_id: int = Path(...),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("days_off", "delete"))
 ):
     """Delete a single offday"""
     service = OffdayService(session)
@@ -213,7 +217,8 @@ async def delete_employee_month_offdays(
     year: int = Query(..., ge=2020),
     month: int = Query(..., ge=1, le=12),
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("days_off", "delete"))
 ):
     """Delete all offdays for an employee in a specific month"""
     service = OffdayService(session)

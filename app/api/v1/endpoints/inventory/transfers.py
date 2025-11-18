@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from decimal import Decimal
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_async_session
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.inventory.transfer_service import TransferService
@@ -17,7 +17,8 @@ router = APIRouter()
 async def create_transfer(
     transfer_data: TransferCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_transfer", "create"))
 ):
     """Create a new transfer"""
     try:
@@ -32,7 +33,8 @@ async def add_item_to_transfer(
     transfer_id: int,
     item_data: TransferItemCreate,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_transfer", "create"))
 ):
     """Add item to existing transfer"""
     try:
@@ -54,7 +56,8 @@ async def remove_item_from_transfer(
     transfer_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_transfer", "delete"))
 ):
     """Remove item from transfer"""
     try:
@@ -109,7 +112,8 @@ async def get_transfer(
 async def approve_transfer(
     transfer_id: int,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_transfer", "approve"))
 ):
     """Approve transfer and reserve stock"""
     try:
@@ -160,7 +164,8 @@ async def cancel_transfer(
     transfer_id: int,
     reason: str,
     db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("stock_transfer", "cancel"))
 ):
     """Cancel transfer and release reserved stock"""
     try:

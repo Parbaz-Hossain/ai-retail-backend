@@ -154,11 +154,16 @@ class RoleService:
     async def get_roles(
         self,
         page_index: int = 1,
-        page_size: int = 100
+        page_size: int = 100,
+        search: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get paginated list of roles with permissions"""
         try:
             conditions = [Role.is_deleted == False]
+
+            if search:
+                search_term = f"%{search}%"
+                conditions.append(Role.name.ilike(search_term))
             
             # Get total count
             total_count = await self.session.scalar(

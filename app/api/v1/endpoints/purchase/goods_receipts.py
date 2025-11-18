@@ -4,7 +4,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_async_session
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_permission
 from app.schemas.common.pagination import PaginatedResponse
 from app.services.purchase.goods_receipt_service import GoodsReceiptService
 from app.schemas.purchase.goods_receipt_schema import (GoodsReceiptCreate, GoodsReceiptUpdate, GoodsReceiptResponse)
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 async def create_goods_receipt(
     receipt_data: GoodsReceiptCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("good_receipt", "create"))
 ):
     """Create a new goods receipt"""
     try:
@@ -94,7 +95,8 @@ async def update_goods_receipt(
     receipt_id: int,
     receipt_data: GoodsReceiptUpdate,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("good_receipt", "update"))
 ):
     """Update goods receipt"""
     try:
@@ -119,7 +121,8 @@ async def update_goods_receipt(
 async def delete_goods_receipt(
     receipt_id: int,
     session: AsyncSession = Depends(get_async_session),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    _permission = Depends(require_permission("good_receipt", "delete"))
 ):
     """Delete goods receipt and reverse stock movements"""
     try:
