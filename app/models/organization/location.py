@@ -10,7 +10,7 @@ class Location(BaseModel):
     foodics_guid = Column(Uuid(as_uuid=True), unique=True, nullable=True)  # Foodics branch ID
     name = Column(String(100), nullable=False)
     location_type = Column(SQLEnum('WAREHOUSE', 'BRANCH', 'CENTRAL_KITCHEN', name='location_type', create_type=False), nullable=False)
-    manager_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    manager_id = Column(Integer, ForeignKey('users.id', use_alter=True, name='fk_location_manager'), nullable=True)
     address = Column(Text)
     city = Column(String(50))
     state = Column(String(50))
@@ -34,4 +34,4 @@ class Location(BaseModel):
     shipments_from = relationship("Shipment", foreign_keys="Shipment.from_location_id", back_populates="from_location")
     shipments_to = relationship("Shipment", foreign_keys="Shipment.to_location_id", back_populates="to_location")
     orders = relationship("Order", back_populates="location")
-    users = relationship("User", back_populates="location")
+    users = relationship("User", foreign_keys="User.location_id", back_populates="location")

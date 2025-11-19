@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import select, delete, func, or_
+from sqlalchemy import and_, select, delete, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 from fastapi import HTTPException, status
@@ -11,6 +11,7 @@ from app.models.approval.approval_request import ApprovalRequest
 from app.models.approval.approval_response import ApprovalResponse
 from app.models.approval.approval_settings import ApprovalSettings
 from app.models.hr.employee import Employee
+from app.models.organization.location import Location
 from app.models.shared.enums import (
     ApprovalRequestType, ApprovalStatus, ApprovalResponseStatus
 )
@@ -24,6 +25,7 @@ from app.schemas.approval.approval_settings_schema import (
 from app.services.communication.whatsapp_service import WhatsAppClient
 from app.services.approval.approval_auto_executor import ApprovalAutoExecutor
 from app.utils.date_time_serializer import serialize_dates
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -31,31 +33,73 @@ class ApprovalService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.whatsapp_client = WhatsAppClient()
+        self.user_service = UserService(session)
 
     # region ========== Approval Settings ==========
 
     async def get_approval_settings(
         self, 
+        page_index: int = 1,
+        page_size: int = 100,
         module: Optional[str] = None, 
-        action_type: Optional[ApprovalRequestType] = None
-    ) -> List[ApprovalSettingsResponse]:
-        """Get approval settings with optional filters"""
-        conditions = []
-        
-        if module:
-            conditions.append(ApprovalSettings.module == module.upper())
-        if action_type:
-            conditions.append(ApprovalSettings.action_type == action_type)
-        
-        result = await self.session.execute(
-            select(ApprovalSettings).where(*conditions)
-        )
-        settings = result.scalars().all()
-        
-        return [
-            ApprovalSettingsResponse.model_validate(s, from_attributes=True) 
-            for s in settings
-        ]
+        action_type: Optional[ApprovalRequestType] = None,
+        is_enabled: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Get paginated approval settings with optional filters"""
+        try:
+            # Build base query
+            query = select(ApprovalSettings)
+            
+            # Apply filters
+            conditions = []
+            
+            if module:
+                conditions.append(ApprovalSettings.module == module.upper())
+            
+            if action_type:
+                conditions.append(ApprovalSettings.action_type == action_type)
+            
+            if is_enabled is not None:
+                conditions.append(ApprovalSettings.is_enabled == is_enabled)
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count(ApprovalSettings.id)).select_from(ApprovalSettings)
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            query = query.order_by(ApprovalSettings.module, ApprovalSettings.action_type)
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
+            settings = result.scalars().all()
+            
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": total_count or 0,
+                "data": [
+                    ApprovalSettingsResponse.model_validate(s, from_attributes=True)
+                    for s in settings
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting approval settings: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
     
     async def get_approval_setting(
         self, 
@@ -310,40 +354,66 @@ class ApprovalService:
         page_size: int = 100,
         module: Optional[str] = None,
         action_type: Optional[ApprovalRequestType] = None,
-        is_active: Optional[bool] = True
+        is_active: Optional[bool] = True,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated approval members with filtering"""
         try:
+            # Build base query with employee join
+            query = (
+                select(ApprovalMember)
+                .join(Employee, ApprovalMember.employee_id == Employee.id)
+                .options(selectinload(ApprovalMember.employee))
+                .where(Employee.is_active == True)
+            )
+            
+            # Apply filters
             conditions = []
+            
             if is_active is not None:
                 conditions.append(ApprovalMember.is_active == is_active)
+            
             if module:
                 conditions.append(ApprovalMember.module == module.upper())
-
+            
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                    select(Location).where(Location.manager_id == user_id)
+                )
+                loc = loc_res.scalar_one_or_none()
+                logger.info(f"Location manager filter applied for user {user_id}, location: {loc.id}")
+                if loc:
+                    conditions.append(Employee.location_id == loc.id)
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
             # Get total count
-            total_count = await self.session.scalar(
-                select(func.count(ApprovalMember.id)).where(*conditions)
-            )
-
+            count_query = select(func.count(ApprovalMember.id)).select_from(ApprovalMember).join(Employee)
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
+            # Calculate offset
             skip = (page_index - 1) * page_size
-
-            result = await self.session.execute(
-                select(ApprovalMember)
-                .options(selectinload(ApprovalMember.employee))
-                .where(*conditions)
-                .order_by(ApprovalMember.module, ApprovalMember.created_at.desc())
-                .offset(skip)
-                .limit(page_size)
-            )
+            
+            # Get paginated data
+            query = query.order_by(ApprovalMember.module, ApprovalMember.created_at.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
             members = result.scalars().all()
-
-            # Filter by action_type if specified
+            
+            # Filter by action_type if specified (done in-memory since it's a JSON array field)
             if action_type:
                 members = [
                     m for m in members 
                     if action_type.value in (m.action_types or [])
                 ]
-
+            
             return {
                 "page_index": page_index,
                 "page_size": page_size,
@@ -353,6 +423,7 @@ class ApprovalService:
                     for member in members
                 ]
             }
+            
         except Exception as e:
             logger.error(f"Error getting approval members: {e}")
             return {
@@ -361,7 +432,7 @@ class ApprovalService:
                 "count": 0,
                 "data": []
             }
-    
+        
     async def get_approval_member(
         self, 
         member_id: int
@@ -676,40 +747,61 @@ class ApprovalService:
         status: Optional[ApprovalStatus] = None,
         request_type: Optional[ApprovalRequestType] = None,
         page_index: int = 1,
-        page_size: int = 100
+        page_size: int = 100,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated approval requests with filtering"""
         try:
-            conditions = []
-            
-            if status:
-                conditions.append(ApprovalRequest.status == status)
-            if request_type:
-                conditions.append(ApprovalRequest.request_type == request_type)
-            
-            # Get total count
-            total_count = await self.session.scalar(
-                select(func.count(ApprovalRequest.id)).where(*conditions)
-            )
-            
-            # Calculate offset
-            skip = (page_index - 1) * page_size
-            
-            # Get paginated data
-            result = await self.session.execute(
+            # Build base query with employee join
+            query = (
                 select(ApprovalRequest)
+                .join(Employee, ApprovalRequest.employee_id == Employee.id)
                 .options(
                     selectinload(ApprovalRequest.employee),
                     selectinload(ApprovalRequest.approval_responses)
                     .selectinload(ApprovalResponse.approval_member)
                     .selectinload(ApprovalMember.employee)
                 )
-                .where(*conditions)
-                .order_by(ApprovalRequest.created_at.desc())
-                .offset(skip)
-                .limit(page_size)
+                .where(Employee.is_active == True)
             )
             
+            # Apply filters
+            conditions = []
+            
+            if status:
+                conditions.append(ApprovalRequest.status == status)
+            
+            if request_type:
+                conditions.append(ApprovalRequest.request_type == request_type)
+            
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                    select(Location).where(Location.manager_id == user_id)
+                )
+                loc = loc_res.scalar_one_or_none()
+                if loc:
+                    conditions.append(Employee.location_id == loc.id)
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count
+            count_query = select(func.count(ApprovalRequest.id)).select_from(ApprovalRequest).join(Employee)
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            query = query.order_by(ApprovalRequest.created_at.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
             requests = result.scalars().unique().all()
             
             return {

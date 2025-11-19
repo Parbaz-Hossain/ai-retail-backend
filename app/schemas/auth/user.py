@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str
     full_name: str
+    location_id: Optional[int] = None
     phone: Optional[str] = None
     address: Optional[str] = None
 
@@ -48,6 +49,7 @@ class UserCreateForm:
         email: str = Form(...),
         username: str = Form(...),
         full_name: str = Form(...),
+        location_id: Optional[int] = Form(None),
         password: str = Form(...),
         confirm_password: str = Form(...),
         phone: Optional[str] = Form(None),
@@ -56,6 +58,7 @@ class UserCreateForm:
         self.email = email
         self.username = username
         self.full_name = full_name
+        self.location_id = location_id
         self.password = password
         self.confirm_password = confirm_password
         self.phone = phone
@@ -67,6 +70,7 @@ class UserCreateForm:
             email=self.email,
             username=self.username,
             full_name=self.full_name,
+            location_id=self.location_id,
             password=self.password,
             confirm_password=self.confirm_password,
             phone=self.phone,
@@ -75,6 +79,7 @@ class UserCreateForm:
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    location_id: Optional[int] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     profile_image: Optional[str] = None
@@ -83,10 +88,12 @@ class UserUpdateForm:
     def __init__(
         self,
         full_name: Optional[str] = Form(None),
+        location_id: Optional[int] = Form(None),
         phone: Optional[str] = Form(None),
         address: Optional[str] = Form(None)
     ):
         self.full_name = full_name
+        self.location_id = location_id
         self.phone = phone
         self.address = address
     
@@ -94,6 +101,7 @@ class UserUpdateForm:
         """Convert form data to UserUpdate schema"""
         return UserUpdate(
             full_name=self.full_name,
+            location_id=self.location_id,
             phone=self.phone,
             address=self.address
         )

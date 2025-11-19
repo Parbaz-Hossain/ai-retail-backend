@@ -25,35 +25,28 @@ PERMISSIONS_SEED = [
     {"name": "dashboard:view", "description": "View dashboard", "resource": "dashboard", "action": "view"},
 
     # ==================== USER MANAGEMENT ====================
-    {"name": "user:create", "description": "Create new users", "resource": "user", "action": "create"},
-    {"name": "user:read", "description": "Read user information", "resource": "user", "action": "read"},
-    {"name": "user:update", "description": "Update user information", "resource": "user", "action": "update"},
-    {"name": "user:delete", "description": "Delete users", "resource": "user", "action": "delete"},
-    {"name": "user:activate", "description": "Activate/Deactivate users", "resource": "user", "action": "activate"},
-    {"name": "user:export", "description": "Export user data", "resource": "user", "action": "export"},
+    # {"name": "user:create", "description": "Create new users", "resource": "user", "action": "create"},
+    # {"name": "user:read", "description": "Read user information", "resource": "user", "action": "read"},
+    # {"name": "user:update", "description": "Update user information", "resource": "user", "action": "update"},
+    # {"name": "user:delete", "description": "Delete users", "resource": "user", "action": "delete"},
+    # {"name": "user:activate", "description": "Activate/Deactivate users", "resource": "user", "action": "activate"},
+    # {"name": "user:export", "description": "Export user data", "resource": "user", "action": "export"},
 
     # Role Management
-    {"name": "role:create", "description": "Create new roles", "resource": "role", "action": "create"},
-    {"name": "role:read", "description": "Read role information", "resource": "role", "action": "read"},
-    {"name": "role:update", "description": "Update role information", "resource": "role", "action": "update"},
-    {"name": "role:delete", "description": "Delete roles", "resource": "role", "action": "delete"},
-    {"name": "role:assign", "description": "Assign roles to users", "resource": "role", "action": "assign"},
-    {"name": "role:export", "description": "Export role data", "resource": "role", "action": "export"},
+    # {"name": "role:create", "description": "Create new roles", "resource": "role", "action": "create"},
+    # {"name": "role:read", "description": "Read role information", "resource": "role", "action": "read"},
+    # {"name": "role:update", "description": "Update role information", "resource": "role", "action": "update"},
+    # {"name": "role:delete", "description": "Delete roles", "resource": "role", "action": "delete"},
+    # {"name": "role:assign", "description": "Assign roles to users", "resource": "role", "action": "assign"},
+    # {"name": "role:export", "description": "Export role data", "resource": "role", "action": "export"},
 
     # Permission Management
-    {"name": "permission:create", "description": "Create permissions", "resource": "permission", "action": "create"},
-    {"name": "permission:read", "description": "View permissions", "resource": "permission", "action": "read"},
-    {"name": "permission:update", "description": "Update permissions", "resource": "permission", "action": "update"},
-    {"name": "permission:delete", "description": "Delete permissions", "resource": "permission", "action": "delete"},
-    {"name": "permission:assign", "description": "Assign permissions to roles", "resource": "permission", "action": "assign"},
-    {"name": "permission:export", "description": "Export permission data", "resource": "permission", "action": "export"},
-
-    # User Permissions (Direct)
-    {"name": "user_permission:create", "description": "Assign direct permissions to users", "resource": "user_permission", "action": "create"},
-    {"name": "user_permission:read", "description": "View user permissions", "resource": "user_permission", "action": "read"},
-    {"name": "user_permission:update", "description": "Update user permissions", "resource": "user_permission", "action": "update"},
-    {"name": "user_permission:delete", "description": "Remove user permissions", "resource": "user_permission", "action": "delete"},
-    {"name": "user_permission:export", "description": "Export user permission data", "resource": "user_permission", "action": "export"},
+    # {"name": "permission:create", "description": "Create permissions", "resource": "permission", "action": "create"},
+    # {"name": "permission:read", "description": "View permissions", "resource": "permission", "action": "read"},
+    # {"name": "permission:update", "description": "Update permissions", "resource": "permission", "action": "update"},
+    # {"name": "permission:delete", "description": "Delete permissions", "resource": "permission", "action": "delete"},
+    # {"name": "permission:assign", "description": "Assign permissions to roles", "resource": "permission", "action": "assign"},
+    # {"name": "permission:export", "description": "Export permission data", "resource": "permission", "action": "export"},
 
     # ==================== APPROVAL ====================
     # Approval Settings
@@ -223,15 +216,6 @@ PERMISSIONS_SEED = [
     {"name": "stock_transfer:cancel", "description": "Cancel stock transfers", "resource": "stock_transfer", "action": "cancel"},
     {"name": "stock_transfer:export", "description": "Export stock transfers", "resource": "stock_transfer", "action": "export"},
 
-    # Shipment (Stock Operation)
-    {"name": "stock_shipment:create", "description": "Create stock shipments", "resource": "stock_shipment", "action": "create"},
-    {"name": "stock_shipment:read", "description": "View stock shipments", "resource": "stock_shipment", "action": "read"},
-    {"name": "stock_shipment:update", "description": "Update stock shipments", "resource": "stock_shipment", "action": "update"},
-    {"name": "stock_shipment:delete", "description": "Delete stock shipments", "resource": "stock_shipment", "action": "delete"},
-    {"name": "stock_shipment:dispatch", "description": "Dispatch shipments", "resource": "stock_shipment", "action": "dispatch"},
-    {"name": "stock_shipment:receive", "description": "Receive shipments", "resource": "stock_shipment", "action": "receive"},
-    {"name": "stock_shipment:export", "description": "Export stock shipments", "resource": "stock_shipment", "action": "export"},
-
     # Stock Movement
     {"name": "stock_movement:create", "description": "Create stock movements", "resource": "stock_movement", "action": "create"},
     {"name": "stock_movement:read", "description": "View stock movements", "resource": "stock_movement", "action": "read"},
@@ -296,15 +280,15 @@ PERMISSIONS_SEED = [
     {"name": "po_payment:export", "description": "Export PO payments", "resource": "po_payment", "action": "export"},
 
     # ==================== LOGISTIC ====================
-    # Shipment (Logistic)
-    {"name": "logistic_shipment:create", "description": "Create logistic shipments", "resource": "logistic_shipment", "action": "create"},
-    {"name": "logistic_shipment:read", "description": "View logistic shipments", "resource": "logistic_shipment", "action": "read"},
-    {"name": "logistic_shipment:update", "description": "Update logistic shipments", "resource": "logistic_shipment", "action": "update"},
-    {"name": "logistic_shipment:delete", "description": "Delete logistic shipments", "resource": "logistic_shipment", "action": "delete"},
-    {"name": "logistic_shipment:assign", "description": "Assign shipments to drivers", "resource": "logistic_shipment", "action": "assign"},
-    {"name": "logistic_shipment:dispatch", "description": "Dispatch shipments", "resource": "logistic_shipment", "action": "dispatch"},
-    {"name": "logistic_shipment:complete", "description": "Complete shipments", "resource": "logistic_shipment", "action": "complete"},
-    {"name": "logistic_shipment:export", "description": "Export logistic shipments", "resource": "logistic_shipment", "action": "export"},
+    # Shipment
+    {"name": "shipment:create", "description": "Create shipments", "resource": "shipment", "action": "create"},
+    {"name": "shipment:read", "description": "View shipments", "resource": "shipment", "action": "read"},
+    {"name": "shipment:update", "description": "Update shipments", "resource": "shipment", "action": "update"},
+    {"name": "shipment:delete", "description": "Delete shipments", "resource": "shipment", "action": "delete"},
+    {"name": "shipment:assign", "description": "Assign shipments to drivers", "resource": "shipment", "action": "assign"},
+    {"name": "shipment:dispatch", "description": "Dispatch shipments", "resource": "shipment", "action": "dispatch"},
+    {"name": "shipment:complete", "description": "Complete shipments", "resource": "shipment", "action": "complete"},
+    {"name": "shipment:export", "description": "Export shipments", "resource": "shipment", "action": "export"},
 
     # Driver
     {"name": "driver:create", "description": "Create drivers", "resource": "driver", "action": "create"},

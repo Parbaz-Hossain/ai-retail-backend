@@ -145,6 +145,7 @@ class UserService:
                 email=user_create.email,
                 username=user_create.username,
                 full_name=user_create.full_name,
+                location_id=user_create.location_id,
                 hashed_password=get_password_hash(user_create.password),
                 phone=user_create.phone,
                 address=user_create.address,
@@ -381,9 +382,8 @@ class UserService:
                         select(Location).where(Location.manager_id == user_id)
                     )
                 loc = loc_res.scalar_one_or_none()
-                logger.info(f"Location {loc}")
                 if loc:
-                    conditions.append(Location.id == loc.id)
+                    conditions.append(User.location_id == loc.id)
             
             # Get total count
             total_count = await self.session.scalar(
