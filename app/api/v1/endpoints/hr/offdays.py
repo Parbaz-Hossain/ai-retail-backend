@@ -131,7 +131,8 @@ async def get_all_offdays(
         page_size=page_size,
         employee_id=employee_id,
         year=year,
-        month=month
+        month=month,
+        user_id=current_user.id
     )
 
 @router.get("/{offday_id}", response_model=OffdayResponse)

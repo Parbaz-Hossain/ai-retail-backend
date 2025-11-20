@@ -33,7 +33,8 @@ async def get_all_tickets(
         ticket_type=ticket_type,
         start_date=start_date,
         end_date=end_date,
-        search=search
+        search=search,
+        user_id=current_user.id
     )
 
 @router.get("/employee/{employee_id}")

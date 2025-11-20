@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.attendance import Attendance
@@ -14,10 +14,12 @@ from app.models.hr.shift_type import ShiftType
 from app.models.hr.holiday import Holiday
 from app.models.hr.offday import Offday
 from app.models.hr.ticket import Ticket
+from app.models.organization.location import Location
 from app.models.shared.enums import AttendanceStatus
 from app.schemas.hr.attendance_schema import AttendanceCreate, AttendanceResponse
 from app.schemas.hr.ticket_schema import TicketCreate
 from app.services.hr.ticket_service import TicketService
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ class AttendanceService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.ticket_service = TicketService(session)
+        self.user_service = UserService(session)
 
     # region Attendance Helper Methods
     async def _check_holiday(self, attendance_date: date) -> bool:
@@ -438,55 +441,85 @@ class AttendanceService:
         employee_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        status: Optional[AttendanceStatus] = None
+        status: Optional[AttendanceStatus] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Get paginated attendance records with filtering"""
-        try:
-            conditions = []
-            
-            if employee_id:
-                conditions.append(Attendance.employee_id == employee_id)
-            if start_date:
-                conditions.append(Attendance.attendance_date >= start_date)
-            if end_date:
-                conditions.append(Attendance.attendance_date <= end_date)
-            if status:
-                conditions.append(Attendance.status == status)
-
-            # Get total count
-            total_count = await self.session.scalar(
-                select(func.count(Attendance.id)).where(*conditions)
-            )
-
-            # Calculate offset
-            skip = (page_index - 1) * page_size
-
-            # Get paginated data
-            attendances = await self.session.scalars(
-                select(Attendance)
-                .options(selectinload(Attendance.employee))
-                .where(*conditions)
-                .order_by(Attendance.attendance_date.desc())
-                .offset(skip)
-                .limit(page_size)
-            )
-
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": total_count or 0,
-                "data": attendances.all()
-            }
-
-        except Exception as e:
-            logger.error(f"Error fetching attendance: {e}")
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": 0,
-                "data": []
-            }
-
+            """Get paginated attendance records with filtering"""
+            try:
+                # Build base query with employee join
+                query = (
+                    select(Attendance)
+                    .join(Employee, Attendance.employee_id == Employee.id)
+                    .options(selectinload(Attendance.employee))
+                    .where(Employee.is_active == True)
+                )
+                
+                # Apply filters
+                conditions = []
+                
+                if employee_id:
+                    conditions.append(Attendance.employee_id == employee_id)
+                
+                if start_date:
+                    conditions.append(Attendance.attendance_date >= start_date)
+                
+                if end_date:
+                    conditions.append(Attendance.attendance_date <= end_date)
+                
+                if status:
+                    conditions.append(Attendance.status == status)
+                
+                # Location manager restriction
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location).where(Location.manager_id == user_id)
+                    )
+                    loc = loc_res.scalar_one_or_none()
+                    if loc:
+                        conditions.append(Employee.location_id == loc.id)
+                
+                if conditions:
+                    query = query.where(and_(*conditions))
+                
+                # Get total count
+                count_query = (
+                    select(func.count(Attendance.id))
+                    .select_from(Attendance)
+                    .join(Employee, Attendance.employee_id == Employee.id)
+                    .where(Employee.is_active == True)
+                )
+                if conditions:
+                    count_query = count_query.where(and_(*conditions))
+                
+                total_count = await self.session.scalar(count_query)
+                
+                # Calculate offset
+                skip = (page_index - 1) * page_size
+                
+                # Get paginated data
+                query = query.order_by(Attendance.attendance_date.desc())
+                query = query.offset(skip).limit(page_size)
+                
+                result = await self.session.execute(query)
+                attendances = result.scalars().all()
+                
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": total_count or 0,
+                    "data": attendances
+                }
+                
+            except Exception as e:
+                logger.error(f"Error fetching attendance: {e}")
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": 0,
+                    "data": []
+                }
+    
     # ---------- Summary (Updated to handle weekends and night shifts) ----------
     async def get_employee_attendance_summary(self, employee_id: int, month: int, year: int) -> Dict:
         try:

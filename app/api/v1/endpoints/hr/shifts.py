@@ -203,7 +203,8 @@ async def get_employee_shifts(
         search=search,
         start_date=start_date,
         end_date=end_date,
-        is_active=is_active
+        is_active=is_active,
+        user_id=current_user.id
     )
 
 @router.get("/employees/{employee_id}/shifts/detail", response_model=EmployeeShiftDetail)
