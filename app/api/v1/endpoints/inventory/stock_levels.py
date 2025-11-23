@@ -44,7 +44,8 @@ async def get_stock_levels(
         page_size=page_size,
         location_id=location_id,
         item_id=item_id,
-        low_stock_only=low_stock_only
+        low_stock_only=low_stock_only,
+        user_id=current_user.id
     )
     return stock_levels
 

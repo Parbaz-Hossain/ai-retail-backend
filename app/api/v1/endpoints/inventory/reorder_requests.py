@@ -85,7 +85,8 @@ async def get_reorder_requests(
         page_size=page_size,
         location_id=location_id,
         status=status,
-        priority=priority
+        priority=priority,
+        user_id=current_user.id
     )
     return requests
 

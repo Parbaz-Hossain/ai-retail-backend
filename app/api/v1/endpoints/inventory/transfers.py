@@ -91,7 +91,8 @@ async def get_transfers(
         page_size=page_size,
         from_location_id=from_location_id,
         to_location_id=to_location_id,
-        status=status
+        status=status,
+        user_id=current_user.id
     )
     return transfers
 

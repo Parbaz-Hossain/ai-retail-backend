@@ -51,7 +51,8 @@ async def get_stock_movements(
         location_id=location_id,
         movement_type=movement_type,
         start_date=start_date,
-        end_date=end_date
+        end_date=end_date,
+        user_id=current_user.id
     )
     return movements
 

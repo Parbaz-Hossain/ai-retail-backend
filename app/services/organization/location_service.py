@@ -141,9 +141,9 @@ class LocationService:
                 loc_res = await self.session.execute(
                         select(Location).where(Location.manager_id == user_id)
                     )
-                loc = loc_res.scalar_one_or_none()
-                if loc:
-                    query = query.where(Location.id == loc.id)
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    query = query.where(Location.id.in_(loc_ids))
             
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())

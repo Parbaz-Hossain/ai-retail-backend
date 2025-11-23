@@ -235,14 +235,15 @@ class EmployeeService:
                 )
             
             # Location manager restriction
-            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
-            if role_name:
-                loc_res = await self.session.execute(
-                    select(Location).where(Location.manager_id == user_id)
-                )
-                loc = loc_res.scalar_one_or_none()
-                if loc:
-                    conditions.append(Employee.location_id == loc.id)
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(Employee.location_id.in_(loc_ids))
             
             if conditions:
                 query = query.where(and_(*conditions))

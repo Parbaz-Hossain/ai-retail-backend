@@ -168,9 +168,9 @@ class DeductionService:
                 loc_res = await self.session.execute(
                     select(Location).where(Location.manager_id == user_id)
                 )
-                loc = loc_res.scalar_one_or_none()
-                if loc:
-                    conditions.append(Employee.location_id == loc.id)
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    conditions.append(Employee.location_id.in_(loc_ids))
             
             if conditions:
                 query = query.where(and_(*conditions))

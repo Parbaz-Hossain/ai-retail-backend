@@ -81,7 +81,8 @@ async def get_inventory_counts(
         page_index=page_index,
         page_size=page_size,
         location_id=location_id,
-        status=status
+        status=status,
+        user_id=current_user.id
     )
     return counts
 
