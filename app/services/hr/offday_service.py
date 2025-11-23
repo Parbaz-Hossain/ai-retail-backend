@@ -7,16 +7,19 @@ from datetime import date, datetime
 
 from app.models.hr.offday import Offday
 from app.models.hr.employee import Employee
+from app.models.organization.location import Location
 from app.schemas.hr.offday_schema import (
     OffdayCreate, OffdayBulkCreate, OffdayUpdate, 
     OffdayResponse, OffdayListResponse
 )
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import logger
+from app.services.auth.user_service import UserService
 
 class OffdayService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.user_service = UserService(db)
 
     async def create_offday(self, offday_data: OffdayCreate, current_user_id: int) -> OffdayResponse:
         """Create a single offday"""
@@ -153,44 +156,73 @@ class OffdayService:
         page_size: int = 100,
         employee_id: Optional[int] = None,
         year: Optional[int] = None,
-        month: Optional[int] = None
+        month: Optional[int] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated offdays with filtering"""
         try:
-            conditions = [Offday.is_active == True]
+            # Build base query with employee join
+            query = (
+                select(Offday)
+                .join(Employee, Offday.employee_id == Employee.id)
+                .options(selectinload(Offday.employee))
+                .where(Offday.is_active == True, Employee.is_active == True)
+            )
+            
+            # Apply filters
+            conditions = []
             
             if employee_id:
                 conditions.append(Offday.employee_id == employee_id)
+            
             if year:
                 conditions.append(Offday.year == year)
+            
             if month:
                 conditions.append(Offday.month == month)
-
+            
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.db.execute(
+                    select(Location).where(Location.manager_id == user_id)
+                )
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    conditions.append(Employee.location_id.in_(loc_ids))
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
             # Get total count
-            total_count = await self.db.scalar(
-                select(func.count(Offday.id)).where(*conditions)
+            count_query = (
+                select(func.count(Offday.id))
+                .select_from(Offday)
+                .join(Employee, Offday.employee_id == Employee.id)
+                .where(Offday.is_active == True, Employee.is_active == True)
             )
-
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.db.scalar(count_query)
+            
             # Calculate offset
             skip = (page_index - 1) * page_size
-
+            
             # Get paginated data
-            offdays = await self.db.scalars(
-                select(Offday)
-                .options(selectinload(Offday.employee))
-                .where(*conditions)
-                .order_by(Offday.offday_date.desc())
-                .offset(skip)
-                .limit(page_size)
-            )
-
+            query = query.order_by(Offday.offday_date.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.db.execute(query)
+            offdays = result.scalars().all()
+            
             return {
                 "page_index": page_index,
                 "page_size": page_size,
                 "count": total_count or 0,
-                "data": offdays.all()
+                "data": offdays
             }
-
+            
         except Exception as e:
             logger.error(f"Error getting offdays: {e}")
             return {
@@ -199,7 +231,7 @@ class OffdayService:
                 "count": 0,
                 "data": []
             }
-
+    
     async def get_offday(self, offday_id: int) -> Optional[OffdayResponse]:
         """Get a single offday by ID"""
         result = await self.db.execute(

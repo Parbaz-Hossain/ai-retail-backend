@@ -205,5 +205,6 @@ async def get_all_salaries(
         year=year,
         location_id=location_id,
         department_id=department_id,
-        payment_status=payment_status
+        payment_status=payment_status,
+        user_id=current_user.id
     )

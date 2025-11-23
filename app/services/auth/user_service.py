@@ -11,6 +11,7 @@ from app.models.auth.permission import Permission
 from app.models.auth.user_role import UserRole
 from app.models.auth.role_permission import RolePermission
 from app.core.security import get_password_hash, generate_password_reset_token
+from app.models.organization.location import Location
 from app.schemas.auth.user import UserCreate, UserResponse, UserUpdate
 from openpyxl import Workbook
 from sqlalchemy import select
@@ -100,6 +101,25 @@ class UserService:
         except Exception as e:
             logger.error(f"Error getting roles for user {user_id}: {str(e)}")
             return []
+
+    async def get_specific_role_name_by_user(self, user_id: int, role_name: str) -> Optional[str]:
+        """Get specific active role name assigned to a user."""
+        try:
+            result = await self.session.execute(
+                select(Role.name)
+                .join(UserRole, UserRole.role_id == Role.id)
+                .where(
+                    UserRole.user_id == user_id,
+                    Role.name == role_name,
+                    Role.is_active == True,
+                    Role.is_deleted == False,
+                    UserRole.is_active == True
+                )
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Error getting role '{role_name}' for user {user_id}: {str(e)}")
+            return None
     
     async def create_user(self, user_create: UserCreate, created_by: Optional[int] = None) -> User:
         """Create new user"""
@@ -125,6 +145,7 @@ class UserService:
                 email=user_create.email,
                 username=user_create.username,
                 full_name=user_create.full_name,
+                location_id=user_create.location_id,
                 hashed_password=get_password_hash(user_create.password),
                 phone=user_create.phone,
                 address=user_create.address,
@@ -337,7 +358,8 @@ class UserService:
         self,
         page_index: int = 1,
         page_size: int = 100,
-        search: str = None
+        search: str = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated list of users with roles"""
         try:
@@ -352,6 +374,16 @@ class UserService:
                         User.full_name.ilike(search_term)
                     )
                 )
+
+            # Location manager restriction
+            role_name = await self.get_specific_role_name_by_user(user_id,"location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                        select(Location).where(Location.manager_id == user_id)
+                    )
+                loc = loc_res.scalar_one_or_none()
+                if loc:
+                    conditions.append(User.location_id == loc.id)
             
             # Get total count
             total_count = await self.session.scalar(

@@ -9,8 +9,10 @@ from sqlalchemy.orm import selectinload
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.user_shift import UserShift
 from app.models.hr.employee import Employee
+from app.models.organization.location import Location
 from app.schemas.hr.shift_schema import EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, UserShiftCreate, UserShiftUpdate
 from app.utils.validators.validation_utils import is_valid_shift
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ logger = logging.getLogger(__name__)
 class ShiftService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     # region Shift Type Management 
 
@@ -283,7 +286,8 @@ class ShiftService:
         search: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Get employee shifts grouped by employee.
@@ -313,6 +317,16 @@ class ShiftService:
                 )
                 .distinct()
             )
+
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                    select(Location).where(Location.manager_id == user_id)
+                )
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    conditions.append(Employee.location_id.in_(loc_ids))
             
             # Apply shift date filters
             if shift_conditions:

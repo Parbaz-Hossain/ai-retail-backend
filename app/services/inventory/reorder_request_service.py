@@ -14,11 +14,13 @@ from app.models.organization.location import Location
 from app.schemas.inventory.reorder_request import ReorderRequestCreate, ReorderRequestUpdate, ReorderRequestItemCreate
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import ReorderRequestStatus
+from app.services.auth.user_service import UserService
 from app.services.task.task_integration_service import TaskIntegrationService
 
 class ReorderRequestService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.user_service = UserService(db)
 
     async def create_reorder_request(self, request_data: ReorderRequestCreate, current_user_id: int) -> ReorderRequest:
         # Validate location exists
@@ -182,7 +184,8 @@ class ReorderRequestService:
         page_size: int = 100,
         location_id: Optional[int] = None,
         status: Optional[ReorderRequestStatus] = None,
-        priority: Optional[str] = None
+        priority: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get reorder requests with pagination"""
         try:
@@ -206,6 +209,17 @@ class ReorderRequestService:
             if priority:
                 conditions.append(ReorderRequest.priority == priority)
                 
+            # Location manager restriction
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.db.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(ReorderRequest.location_id.in_(loc_ids))
+            
             if conditions:
                 query = query.where(and_(*conditions))
             

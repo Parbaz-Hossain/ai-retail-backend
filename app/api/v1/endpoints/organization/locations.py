@@ -41,7 +41,8 @@ async def get_locations(
         location_type=location_type, 
         city=city, 
         is_active=is_active, 
-        search=search
+        search=search,
+        user_id=current_user.id
     )
 
 @router.get("/branches", response_model=List[LocationResponse])

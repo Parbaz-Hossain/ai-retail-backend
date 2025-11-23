@@ -75,7 +75,8 @@ async def get_employees(
         location_id=location_id,
         is_manager=is_manager,
         is_active=is_active,
-        search=search
+        search=search,
+        user_id=current_user.id
     )
 
 @router.get("/managers", response_model=List[EmployeeResponse])

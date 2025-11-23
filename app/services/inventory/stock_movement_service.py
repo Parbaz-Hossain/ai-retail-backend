@@ -14,6 +14,7 @@ from app.schemas.inventory.stock_movement import StockMovementCreate
 from app.schemas.inventory.inventory_response import MovementSummaryResponse
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import StockMovementType
+from app.services.auth.user_service import UserService
 from app.services.task.task_integration_service import TaskIntegrationService
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 class StockMovementService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.user_service = UserService(db)
 
     async def create_stock_movement(
         self, 
@@ -88,7 +90,8 @@ class StockMovementService:
         location_id: Optional[int] = None,
         movement_type: Optional[StockMovementType] = None,
         start_date: Optional[date] = None,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get all stock movements with optional filters"""
         try:
@@ -115,6 +118,17 @@ class StockMovementService:
                 conditions.append(cast(StockMovement.movement_date, Date) >= start_date)
             if end_date:
                 conditions.append(cast(StockMovement.movement_date, Date) <= end_date)
+            
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.db.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(StockMovement.location_id.in_(loc_ids))
             
             if conditions:
                 query = query.where(and_(*conditions))

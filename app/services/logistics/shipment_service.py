@@ -22,6 +22,7 @@ from app.schemas.logistics.shipment_schema import (
     ShipmentCreate, ShipmentUpdate, ShipmentResponse,
     ShipmentItemCreate, OTPVerificationRequest
 )
+from app.services.auth.user_service import UserService
 from app.services.task.task_integration_service import TaskIntegrationService
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 class ShipmentService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     def generate_shipment_number(self) -> str:
         """Generate unique shipment number"""
@@ -307,84 +309,113 @@ class ShipmentService:
         driver_id: Optional[int] = None,
         vehicle_id: Optional[int] = None,
         date_from: Optional[date] = None,
-        date_to: Optional[date] = None
+        date_to: Optional[date] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Get list of shipments with filters"""
-        try:
-            query = select(Shipment).options(
-                selectinload(Shipment.from_location),
-                selectinload(Shipment.to_location),
-                selectinload(Shipment.driver)
-                    .selectinload(Driver.employee)
+            """Get list of shipments with filters"""
+            try:
+                # Build base query
+                query = (
+                    select(Shipment)
                     .options(
-                        selectinload(Employee.location),  
-                        selectinload(Employee.department)
-                    ),
-                selectinload(Shipment.vehicle),
-                selectinload(Shipment.items).selectinload(ShipmentItem.item)
-            )
-            
-            # Apply filters
-            conditions = [Shipment.is_deleted == False]
-            
-            if search:
-                conditions.append(
-                    or_(
-                        Shipment.shipment_number.icontains(search),
-                        Shipment.reference_type.icontains(search)
+                        selectinload(Shipment.from_location),
+                        selectinload(Shipment.to_location),
+                        selectinload(Shipment.driver)
+                            .selectinload(Driver.employee)
+                            .options(
+                                selectinload(Employee.location),  
+                                selectinload(Employee.department)
+                            ),
+                        selectinload(Shipment.vehicle),
+                        selectinload(Shipment.items).selectinload(ShipmentItem.item)
                     )
+                    .where(Shipment.is_deleted == False)
                 )
-            
-            if status:
-                conditions.append(Shipment.status == status)
                 
-            if from_location_id:
-                conditions.append(Shipment.from_location_id == from_location_id)
+                # Apply filters
+                conditions = []
                 
-            if to_location_id:
-                conditions.append(Shipment.to_location_id == to_location_id)
+                if search:
+                    search_pattern = f"%{search}%"
+                    conditions.append(
+                        or_(
+                            Shipment.shipment_number.ilike(search_pattern),
+                            Shipment.reference_type.ilike(search_pattern)
+                        )
+                    )
                 
-            if driver_id:
-                conditions.append(Shipment.driver_id == driver_id)
+                if status:
+                    conditions.append(Shipment.status == status)
                 
-            if vehicle_id:
-                conditions.append(Shipment.vehicle_id == vehicle_id)
+                if from_location_id:
+                    conditions.append(Shipment.from_location_id == from_location_id)
                 
-            if date_from:
-                conditions.append(Shipment.shipment_date >= date_from)
+                if to_location_id:
+                    conditions.append(Shipment.to_location_id == to_location_id)
                 
-            if date_to:
-                conditions.append(Shipment.shipment_date <= date_to)
-            
-            query = query.where(and_(*conditions))
-            
-            # Get total count
-            total_count_query = select(func.count()).select_from(query.subquery())
-            total_result = await self.session.execute(total_count_query)
-            total = total_result.scalar() or 0
-            
-            # Calculate offset and get data
-            skip = (page_index - 1) * page_size
-            query = query.offset(skip).limit(page_size).order_by(Shipment.created_at.desc())
-            result = await self.session.execute(query)
-            shipments = result.scalars().all()
-
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": total,
-                "data": shipments
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting shipments: {str(e)}")
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": 0,
-                "data": []
-            }
-
+                if driver_id:
+                    conditions.append(Shipment.driver_id == driver_id)
+                
+                if vehicle_id:
+                    conditions.append(Shipment.vehicle_id == vehicle_id)
+                
+                if date_from:
+                    conditions.append(Shipment.shipment_date >= date_from)
+                
+                if date_to:
+                    conditions.append(Shipment.shipment_date <= date_to)
+                
+                # Location manager restriction - handles multiple locations per manager
+                if user_id:
+                    role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                    if role_name:
+                        loc_res = await self.session.execute(
+                            select(Location.id).where(Location.manager_id == user_id)
+                        )
+                        loc_ids = loc_res.scalars().all()
+                        if loc_ids:
+                            conditions.append(Shipment.from_location_id.in_(loc_ids))
+                
+                if conditions:
+                    query = query.where(and_(*conditions))
+                
+                # Get total count
+                count_query = (
+                    select(func.count(Shipment.id))
+                    .select_from(Shipment)
+                    .where(Shipment.is_deleted == False)
+                )
+                if conditions:
+                    count_query = count_query.where(and_(*conditions))
+                
+                total_count = await self.session.scalar(count_query)
+                
+                # Calculate offset
+                skip = (page_index - 1) * page_size
+                
+                # Get paginated data
+                query = query.order_by(Shipment.created_at.desc())
+                query = query.offset(skip).limit(page_size)
+                
+                result = await self.session.execute(query)
+                shipments = result.scalars().all()
+                
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": total_count or 0,
+                    "data": shipments
+                }
+                
+            except Exception as e:
+                logger.error(f"Error getting shipments: {str(e)}")
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": 0,
+                    "data": []
+                }
+    
     async def update_shipment(self, shipment_id: int, shipment_data: ShipmentUpdate, user_id: int) -> Optional[Shipment]:
         """Update shipment"""
         try:

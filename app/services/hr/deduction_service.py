@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr.deduction import DeductionType, EmployeeDeduction, SalaryDeduction
 from app.models.hr.employee import Employee
 from app.models.hr.attendance import Attendance
+from app.models.organization.location import Location
 from app.models.shared.enums import DeductionStatus, AttendanceStatus
 from app.schemas.hr.deduction_schema import (
     DeductionTypeCreate, DeductionTypeUpdate,
@@ -16,12 +17,14 @@ from app.schemas.hr.deduction_schema import (
     BulkDeductionCreate
 )
 from fastapi import HTTPException
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 class DeductionService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     # ======================================= Deduction Type CRUD ============================================ #
     async def create_deduction_type(self, data: DeductionTypeCreate) -> DeductionType:
@@ -124,52 +127,91 @@ class DeductionService:
         page_size: int = 100,
         employee_id: Optional[int] = None,
         status: Optional[DeductionStatus] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated list of employee deduction with filtering"""
-
-        conditions = []
-        if employee_id:
-            conditions.append(EmployeeDeduction.employee_id == employee_id)
-        if status:
-            conditions.append(EmployeeDeduction.status == status)
-
-        if search:
-            like = f"%{search}%"
-            conditions.append(
+        try:
+            # Build base query with employee join
+            query = (
+                select(EmployeeDeduction)
+                .join(Employee, EmployeeDeduction.employee_id == Employee.id)
+                .options(
+                    selectinload(EmployeeDeduction.deduction_type),
+                    selectinload(EmployeeDeduction.employee)
+                )
+                .where(Employee.is_active == True)
+            )
+            
+            # Apply filters
+            conditions = []
+            
+            if employee_id:
+                conditions.append(EmployeeDeduction.employee_id == employee_id)
+            
+            if status:
+                conditions.append(EmployeeDeduction.status == status)
+            
+            if search:
+                like = f"%{search}%"
+                conditions.append(
                     or_(
                         EmployeeDeduction.deduction_type.has(DeductionType.name.ilike(like)),
                         Employee.first_name.ilike(like),
                         Employee.last_name.ilike(like)
                     )
                 )
-                
-        # Get total count
-        total_count = await self.session.scalar(
-            select(func.count(EmployeeDeduction.id)).where(*conditions)
-        )
-        
-        # Calculate offset
-        skip = (page_index - 1) * page_size
-        
-        # Get paginated data
-        employee_deductions = await self.session.scalars(
-            select(EmployeeDeduction)
-            .options(
-                selectinload(EmployeeDeduction.deduction_type),
-                selectinload(EmployeeDeduction.employee)
+            
+            # Location manager restriction
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.session.execute(
+                    select(Location).where(Location.manager_id == user_id)
+                )
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    conditions.append(Employee.location_id.in_(loc_ids))
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
+            # Get total count (need to join Employee for location/search filters)
+            count_query = (
+                select(func.count(EmployeeDeduction.id))
+                .select_from(EmployeeDeduction)
+                .join(Employee, EmployeeDeduction.employee_id == Employee.id)
             )
-            .where(*conditions)
-            .offset(skip)
-            .limit(page_size)
-        )
-        return {
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
+            # Calculate offset
+            skip = (page_index - 1) * page_size
+            
+            # Get paginated data
+            query = query.order_by(EmployeeDeduction.created_at.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
+            employee_deductions = result.scalars().all()
+            
+            return {
                 "page_index": page_index,
                 "page_size": page_size,
                 "count": total_count or 0,
-                "data": employee_deductions.all()
+                "data": employee_deductions
             }
-
+            
+        except Exception as e:
+            logger.error(f"Error getting employee deductions: {e}")
+            return {
+                "page_index": page_index,
+                "page_size": page_size,
+                "count": 0,
+                "data": []
+            }
+    
     async def get_employee_deduction(self, deduction_id: int) -> EmployeeDeduction:
         deduction = await self.session.get(EmployeeDeduction, deduction_id, options=[
             selectinload(EmployeeDeduction.deduction_type),

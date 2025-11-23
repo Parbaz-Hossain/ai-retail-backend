@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
@@ -9,6 +9,7 @@ class User(BaseModel):
     email = Column(String(255), unique=True, index=True, nullable=False)
     username = Column(String(100), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=False)
+    location_id = Column(Integer, ForeignKey('locations.id'), nullable=True)
     hashed_password = Column(String(255), nullable=False)
     is_superuser = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
@@ -41,6 +42,7 @@ class User(BaseModel):
     )
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     employees = relationship("Employee", back_populates="user")
+    location = relationship("Location", foreign_keys=[location_id], back_populates="users")
 
     def __repr__(self):
         return f"<User {self.username}>"

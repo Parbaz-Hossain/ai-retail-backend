@@ -18,6 +18,7 @@ from app.models.inventory.stock_movement import StockMovement
 from app.models.organization.location import Location
 from app.models.shared.enums import StockMovementType
 from app.core.exceptions import ValidationError
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 class FoodicsOrderService:
     def __init__(self, db: AsyncSession, foodics_api_token: str):
         self.db = db
+        self.user_service = UserService(db)
         self.api_token = foodics_api_token
         self.base_url = "https://api.foodics.com/v5"
         self.headers = {
@@ -432,7 +434,8 @@ class FoodicsOrderService:
         location_id: Optional[int] = None,
         status: Optional[int] = None,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get orders with pagination and filters"""
         
@@ -454,7 +457,18 @@ class FoodicsOrderService:
         
         if end_date:
             filters.append(Order.business_date <= end_date.date())
-        
+
+        # Location manager restriction
+        if user_id:
+            role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+            if role_name:
+                loc_res = await self.db.execute(
+                    select(Location.id).where(Location.manager_id == user_id)
+                )
+                loc_ids = loc_res.scalars().all()
+                if loc_ids:
+                    filters.append(Order.location_id.in_(loc_ids))
+
         if filters:
             query = query.where(and_(*filters))
         

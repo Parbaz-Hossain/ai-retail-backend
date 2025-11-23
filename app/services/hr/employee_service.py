@@ -3,13 +3,14 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import and_, select, func, or_
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.employee import Employee
 from app.models.organization.department import Department
 from app.models.organization.location import Location
 from app.schemas.hr.employee_schema import EmployeeCreate, EmployeeUpdate
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 class EmployeeService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     # ---------- Helpers ----------
     async def _generate_employee_id(self) -> str:
@@ -191,20 +193,35 @@ class EmployeeService:
         location_id: Optional[int] = None,
         is_manager: Optional[bool] = None,
         is_active: Optional[bool] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get paginated list of employees with filtering"""
         try:
+            # Build base query
+            query = (
+                select(Employee)
+                .options(
+                    selectinload(Employee.department),
+                    selectinload(Employee.location),
+                )
+            )
+            
+            # Apply filters
             conditions = []
             
             if is_active is not None:
                 conditions.append(Employee.is_active == is_active)
+            
             if department_id:
                 conditions.append(Employee.department_id == department_id)
+            
             if location_id:
                 conditions.append(Employee.location_id == location_id)
+            
             if is_manager is not None:
                 conditions.append(Employee.is_manager == is_manager)
+            
             if search:
                 like = f"%{search}%"
                 conditions.append(
@@ -216,34 +233,45 @@ class EmployeeService:
                         Employee.phone.ilike(like),
                     )
                 )
-
+            
+            # Location manager restriction
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(Employee.location_id.in_(loc_ids))
+            
+            if conditions:
+                query = query.where(and_(*conditions))
+            
             # Get total count
-            total_count = await self.session.scalar(
-                select(func.count(Employee.id)).where(*conditions)
-            )
-
+            count_query = select(func.count(Employee.id)).select_from(Employee)
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
+            
             # Calculate offset
             skip = (page_index - 1) * page_size
-
+            
             # Get paginated data
-            employees = await self.session.scalars(
-                select(Employee)
-                .options(
-                    selectinload(Employee.department),
-                    selectinload(Employee.location),
-                )
-                .where(*conditions)
-                .offset(skip)
-                .limit(page_size)
-            )
-
+            query = query.order_by(Employee.created_at.desc())
+            query = query.offset(skip).limit(page_size)
+            
+            result = await self.session.execute(query)
+            employees = result.scalars().all()
+            
             return {
                 "page_index": page_index,
                 "page_size": page_size,
                 "count": total_count or 0,
-                "data": employees.all()
+                "data": employees
             }
-
+            
         except Exception as e:
             logger.error(f"Error getting employees: {e}")
             return {
@@ -252,7 +280,6 @@ class EmployeeService:
                 "count": 0,
                 "data": []
             }
-
     # ---------- Quick helpers ----------
     async def get_managers(self, location_id: Optional[int] = None) -> List[Employee]:
         try:

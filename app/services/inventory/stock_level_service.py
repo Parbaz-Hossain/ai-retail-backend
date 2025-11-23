@@ -9,11 +9,13 @@ from app.models.organization.location import Location
 from app.schemas.inventory.stock_level import StockLevelCreate, StockLevelUpdate
 from app.core.exceptions import NotFoundError, ValidationError
 from decimal import Decimal
+from app.services.auth.user_service import UserService
 
 class StockLevelService:
     def __init__(self, db: AsyncSession):
         self.db = db
-
+        self.user_service = UserService(db)
+        
     async def create_stock_level(self, stock_level_data: StockLevelCreate, current_user_id: int) -> StockLevel:
         # Check if combination already exists
         existing = await self.db.execute(
@@ -71,7 +73,8 @@ class StockLevelService:
         page_size: int = 100,
         location_id: Optional[int] = None,
         item_id: Optional[int] = None,
-        low_stock_only: bool = False
+        low_stock_only: bool = False,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get stock levels with pagination"""
         try:
@@ -85,6 +88,17 @@ class StockLevelService:
                 conditions.append(StockLevel.location_id == location_id)
             if item_id:
                 conditions.append(StockLevel.item_id == item_id)
+
+            # Location manager restriction
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.db.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(StockLevel.location_id.in_(loc_ids))
                 
             if conditions:
                 query = query.where(and_(*conditions))

@@ -14,10 +14,12 @@ from app.schemas.inventory.transfer import TransferCreate, TransferItemCreate
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models.shared.enums import TransferStatus, StockMovementType
 from datetime import datetime, date
+from app.services.auth.user_service import UserService
 
 class TransferService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.user_service = UserService(db)
 
     async def create_transfer(self, transfer_data: TransferCreate, current_user_id: int) -> Transfer:
         """Create transfer with basic info only (no items)"""
@@ -198,7 +200,8 @@ class TransferService:
         page_size: int = 100,
         from_location_id: Optional[int] = None,
         to_location_id: Optional[int] = None,
-        status: Optional[TransferStatus] = None
+        status: Optional[TransferStatus] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get transfers with pagination"""
         try:
@@ -223,6 +226,17 @@ class TransferService:
                 conditions.append(Transfer.to_location_id == to_location_id)
             if status:
                 conditions.append(Transfer.status == status)
+            
+            # Location manager restriction
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.db.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(Transfer.from_location_id.in_(loc_ids))
                 
             if conditions:
                 query = query.where(and_(*conditions))

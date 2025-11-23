@@ -118,7 +118,8 @@ async def get_orders(
             location_id=location_id,
             status=status,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            user_id=current_user.id
         )
         return orders
         
