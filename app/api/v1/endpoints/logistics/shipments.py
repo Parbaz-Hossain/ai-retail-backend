@@ -121,7 +121,8 @@ async def get_shipments(
             driver_id=driver_id,
             vehicle_id=vehicle_id,
             date_from=date_from,
-            date_to=date_to
+            date_to=date_to,
+            user_id=current_user.id
         )
         return shipments
     except Exception as e:

@@ -102,7 +102,8 @@ async def get_employee_deductions(
         page_size=page_size, 
         employee_id=employee_id, 
         status=status,
-        search=search
+        search=search,
+        user_id=current_user.id
     )
 
 @router.get("/employee/{deduction_id}", response_model=EmployeeDeductionResponse)

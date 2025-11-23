@@ -13,9 +13,12 @@ from app.schemas.inventory.inventory_count import InventoryCountCreate, Inventor
 from app.core.exceptions import NotFoundError, ValidationError
 from datetime import date
 
+from app.services.auth.user_service import UserService
+
 class InventoryCountService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.user_service = UserService(db)
 
     async def create_inventory_count(self, count_data: InventoryCountCreate, current_user_id: int) -> InventoryCount:
         # Validate location exists
@@ -173,7 +176,8 @@ class InventoryCountService:
         page_index: int = 1,
         page_size: int = 100,
         location_id: Optional[int] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get inventory counts with pagination"""
         try:
@@ -191,6 +195,17 @@ class InventoryCountService:
             if status:
                 conditions.append(InventoryCount.status == status)
                 
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.db.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(InventoryCount.location_id.in_(loc_ids))
+        
             if conditions:
                 query = query.where(and_(*conditions))
             

@@ -42,7 +42,8 @@ async def get_attendance(
         employee_id=employee_id,
         start_date=start_date,
         end_date=end_date,
-        status=status
+        status=status,
+        user_id=current_user.id
     )
 
 @router.get("/employee/{employee_id}/summary")

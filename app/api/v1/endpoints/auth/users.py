@@ -81,7 +81,8 @@ async def get_users(
         result = await user_service.get_users(
             page_index=page_index,
             page_size=page_size,
-            search=search
+            search=search,
+            user_id=current_user.id
         )
         
         return result

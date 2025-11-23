@@ -31,18 +31,24 @@ logger = logging.getLogger(__name__)
 
 # region ========== Approval Settings ==========
 
-@router.get("/settings", response_model=List[ApprovalSettingsResponse])
+@router.get("/settings", response_model=PaginatedResponse[ApprovalSettingsResponse])
 async def get_approval_settings(
+    page_index: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=100),
     module: Optional[str] = Query(None, description="Filter by module"),
     action_type: Optional[ApprovalRequestType] = Query(None, description="Filter by action type"),
+    is_enabled: Optional[bool] = Query(None, description="Filter by enabled status"),
     session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Get approval settings grouped by module"""
+    """Get paginated approval settings with filtering"""
     service = ApprovalService(session)
     return await service.get_approval_settings(
+        page_index=page_index,
+        page_size=page_size,
         module=module,
-        action_type=action_type     
+        action_type=action_type,
+        is_enabled=is_enabled    
     )
 
 @router.get("/settings/{setting_id}", response_model=ApprovalSettingsResponse)
@@ -167,7 +173,8 @@ async def get_approval_members(
         page_size=page_size,
         module=module,
         action_type=action_type,
-        is_active=is_active
+        is_active=is_active,
+        user_id=current_user.id
     )
 
 @router.get("/members/{member_id}", response_model=ApprovalMemberResponse)
@@ -204,7 +211,8 @@ async def get_all_approval_requests(
         status=status,
         request_type=request_type,
         page_index=page_index,
-        page_size=page_size
+        page_size=page_size,
+        user_id=current_user.id
     )
 
 @router.get("/requests/{request_id}", response_model=ApprovalRequestResponse)
