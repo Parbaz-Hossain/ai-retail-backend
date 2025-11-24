@@ -43,6 +43,7 @@ class PurchaseOrderBase(BaseModel):
     payment_conditions: Optional[str] = None
     tax_amount: Optional[Decimal] = Decimal('0')
     discount_amount: Optional[Decimal] = Decimal('0')
+    location_id: Optional[int] = None
 
 class PurchaseOrderCreate(PurchaseOrderBase):
     pass
@@ -54,11 +55,18 @@ class PurchaseOrderUpdate(BaseModel):
     payment_conditions: Optional[str] = None
     tax_amount: Optional[Decimal] = None
     discount_amount: Optional[Decimal] = None
+    location_id: Optional[int] = None
 
 class SupplierInfo(BaseModel):
     id: int
     name: str
 
+    class Config:
+        from_attributes = True
+
+class LocationRef(BaseModel):
+    id: int
+    name: str
     class Config:
         from_attributes = True
 
@@ -76,6 +84,7 @@ class PurchaseOrderResponse(PurchaseOrderBase):
     updated_at: Optional[datetime]
     items: List[PurchaseOrderItemResponse] = []
     supplier: Optional[SupplierInfo] = None
+    location: Optional[LocationRef] = None
 
     # NEW PAYMENT FIELDS
     paid_amount: Optional[Decimal]= None

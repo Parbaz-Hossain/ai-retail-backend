@@ -35,3 +35,5 @@ class Location(BaseModel):
     shipments_to = relationship("Shipment", foreign_keys="Shipment.to_location_id", back_populates="to_location")
     orders = relationship("Order", back_populates="location")
     users = relationship("User", foreign_keys="User.location_id", back_populates="location")
+    purchase_orders = relationship("PurchaseOrder", back_populates="location")
+    po_payments = relationship("POPayment", back_populates="location")

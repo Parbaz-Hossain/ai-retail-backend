@@ -90,7 +90,8 @@ async def get_all_po_payments(
             page_size=page_size,
             purchase_order_id=purchase_order_id,
             status=status,
-            search=search
+            search=search,
+            user_id=current_user.id
         )
         return payments
 

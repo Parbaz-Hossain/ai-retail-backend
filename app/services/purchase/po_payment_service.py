@@ -7,15 +7,18 @@ from sqlalchemy import or_, select, and_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
+from app.models.organization.location import Location
 from app.models.purchase.po_payment import POPayment, PaymentStatus, PaymentType
 from app.models.purchase.purchase_order import PurchaseOrder
 from app.schemas.purchase.po_payment_schema import POPaymentCreate, POPaymentResponse, POPaymentUpdate
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 class POPaymentService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     async def create_payment(
         self, 
@@ -221,61 +224,90 @@ class POPaymentService:
         page_size: int = 100,
         purchase_order_id: Optional[int] = None,
         status: Optional[PaymentStatus] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Get all payments with pagination and filters"""
-        try:
-            filters = [POPayment.is_deleted == False]
-            
-            if purchase_order_id is not None:
-                filters.append(POPayment.purchase_order_id == purchase_order_id)
-            
-            if status is not None:
-                filters.append(POPayment.status == status)
-            
-            if search:
-                filters.append(
-                    or_(
-                        POPayment.notes.ilike(f"%{search}%"),
-                        PurchaseOrder.po_number.ilike(f"%{search}%")
-                    )
+            """Get all payments with pagination and filters"""
+            try:
+                # Build base query with PurchaseOrder join
+                query = (
+                    select(POPayment)
+                    .join(PurchaseOrder, POPayment.purchase_order_id == PurchaseOrder.id)
+                    .options(selectinload(POPayment.purchase_order))
+                    .options(selectinload(POPayment.location))
+                    .where(POPayment.is_deleted == False)
                 )
-
-            query = (
-                select(POPayment)
-                .options(selectinload(POPayment.purchase_order))
-                .join(PurchaseOrder, POPayment.purchase_order_id == PurchaseOrder.id)
-                .where(and_(*filters))
-                .order_by(POPayment.created_at.desc())
-            )
-
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
-            total_result = await self.session.execute(count_query)
-            total = total_result.scalar() or 0
-
-            # Pagination
-            skip = (page_index - 1) * page_size
-            paginated_query = query.offset(skip).limit(page_size)
-            result = await self.session.execute(paginated_query)
-            payments = result.scalars().all()
-
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": total,
-                "data": payments
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting all payments: {str(e)}")
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": 0,
-                "data": []
-            }
-
+                
+                # Apply filters
+                conditions = []
+                
+                if purchase_order_id is not None:
+                    conditions.append(POPayment.purchase_order_id == purchase_order_id)
+                
+                if status is not None:
+                    conditions.append(POPayment.status == status)
+                
+                if search:
+                    search_pattern = f"%{search}%"
+                    conditions.append(
+                        or_(
+                            POPayment.notes.ilike(search_pattern),
+                            PurchaseOrder.po_number.ilike(search_pattern)
+                        )
+                    )
+                
+                # Location manager restriction - handles multiple locations per manager
+                if user_id:
+                    role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                    if role_name:
+                        loc_res = await self.session.execute(
+                            select(Location.id).where(Location.manager_id == user_id)
+                        )
+                        loc_ids = loc_res.scalars().all()
+                        if loc_ids:
+                            conditions.append(POPayment.location_id.in_(loc_ids))
+                
+                if conditions:
+                    query = query.where(and_(*conditions))
+                
+                # Get total count
+                count_query = (
+                    select(func.count(POPayment.id))
+                    .select_from(POPayment)
+                    .join(PurchaseOrder, POPayment.purchase_order_id == PurchaseOrder.id)
+                    .where(POPayment.is_deleted == False)
+                )
+                if conditions:
+                    count_query = count_query.where(and_(*conditions))
+                
+                total_count = await self.session.scalar(count_query)
+                
+                # Calculate offset
+                skip = (page_index - 1) * page_size
+                
+                # Get paginated data
+                query = query.order_by(POPayment.created_at.desc())
+                query = query.offset(skip).limit(page_size)
+                
+                result = await self.session.execute(query)
+                payments = result.scalars().all()
+                
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": total_count or 0,
+                    "data": payments
+                }
+                
+            except Exception as e:
+                logger.error(f"Error getting all payments: {str(e)}")
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": 0,
+                    "data": []
+                }
+                
     async def get_po_payments(
         self, 
         page_index: int = 1,
@@ -416,6 +448,7 @@ class POPaymentService:
             result = await self.session.execute(
                 select(POPayment)
                 .options(selectinload(POPayment.purchase_order))
+                .options(selectinload(POPayment.location))
                 .where(
                     and_(
                         POPayment.id == payment_id,

@@ -52,7 +52,8 @@ async def get_drivers(
             page_size=page_size,
             search=search,
             is_available=is_available,
-            is_active=is_active
+            is_active=is_active,
+            user_id=current_user.id
         )
         return drivers
     except Exception as e:

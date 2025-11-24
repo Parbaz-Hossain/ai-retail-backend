@@ -11,14 +11,17 @@ from app.models.logistics.driver import Driver
 from app.models.hr.employee import Employee
 from app.models.logistics.shipment import Shipment
 from app.models.logistics.shipment_item import ShipmentItem
+from app.models.organization.location import Location
 from app.schemas.common.pagination import PaginatedResponse
 from app.schemas.logistics.driver_schema import DriverCreate, DriverUpdate, DriverResponse
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 class DriverService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)  
 
     async def create_driver(self, driver_data: DriverCreate, user_id: int) -> Driver:
         """Create a new driver"""
@@ -107,71 +110,99 @@ class DriverService:
         page_size: int = 100,
         search: Optional[str] = None,
         is_available: Optional[bool] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Get list of drivers with filters"""
-        try:
-            conditions = [Driver.is_deleted == False]
-
-            if search:
-                conditions.append(
-                    or_(
-                        Driver.license_number.ilike(f"%{search}%"),
-                        Driver.phone.ilike(f"%{search}%")
+            """Get list of drivers with filters"""
+            try:
+                # Build base query with employee join
+                query = (
+                    select(Driver)
+                    .join(Employee, Driver.employee_id == Employee.id)
+                    .options(
+                        selectinload(Driver.employee).selectinload(Employee.department),
+                        selectinload(Driver.employee).selectinload(Employee.location),
                     )
+                    .where(Driver.is_deleted == False, Employee.is_active == True)
                 )
-
-            if is_available is not None:
-                conditions.append(Driver.is_available == is_available)
-
-            if is_active is not None:
-                conditions.append(Driver.is_active == is_active)
-
-            # Count total first
-            total = await self.session.scalar(
-                select(func.count()).select_from(Driver).where(and_(*conditions))
-            )
-
-            # Calculate offset
-            skip = (page_index - 1) * page_size
-
-            # Build query with eager loads
-            query = (
-                select(Driver)
-                .options(
-                    selectinload(Driver.employee).selectinload(Employee.department),
-                    selectinload(Driver.employee).selectinload(Employee.location),
+                
+                # Apply filters
+                conditions = []
+                
+                if search:
+                    search_pattern = f"%{search}%"
+                    conditions.append(
+                        or_(
+                            Driver.license_number.ilike(search_pattern),
+                            Driver.phone.ilike(search_pattern),
+                            Employee.first_name.ilike(search_pattern),
+                            Employee.last_name.ilike(search_pattern)
+                        )
+                    )
+                
+                if is_available is not None:
+                    conditions.append(Driver.is_available == is_available)
+                
+                if is_active is not None:
+                    conditions.append(Driver.is_active == is_active)
+                
+                # Location manager restriction - handles multiple locations per manager
+                if user_id:
+                    role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                    if role_name:
+                        loc_res = await self.session.execute(
+                            select(Location.id).where(Location.manager_id == user_id)
+                        )
+                        loc_ids = loc_res.scalars().all()
+                        if loc_ids:
+                            conditions.append(Employee.location_id.in_(loc_ids))
+                
+                if conditions:
+                    query = query.where(and_(*conditions))
+                
+                # Get total count
+                count_query = (
+                    select(func.count(Driver.id))
+                    .select_from(Driver)
+                    .join(Employee, Driver.employee_id == Employee.id)
+                    .where(Driver.is_deleted == False, Employee.is_active == True)
                 )
-                .where(and_(*conditions))
-                .offset(skip)
-                .limit(page_size)
-                .order_by(Driver.created_at.desc())
-            )
-
-            result = await self.session.execute(query)
-            drivers = result.scalars().all()
-
-            # Convert ORM → Pydantic
-            driver_list = [
-                DriverResponse.model_validate(d, from_attributes=True) for d in drivers
-            ]
-
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": total,
-                "data": driver_list
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting drivers: {str(e)}")
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": 0,
-                "data": []
-            }
-
+                if conditions:
+                    count_query = count_query.where(and_(*conditions))
+                
+                total_count = await self.session.scalar(count_query)
+                
+                # Calculate offset
+                skip = (page_index - 1) * page_size
+                
+                # Get paginated data
+                query = query.order_by(Driver.created_at.desc())
+                query = query.offset(skip).limit(page_size)
+                
+                result = await self.session.execute(query)
+                drivers = result.scalars().all()
+                
+                # Convert ORM → Pydantic
+                driver_list = [
+                    DriverResponse.model_validate(d, from_attributes=True) for d in drivers
+                ]
+                
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": total_count or 0,
+                    "data": driver_list
+                }
+                
+            except Exception as e:
+                logger.error(f"Error getting drivers: {str(e)}")
+                return {
+                    "page_index": page_index,
+                    "page_size": page_size,
+                    "count": 0,
+                    "data": []
+                }
+    
     async def update_driver(self, driver_id: int, driver_data: DriverUpdate, user_id: int) -> Optional[Driver]:
         """Update driver"""
         try:
@@ -351,7 +382,6 @@ class DriverService:
                 "count": 0,
                 "data": []
             }
-
 
     async def get_license_expiring_soon(self, days_ahead: int = 30) -> List[Driver]:
         """Return drivers with license_expiry between today and today+days_ahead (inclusive)."""
