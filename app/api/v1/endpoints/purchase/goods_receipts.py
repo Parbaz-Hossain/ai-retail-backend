@@ -55,7 +55,8 @@ async def get_goods_receipts(
             purchase_order_id=purchase_order_id,
             start_date=start_date,
             end_date=end_date,
-            search=search
+            search=search,
+            user_id=current_user.id
         )
         return result
     except Exception as e:

@@ -16,6 +16,8 @@ class POPayment(BaseModel):
     requested_by = Column(Integer, nullable=False)  # User ID
     approved_by = Column(Integer)  # Manager User ID
     approved_date = Column(DateTime(timezone=True))
+    location_id = Column(Integer, ForeignKey('locations.id'), nullable=True)
     
     # Relationships
     purchase_order = relationship("PurchaseOrder", back_populates="payments")
+    location = relationship("Location", back_populates="po_payments")

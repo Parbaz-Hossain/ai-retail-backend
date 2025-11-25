@@ -22,6 +22,7 @@ class PurchaseOrder(BaseModel):
     requested_by = Column(Integer)  # User ID
     approved_by = Column(Integer)  # User ID
     approved_date = Column(DateTime(timezone=True))
+    location_id = Column(Integer, ForeignKey('locations.id'), nullable=True)
 
     # NEW PAYMENT FIELDS
     paid_amount = Column(Numeric(12, 2), default=0)
@@ -33,3 +34,4 @@ class PurchaseOrder(BaseModel):
     items = relationship("PurchaseOrderItem", back_populates="purchase_order")
     goods_receipts = relationship("GoodsReceipt", back_populates="purchase_order")
     payments = relationship("POPayment", back_populates="purchase_order")
+    location = relationship("Location", back_populates="purchase_orders")

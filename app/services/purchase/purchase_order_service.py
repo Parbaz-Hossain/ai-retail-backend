@@ -8,6 +8,7 @@ from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
+from app.models.organization.location import Location
 from app.models.purchase.purchase_order import PurchaseOrder
 from app.models.purchase.purchase_order_item import PurchaseOrderItem
 from app.models.purchase.supplier import Supplier
@@ -19,6 +20,7 @@ from app.schemas.purchase.purchase_order_schema import (
     PurchaseOrderUpdate, 
     PurchaseOrderItemCreate
 )
+from app.services.auth.user_service import UserService
 from app.services.task.task_integration_service import TaskIntegrationService
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,7 @@ logger = logging.getLogger(__name__)
 class PurchaseOrderService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     async def generate_po_number(self) -> str:
         """Generate unique purchase order number"""
@@ -359,7 +362,8 @@ class PurchaseOrderService:
                 select(PurchaseOrder)
                 .options(
                     selectinload(PurchaseOrder.items.and_(PurchaseOrderItem.is_deleted == False)).selectinload(PurchaseOrderItem.item),
-                    selectinload(PurchaseOrder.supplier)
+                    selectinload(PurchaseOrder.supplier),
+                    selectinload(PurchaseOrder.location)
                 )
                 .where(
                     and_(
@@ -382,14 +386,16 @@ class PurchaseOrderService:
         supplier_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get purchase orders with pagination and filters"""
         try:
             # Base query
             query = select(PurchaseOrder).options(
                 selectinload(PurchaseOrder.supplier),
-                selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.item)
+                selectinload(PurchaseOrder.items).selectinload(PurchaseOrderItem.item),
+                selectinload(PurchaseOrder.location)
             ).where(PurchaseOrder.is_deleted == False)
 
             # Apply filters
@@ -411,6 +417,17 @@ class PurchaseOrderService:
                     PurchaseOrder.notes.ilike(f"%{search}%")
                 )
                 query = query.where(search_filter)
+
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        query = query.where(PurchaseOrder.location_id.in_(loc_ids))
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())

@@ -26,12 +26,14 @@ from app.models.logistics.shipment import Shipment
 from app.models.task.task import Task
 from app.models.shared.enums import StockMovementType, PurchaseOrderStatus, AttendanceStatus, TaskStatus
 from app.schemas.common.pagination import PaginatedResponse
+from app.services.auth.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 class ReportService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)  
 
     # =================== INVENTORY REPORTS ===================
     
@@ -44,134 +46,155 @@ class ReportService:
         stock_status: Optional[str] = None,
         search: Optional[str] = None,
         sort_by: str = "item_name",
-        sort_order: str = "asc"
+        sort_order: str = "asc",
+        user_id: Optional[int] = None
     ) -> PaginatedResponse[Dict]:
-        """Generate comprehensive stock levels report"""
-        try:
-            # Build base query
-            query = select(
-                StockLevel.id,
-                Item.item_code.label("sku"),
-                Item.name.label("item_name"),
-                Category.name.label("category_name"),
-                Location.name.label("location_name"),
-                StockLevel.current_stock,
-                StockLevel.available_stock,
-                StockLevel.reserved_stock,
-                StockLevel.par_level_min.label("minimum_stock"),
-                StockLevel.par_level_max.label("maximum_stock"),
-                Item.reorder_point,
-                Item.unit_cost,
-                (StockLevel.current_stock * Item.unit_cost).label("stock_value"),
-                case(
-                    (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
-                    (StockLevel.current_stock <= Item.reorder_point, "LOW"),
-                    (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
-                    else_="NORMAL"
-                ).label("stock_status"),
-                case(
-                    (StockLevel.current_stock <= 0, "CRITICAL"),
-                    (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
-                    (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
-                    else_="LOW"
-                ).label("priority"),
-                Item.unit_type.label("unit")
-            ).select_from(StockLevel)\
-             .join(Item, StockLevel.item_id == Item.id)\
-             .join(Location, StockLevel.location_id == Location.id)\
-             .outerjoin(Category, Item.category_id == Category.id)\
-             .where(
-                and_(
+            """Generate comprehensive stock levels report"""
+            try:
+                # Build base query
+                query = select(
+                    StockLevel.id,
+                    Item.item_code.label("sku"),
+                    Item.name.label("item_name"),
+                    Category.name.label("category_name"),
+                    Location.name.label("location_name"),
+                    StockLevel.current_stock,
+                    StockLevel.available_stock,
+                    StockLevel.reserved_stock,
+                    StockLevel.par_level_min.label("minimum_stock"),
+                    StockLevel.par_level_max.label("maximum_stock"),
+                    Item.reorder_point,
+                    Item.unit_cost,
+                    (StockLevel.current_stock * Item.unit_cost).label("stock_value"),
+                    case(
+                        (StockLevel.current_stock <= 0, "OUT_OF_STOCK"),
+                        (StockLevel.current_stock <= Item.reorder_point, "LOW"),
+                        (StockLevel.current_stock >= StockLevel.par_level_max, "HIGH"),
+                        else_="NORMAL"
+                    ).label("stock_status"),
+                    case(
+                        (StockLevel.current_stock <= 0, "CRITICAL"),
+                        (StockLevel.current_stock <= Item.reorder_point, "HIGH"),
+                        (StockLevel.current_stock <= StockLevel.par_level_min, "MEDIUM"),
+                        else_="LOW"
+                    ).label("priority"),
+                    Item.unit_type.label("unit")
+                ).select_from(StockLevel)\
+                .join(Item, StockLevel.item_id == Item.id)\
+                .join(Location, StockLevel.location_id == Location.id)\
+                .outerjoin(Category, Item.category_id == Category.id)
+                
+                # Base conditions
+                conditions = [
                     StockLevel.is_deleted == False,
                     Item.is_deleted == False,
                     Location.is_active == True
-                )
-            )
+                ]
 
-            # Apply filters
-            if location_id:
-                query = query.where(StockLevel.location_id == location_id)
-            
-            if category_id:
-                query = query.where(Item.category_id == category_id)
-            
-            if stock_status:
-                if stock_status == "LOW":
-                    query = query.where(StockLevel.current_stock <= Item.reorder_point)
-                elif stock_status == "OUT_OF_STOCK":
-                    query = query.where(StockLevel.current_stock <= 0)
-                elif stock_status == "HIGH":
-                    query = query.where(StockLevel.current_stock >= StockLevel.par_level_max)
-            
-            if search:
-                query = query.where(
-                    or_(
-                        Item.name.ilike(f"%{search}%"),
-                        Item.item_code.ilike(f"%{search}%"),
-                        Category.name.ilike(f"%{search}%"),
-                        Location.name.ilike(f"%{search}%")
+                # Apply filters
+                if location_id:
+                    conditions.append(StockLevel.location_id == location_id)
+                
+                if category_id:
+                    conditions.append(Item.category_id == category_id)
+                
+                if stock_status:
+                    if stock_status == "LOW":
+                        conditions.append(StockLevel.current_stock <= Item.reorder_point)
+                    elif stock_status == "OUT_OF_STOCK":
+                        conditions.append(StockLevel.current_stock <= 0)
+                    elif stock_status == "HIGH":
+                        conditions.append(StockLevel.current_stock >= StockLevel.par_level_max)
+                
+                if search:
+                    conditions.append(
+                        or_(
+                            Item.name.ilike(f"%{search}%"),
+                            Item.item_code.ilike(f"%{search}%"),
+                            Category.name.ilike(f"%{search}%"),
+                            Location.name.ilike(f"%{search}%")
+                        )
                     )
+                
+                # Location manager restriction - handles multiple locations per manager
+                if user_id:
+                    role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                    if role_name:
+                        loc_res = await self.session.execute(
+                            select(Location.id).where(Location.manager_id == user_id)
+                        )
+                        loc_ids = loc_res.scalars().all()
+                        if loc_ids:
+                            conditions.append(StockLevel.location_id.in_(loc_ids))
+                
+                query = query.where(and_(*conditions))
+
+                # Get total count with proper query structure
+                count_query = (
+                    select(func.count(StockLevel.id))
+                    .select_from(StockLevel)
+                    .join(Item, StockLevel.item_id == Item.id)
+                    .join(Location, StockLevel.location_id == Location.id)
+                    .outerjoin(Category, Item.category_id == Category.id)
+                    .where(and_(*conditions))
+                )
+                total_result = await self.session.execute(count_query)
+                total_count = total_result.scalar() or 0
+
+                # Apply sorting
+                sort_column = {
+                    "item_name": Item.name,
+                    "current_stock": StockLevel.current_stock,
+                    "available_stock": StockLevel.available_stock,
+                    "stock_value": (StockLevel.current_stock * Item.unit_cost),
+                    "location_name": Location.name
+                }.get(sort_by, Item.name)
+
+                if sort_order == "desc":
+                    query = query.order_by(desc(sort_column))
+                else:
+                    query = query.order_by(asc(sort_column))
+
+                # Apply pagination
+                offset = (page_index - 1) * page_size
+                query = query.offset(offset).limit(page_size)
+
+                # Execute query
+                result = await self.session.execute(query)
+                rows = result.fetchall()
+
+                # Format data
+                data = []
+                for idx, row in enumerate(rows):
+                    data.append({
+                        "sl": offset + idx + 1,
+                        "sku": row.sku,
+                        "item_name": row.item_name,
+                        "category": row.category_name or "Uncategorized",
+                        "location": row.location_name,
+                        "current_stock": float(row.current_stock),
+                        "available_stock": float(row.available_stock),
+                        "reserved_stock": float(row.reserved_stock),
+                        "minimum_stock": float(row.minimum_stock or 0),
+                        "maximum_stock": float(row.maximum_stock or 0),
+                        "reorder_point": float(row.reorder_point or 0),
+                        "unit_cost": float(row.unit_cost or 0),
+                        "stock_value": float(row.stock_value or 0),
+                        "stock_status": row.stock_status,
+                        "priority": row.priority,
+                        "unit": row.unit.value if row.unit else "PCS"
+                    })
+
+                return PaginatedResponse(
+                    page_index=page_index,
+                    page_size=page_size,
+                    count=total_count,
+                    data=data
                 )
 
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
-            total_result = await self.session.execute(count_query)
-            total_count = total_result.scalar()
-
-            # Apply sorting
-            sort_column = {
-                "item_name": Item.name,
-                "current_stock": StockLevel.current_stock,
-                "available_stock": StockLevel.available_stock,
-                "stock_value": (StockLevel.current_stock * Item.unit_cost),
-                "location_name": Location.name
-            }.get(sort_by, Item.name)
-
-            if sort_order == "desc":
-                query = query.order_by(desc(sort_column))
-            else:
-                query = query.order_by(asc(sort_column))
-
-            # Apply pagination
-            offset = (page_index - 1) * page_size
-            query = query.offset(offset).limit(page_size)
-
-            # Execute query
-            result = await self.session.execute(query)
-            rows = result.fetchall()
-
-            # Format data
-            data = []
-            for idx, row in enumerate(rows):
-                data.append({
-                    "sl": offset + idx + 1,
-                    "sku": row.sku,
-                    "item_name": row.item_name,
-                    "category": row.category_name or "Uncategorized",
-                    "location": row.location_name,
-                    "current_stock": float(row.current_stock),
-                    "available_stock": float(row.available_stock),
-                    "reserved_stock": float(row.reserved_stock),
-                    "minimum_stock": float(row.minimum_stock or 0),
-                    "maximum_stock": float(row.maximum_stock or 0),
-                    "reorder_point": float(row.reorder_point or 0),
-                    "unit_cost": float(row.unit_cost or 0),
-                    "stock_value": float(row.stock_value or 0),
-                    "stock_status": row.stock_status,
-                    "priority": row.priority,
-                    "unit": row.unit.value if row.unit else "PCS"
-                })
-
-            return PaginatedResponse(
-                page_index=page_index,
-                page_size=page_size,
-                count=total_count,
-                data=data
-            )
-
-        except Exception as e:
-            logger.error(f"Error in stock levels report: {str(e)}")
-            raise
+            except Exception as e:
+                logger.error(f"Error in stock levels report: {str(e)}")
+                raise
 
     async def get_stock_movements_report(
         self,
@@ -182,7 +205,8 @@ class ReportService:
         location_id: Optional[int] = None,
         item_id: Optional[int] = None,
         movement_type: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> PaginatedResponse[Dict]:
         """Generate stock movements report with detailed transaction history"""
         try:
@@ -210,28 +234,28 @@ class ReportService:
                 StockMovement.movement_date,
                 StockMovement.created_at
             ).select_from(StockMovement)\
-             .join(Item, StockMovement.item_id == Item.id)\
-             .join(Location, StockMovement.location_id == Location.id)\
-             .where(
-                and_(
-                    StockMovement.is_deleted == False,
-                    func.date(StockMovement.movement_date) >= from_date,
-                    func.date(StockMovement.movement_date) <= to_date
-                )
-            )
+            .join(Item, StockMovement.item_id == Item.id)\
+            .join(Location, StockMovement.location_id == Location.id)
+            
+            # Base conditions
+            conditions = [
+                StockMovement.is_deleted == False,
+                func.date(StockMovement.movement_date) >= from_date,
+                func.date(StockMovement.movement_date) <= to_date
+            ]
 
             # Apply filters
             if location_id:
-                query = query.where(StockMovement.location_id == location_id)
+                conditions.append(StockMovement.location_id == location_id)
             
             if item_id:
-                query = query.where(StockMovement.item_id == item_id)
+                conditions.append(StockMovement.item_id == item_id)
             
             if movement_type:
-                query = query.where(StockMovement.movement_type == movement_type)
+                conditions.append(StockMovement.movement_type == movement_type)
             
             if search:
-                query = query.where(
+                conditions.append(
                     or_(
                         Item.name.ilike(f"%{search}%"),
                         Item.item_code.ilike(f"%{search}%"),
@@ -240,11 +264,30 @@ class ReportService:
                         StockMovement.batch_number.ilike(f"%{search}%")
                     )
                 )
+            
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(StockMovement.location_id.in_(loc_ids))
+            
+            query = query.where(and_(*conditions))
 
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
+            # Get total count with proper query structure
+            count_query = (
+                select(func.count(StockMovement.id))
+                .select_from(StockMovement)
+                .join(Item, StockMovement.item_id == Item.id)
+                .join(Location, StockMovement.location_id == Location.id)
+                .where(and_(*conditions))
+            )
             total_result = await self.session.execute(count_query)
-            total_count = total_result.scalar()
+            total_count = total_result.scalar() or 0
 
             # Apply pagination and sorting
             offset = (page_index - 1) * page_size
@@ -295,7 +338,8 @@ class ReportService:
         priority: Optional[str] = None,
         search: Optional[str] = None,
         sort_by: str = "priority",
-        sort_order: str = "asc"
+        sort_order: str = "asc",
+        user_id: Optional[int] = None
     ) -> PaginatedResponse[Dict]:
         """Generate low stock alerts report"""
         try:
@@ -319,50 +363,71 @@ class ReportService:
                 Item.unit_cost,
                 ((Item.reorder_point - StockLevel.current_stock) * Item.unit_cost).label("estimated_cost")
             ).select_from(StockLevel)\
-             .join(Item, StockLevel.item_id == Item.id)\
-             .join(Location, StockLevel.location_id == Location.id)\
-             .outerjoin(Category, Item.category_id == Category.id)\
-             .where(
-                and_(
-                    StockLevel.is_deleted == False,
-                    Item.is_deleted == False,
-                    Location.is_active == True,
-                    StockLevel.current_stock <= Item.reorder_point
-                )
-            )
+            .join(Item, StockLevel.item_id == Item.id)\
+            .join(Location, StockLevel.location_id == Location.id)\
+            .outerjoin(Category, Item.category_id == Category.id)
+            
+            # Base conditions
+            conditions = [
+                StockLevel.is_deleted == False,
+                Item.is_deleted == False,
+                Location.is_active == True,
+                StockLevel.current_stock <= Item.reorder_point
+            ]
 
             # Apply filters
             if location_id:
-                query = query.where(StockLevel.location_id == location_id)
+                conditions.append(StockLevel.location_id == location_id)
             
             if category_id:
-                query = query.where(Item.category_id == category_id)
+                conditions.append(Item.category_id == category_id)
             
             if priority:
                 if priority == "CRITICAL":
-                    query = query.where(StockLevel.current_stock <= 0)
+                    conditions.append(StockLevel.current_stock <= 0)
                 elif priority == "HIGH":
-                    query = query.where(
+                    conditions.append(
                         and_(
                             StockLevel.current_stock > 0,
                             StockLevel.current_stock <= (Item.reorder_point * 0.5)
                         )
                     )
 
-             # Enhanced search functionality
+            # Enhanced search functionality
             if search:
-                search_filter = or_(
-                    Item.name.ilike(f"%{search}%"),
-                    Item.item_code.ilike(f"%{search}%"),
-                    Category.name.ilike(f"%{search}%"),
-                    Location.name.ilike(f"%{search}%")
+                conditions.append(
+                    or_(
+                        Item.name.ilike(f"%{search}%"),
+                        Item.item_code.ilike(f"%{search}%"),
+                        Category.name.ilike(f"%{search}%"),
+                        Location.name.ilike(f"%{search}%")
+                    )
                 )
-                query = query.where(search_filter)
+            
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(StockLevel.location_id.in_(loc_ids))
+            
+            query = query.where(and_(*conditions))
 
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
+            # Get total count with proper query structure
+            count_query = (
+                select(func.count(StockLevel.id))
+                .select_from(StockLevel)
+                .join(Item, StockLevel.item_id == Item.id)
+                .join(Location, StockLevel.location_id == Location.id)
+                .outerjoin(Category, Item.category_id == Category.id)
+                .where(and_(*conditions))
+            )
             total_result = await self.session.execute(count_query)
-            total_count = total_result.scalar()
+            total_count = total_result.scalar() or 0
 
             # Apply pagination and sorting (critical items first)
             offset = (page_index - 1) * page_size

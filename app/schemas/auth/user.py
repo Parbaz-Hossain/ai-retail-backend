@@ -119,6 +119,12 @@ class UserInDBBase(UserBase):
     class Config:
         from_attributes = True
 
+class LocationRef(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
 class User(UserInDBBase):
     roles: List['Role'] = []
 
@@ -127,3 +133,4 @@ class UserInDB(UserInDBBase):
 
 class UserResponse(UserInDBBase):
     roles: List['Role'] = []
+    location: Optional[LocationRef] = None
