@@ -139,9 +139,10 @@ class LocationService:
             role_name = await self.user_service.get_specific_role_name_by_user(user_id,"location_manager")
             if role_name:
                 loc_res = await self.session.execute(
-                        select(Location).where(Location.manager_id == user_id)
-                    )
+                    select(Location.id).where(Location.manager_id == user_id)
+                )
                 loc_ids = loc_res.scalars().all()
+                logger.info(f"Location Manager {user_id} has access to locations: {loc_ids}")
                 if loc_ids:
                     query = query.where(Location.id.in_(loc_ids))
             

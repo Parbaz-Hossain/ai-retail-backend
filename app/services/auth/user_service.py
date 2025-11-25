@@ -29,7 +29,11 @@ class UserService:
         """Get user by ID"""
         try:
             result = await self.session.execute(
-                select(User).where(
+                select(User)
+                .options(
+                    selectinload(User.location)
+                )
+                .where(
                     User.id == user_id,
                     User.is_deleted == False
                 )

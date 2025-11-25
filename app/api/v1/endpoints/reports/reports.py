@@ -38,7 +38,8 @@ async def get_stock_levels_report(
             stock_status=stock_status,
             search=search,
             sort_by=sort_by,
-            sort_order=sort_order
+            sort_order=sort_order,
+            user_id=current_user.id
         )
         return result
     except Exception as e:
@@ -74,7 +75,8 @@ async def get_stock_movements_report(
             location_id=location_id,
             item_id=item_id,
             movement_type=movement_type,
-            search=search
+            search=search,
+            user_id=current_user.id
         )
         return result
     except Exception as e:
@@ -110,7 +112,8 @@ async def get_low_stock_alerts_report(
             priority=priority,
              search=search,
             sort_by=sort_by,
-            sort_order=sort_order
+            sort_order=sort_order,
+            user_id=current_user.id
         )
         return result
     except Exception as e:
