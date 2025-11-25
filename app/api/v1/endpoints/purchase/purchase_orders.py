@@ -272,7 +272,8 @@ async def get_purchase_orders(
             supplier_id=supplier_id,
             start_date=start_date,
             end_date=end_date,
-            search=search
+            search=search,
+            user_id=current_user.id
         )
         return result
     except Exception as e:

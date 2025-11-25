@@ -7,6 +7,7 @@ from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
+from app.models.organization.location import Location
 from app.models.purchase.goods_receipt import GoodsReceipt
 from app.models.purchase.goods_receipt_item import GoodsReceiptItem
 from app.models.purchase.purchase_order import PurchaseOrder
@@ -20,6 +21,7 @@ from app.schemas.purchase.goods_receipt_schema import (
     GoodsReceiptResponse,
     GoodsReceiptUpdate
 )
+from app.services.auth.user_service import UserService
 from app.services.task.task_service import TaskService
 from app.models.shared.enums import TaskStatus, ReferenceType
 
@@ -28,6 +30,7 @@ logger = logging.getLogger(__name__)
 class GoodsReceiptService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.user_service = UserService(session)
 
     async def generate_receipt_number(self) -> str:
         """Generate unique goods receipt number"""
@@ -234,7 +237,8 @@ class GoodsReceiptService:
         purchase_order_id: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get goods receipts with pagination and filters"""
         try:
@@ -267,6 +271,17 @@ class GoodsReceiptService:
                     GoodsReceipt.notes.ilike(f"%{search}%")
                 )
                 query = query.where(search_filter)
+
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.user_service.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
+                    )
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        query = query.where(GoodsReceipt.location_id.in_(loc_ids))
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())

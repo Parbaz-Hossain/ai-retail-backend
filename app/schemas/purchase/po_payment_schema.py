@@ -9,6 +9,7 @@ class POPaymentBase(BaseModel):
     payment_amount: Decimal
     payment_type: PaymentType = PaymentType.REGULAR
     notes: Optional[str] = None
+    location_id: Optional[int] = None
 
     @validator('payment_amount')
     def validate_positive_amount(cls, v):
@@ -22,6 +23,7 @@ class POPaymentCreate(POPaymentBase):
 class POPaymentUpdate(BaseModel):
     payment_amount: Optional[Decimal] = None
     notes: Optional[str] = None
+    location_id: Optional[int] = None
 
     @validator('payment_amount')
     def validate_positive_amount(cls, v):
@@ -36,11 +38,18 @@ class PurchaseOrder(BaseModel):
     class Config:
         from_attributes = True
 
+class LocationRef(BaseModel):
+    id: int
+    name: str
+    class Config:
+        from_attributes = True
+
 class POPaymentResponse(POPaymentBase):
     id: int
     status: PaymentStatus
     file_paths: Optional[List[str]] = None
     purchase_order: Optional[PurchaseOrder] = None
+    location: Optional[LocationRef] = None
     requested_by: int
     approved_by: Optional[int] = None
     approved_date: Optional[datetime] = None

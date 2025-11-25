@@ -29,7 +29,11 @@ class UserService:
         """Get user by ID"""
         try:
             result = await self.session.execute(
-                select(User).where(
+                select(User)
+                .options(
+                    selectinload(User.location)
+                )
+                .where(
                     User.id == user_id,
                     User.is_deleted == False
                 )
@@ -361,9 +365,20 @@ class UserService:
         search: str = None,
         user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-        """Get paginated list of users with roles"""
+        """Get paginated list of users with roles and location"""
         try:
-            conditions = [User.is_deleted == False]
+            # Build base query
+            query = (
+                select(User)
+                .options(
+                    selectinload(User.location),
+                    selectinload(User.user_roles).selectinload(UserRole.role)
+                )
+                .where(User.is_deleted == False)
+            )
+            
+            # Apply filters
+            conditions = []
             
             if search:
                 search_term = f"%{search}%"
@@ -374,43 +389,62 @@ class UserService:
                         User.full_name.ilike(search_term)
                     )
                 )
-
-            # Location manager restriction
-            role_name = await self.get_specific_role_name_by_user(user_id,"location_manager")
-            if role_name:
-                loc_res = await self.session.execute(
-                        select(Location).where(Location.manager_id == user_id)
+            
+            # Location manager restriction - handles multiple locations per manager
+            if user_id:
+                role_name = await self.get_specific_role_name_by_user(user_id, "location_manager")
+                if role_name:
+                    loc_res = await self.session.execute(
+                        select(Location.id).where(Location.manager_id == user_id)
                     )
-                loc = loc_res.scalar_one_or_none()
-                if loc:
-                    conditions.append(User.location_id == loc.id)
+                    loc_ids = loc_res.scalars().all()
+                    if loc_ids:
+                        conditions.append(User.location_id.in_(loc_ids))
+            
+            if conditions:
+                query = query.where(and_(*conditions))
             
             # Get total count
-            total_count = await self.session.scalar(
-                select(func.count(User.id)).where(*conditions)
+            count_query = (
+                select(func.count(User.id))
+                .select_from(User)
+                .where(User.is_deleted == False)
             )
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
+            
+            total_count = await self.session.scalar(count_query)
             
             # Calculate offset
             skip = (page_index - 1) * page_size
             
             # Get paginated data
-            users = await self.session.scalars(
-                select(User)
-                .where(*conditions)
-                .offset(skip)
-                .limit(page_size)
-            )
+            query = query.order_by(User.created_at.desc())
+            query = query.offset(skip).limit(page_size)
             
-            # Get roles for each user and create UserResponse objects
+            result = await self.session.execute(query)
+            users = result.scalars().all()
+            
+            # Convert to UserResponse objects with roles and location
             user_responses = []
-            for user in users.all():
-                roles = await self.get_user_roles(user.id)
-                user_response = UserResponse(
-                    **user.__dict__,
-                    roles=[
-                        {"id": role.id, "name": role.name, "description": role.description}
-                        for role in roles
-                    ]
+            for user in users:
+                # Extract roles from the eagerly loaded user_roles relationship
+                roles = [
+                    {
+                        "id": ur.role.id,
+                        "name": ur.role.name,
+                        "description": ur.role.description
+                    }
+                    for ur in user.user_roles if ur.role
+                ]
+                
+                # Use model_validate to properly handle all fields including relationships
+                user_response = UserResponse.model_validate(
+                    {
+                        **user.__dict__,
+                        "roles": roles
+                    },
+                    from_attributes=True
                 )
                 user_responses.append(user_response)
             
@@ -429,7 +463,7 @@ class UserService:
                 "count": 0,
                 "data": []
             }
-    
+        
     async def count_users(self, search: str = None) -> int:
         """Count users"""
         try:
