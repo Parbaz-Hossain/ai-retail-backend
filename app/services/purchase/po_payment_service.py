@@ -69,6 +69,7 @@ class POPaymentService:
             # Create payment
             payment = POPayment(
                 purchase_order_id=payment_data.purchase_order_id,
+                location_id=payment_data.location_id,
                 payment_amount=payment_data.payment_amount,
                 payment_type=payment_data.payment_type,
                 status=PaymentStatus.PENDING,

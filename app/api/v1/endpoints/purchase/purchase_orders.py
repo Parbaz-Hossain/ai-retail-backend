@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @router.post("/", response_model=PurchaseOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_purchase_order(
     supplier_id: int = Form(...),
+    location_id: Optional[int] = Form(None),
     order_date: Optional[str] = Form(None),
     expected_delivery_date: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
@@ -43,6 +44,7 @@ async def create_purchase_order(
         # Create PO data
         po_data = PurchaseOrderCreate(
             supplier_id=supplier_id,
+            location_id=location_id,
             order_date=parsed_order_date,
             expected_delivery_date=parsed_expected_delivery_date,
             notes=notes,
@@ -88,6 +90,7 @@ async def create_purchase_order(
 async def update_purchase_order(
     po_id: int,
     supplier_id: Optional[int] = Form(None),
+    location_id: Optional[int] = Form(None),
     expected_delivery_date: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     payment_conditions: Optional[str] = Form(None),
@@ -110,6 +113,8 @@ async def update_purchase_order(
         update_data = {}
         if supplier_id is not None:
             update_data['supplier_id'] = supplier_id
+        if location_id is not None:
+            update_data['location_id'] = location_id
         if parsed_expected_delivery_date is not None:
             update_data['expected_delivery_date'] = parsed_expected_delivery_date
         if notes is not None:

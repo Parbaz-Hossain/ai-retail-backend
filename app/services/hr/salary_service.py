@@ -372,7 +372,8 @@ class SalaryService:
         month: int, 
         year: int, 
         location_id: Optional[int], 
-        department_id: Optional[int]
+        department_id: Optional[int],
+        user_id: Optional[int] = None
     ) -> Dict:
         """Get salary reports with deduction breakdown"""
         salary_date = date(year, month, 1)
@@ -393,6 +394,16 @@ class SalaryService:
             query = query.where(Employee.location_id == location_id)
         if department_id:
             query = query.where(Employee.department_id == department_id)
+
+        # Location manager restriction
+        role_name = await self.user_service.get_specific_role_name_by_user(user_id,"location_manager")
+        if role_name:
+            loc_res = await self.session.execute(
+                    select(Location.id).where(Location.manager_id == user_id)
+                )
+            loc_ids = loc_res.scalars().all()
+            if loc_ids:
+                query = query.where(Employee.location_id.in_(loc_ids))
 
         res = await self.session.execute(query)
         salaries = res.scalars().all()
@@ -474,7 +485,7 @@ class SalaryService:
             role_name = await self.user_service.get_specific_role_name_by_user(user_id,"location_manager")
             if role_name:
                 loc_res = await self.session.execute(
-                        select(Location).where(Location.manager_id == user_id)
+                        select(Location.id).where(Location.manager_id == user_id)
                     )
                 loc_ids = loc_res.scalars().all()
                 if loc_ids:

@@ -37,3 +37,4 @@ class Location(BaseModel):
     users = relationship("User", foreign_keys="User.location_id", back_populates="location")
     purchase_orders = relationship("PurchaseOrder", back_populates="location")
     po_payments = relationship("POPayment", back_populates="location")
+    manager = relationship("User", foreign_keys=[manager_id], uselist=False)

@@ -47,8 +47,17 @@ class LocationUpdate(BaseModel):
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
 
+class ManagerRef(BaseModel):
+    username: str
+    full_name: str
+    email: Optional[EmailStr] = None
+
+    class Config:
+        from_attributes = True
+
 class LocationResponse(LocationBase):
     id: int
+    manager: Optional[ManagerRef] = None
     is_active: bool = None
     created_at: datetime = None
     updated_at: Optional[datetime] = None
