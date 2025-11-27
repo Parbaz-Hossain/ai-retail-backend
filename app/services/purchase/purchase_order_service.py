@@ -87,6 +87,7 @@ class PurchaseOrderService:
             purchase_order = PurchaseOrder(
                 po_number=po_number,
                 supplier_id=po_data.supplier_id,
+                location_id=po_data.location_id,
                 order_date=po_data.order_date or date.today(),
                 expected_delivery_date=po_data.expected_delivery_date,
                 status=PurchaseOrderStatus.DRAFT,
@@ -106,7 +107,8 @@ class PurchaseOrderService:
             # Reload PO with supplier
             result = await self.session.execute(
                 select(PurchaseOrder)
-                .options(selectinload(PurchaseOrder.supplier))
+                .options(selectinload(PurchaseOrder.supplier))                
+                .options(selectinload(PurchaseOrder.location))
                 .options(selectinload(PurchaseOrder.items))
                 .where(PurchaseOrder.id == purchase_order.id)
             )
