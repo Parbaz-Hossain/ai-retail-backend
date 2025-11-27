@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlalchemy import select, func, or_
 
 from app.models.organization.location import Location
@@ -22,7 +23,9 @@ class LocationService:
     async def get_location(self, location_id: int) -> Optional[Location]:
         try:
             result = await self.session.execute(
-                select(Location).where(
+                select(Location)
+                .options(selectinload(Location.manager))
+                .where(
                     Location.id == location_id,
                     Location.is_active == True
                 )
@@ -118,7 +121,8 @@ class LocationService:
     ) -> Dict[str, Any]:
         """Get locations with pagination"""
         try:
-            query = select(Location)
+            query = select(Location).options(selectinload(Location.manager))
+            
             if is_active is not None:
                 query = query.where(Location.is_active == is_active)
             if location_type:

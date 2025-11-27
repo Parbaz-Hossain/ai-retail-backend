@@ -182,7 +182,7 @@ async def get_salary_reports(
 ):
     """Get salary reports for management"""
     service = SalaryService(session)
-    return await service.get_salary_reports(month, year, location_id, department_id)
+    return await service.get_salary_reports(month, year, location_id, department_id, current_user.id)
 
 @router.get("/", response_model=PaginatedResponse[SalaryDetailedResponse])
 async def get_all_salaries(

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @router.post("/", response_model=POPaymentResponse, status_code=status.HTTP_201_CREATED)
 async def create_po_payment(
     purchase_order_id: int = Form(...),
+    location_id: Optional[int] = Form(None),
     payment_amount: str = Form(...),
     notes: str = Form(None),
     files: List[UploadFile] = File(None),
@@ -34,6 +35,7 @@ async def create_po_payment(
         # Create payment data
         payment_data = POPaymentCreate(
             purchase_order_id=purchase_order_id,
+            location_id=location_id,
             payment_amount=Decimal(payment_amount),
             notes=notes
         )
