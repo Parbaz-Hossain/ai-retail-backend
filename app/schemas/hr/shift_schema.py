@@ -43,6 +43,29 @@ class UserShiftBase(BaseModel):
 class UserShiftCreate(UserShiftBase):
     pass
 
+class BulkUserShiftCreate(BaseModel):
+    """Schema for assigning shifts to multiple employees at once"""
+    employee_ids: List[int]
+    shift_type_id: int
+    effective_date: date
+    end_date: Optional[date] = None
+    deduction_amount: Optional[float] = None
+    
+    @validator('employee_ids')
+    def validate_employee_ids(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('At least one employee ID is required')
+        if len(v) != len(set(v)):
+            raise ValueError('Duplicate employee IDs found')
+        return v
+
+class BulkShiftAssignmentResult(BaseModel):
+    """Result of bulk shift assignment operation"""
+    total_requested: int
+    successful: int
+    failed: int
+    results: List[dict]
+
 class UserShiftUpdate(BaseModel):
     shift_type_id: Optional[int] = None
     effective_date: Optional[date] = None
