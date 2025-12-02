@@ -295,28 +295,42 @@ class ShiftService:
                 try:
                     employee = valid_employees[employee_id]
                     
-                    # Delete any existing shifts with the same effective_date (PERMANENT DELETE)
-                    await self.session.execute(
-                        delete(UserShift).where(
-                            UserShift.employee_id == employee_id,
-                            UserShift.effective_date == data.effective_date
+                    # Delete any existing shifts
+                    delete_conditions = [
+                        UserShift.employee_id == employee_id,
+                    ]
+                    
+                    # Build overlap condition
+                    # Case 1: Existing shift that includes the new effective_date
+                    overlap_case1 = (
+                        UserShift.effective_date <= data.effective_date,
+                        or_(
+                            UserShift.end_date >= data.effective_date,
+                            UserShift.end_date.is_(None)
                         )
                     )
                     
-                    # Close any current active assignment (if effective_date is different)
-                    # current_res = await self.session.execute(
-                    #     select(UserShift).where(
-                    #         UserShift.employee_id == employee_id,
-                    #         UserShift.is_active == True,
-                    #         UserShift.end_date.is_(None),
-                    #         UserShift.effective_date != data.effective_date
-                    #     )
-                    # )
-                    # current_active = current_res.scalar_one_or_none()
-                    # if current_active:
-                    #     current_active.end_date = data.effective_date
-                    #     current_active.is_active = False
+                    # Case 2: Existing shift that starts during the new shift period
+                    if data.end_date:
+                        overlap_case2 = (
+                            UserShift.effective_date >= data.effective_date,
+                            UserShift.effective_date <= data.end_date
+                        )
+                        # Combine both cases
+                        delete_conditions.append(
+                            or_(
+                                *overlap_case1,
+                                *overlap_case2
+                            )
+                        )
+                    else:
+                        # If no end_date for new shift, only check case 1
+                        delete_conditions.extend(overlap_case1)
                     
+                    await self.session.execute(
+                        delete(UserShift).where(*delete_conditions)
+                    )
+                                        
                     # Create new shift assignment
                     new_shift = UserShift(
                         employee_id=employee_id,
