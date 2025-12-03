@@ -3,14 +3,14 @@ from typing import Any, Dict, Optional, List
 from datetime import date, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.hr.shift_type import ShiftType
 from app.models.hr.user_shift import UserShift
 from app.models.hr.employee import Employee
 from app.models.organization.location import Location
-from app.schemas.hr.shift_schema import EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, UserShiftCreate, UserShiftUpdate
+from app.schemas.hr.shift_schema import BulkShiftAssignmentResult, BulkUserShiftCreate, EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, UserShiftCreate, UserShiftUpdate
 from app.utils.validators.validation_utils import is_valid_shift
 from app.services.auth.user_service import UserService
 
@@ -189,9 +189,9 @@ class ShiftService:
 # endregion
 
 
-# region User Shift Management
+    # region User Shift Management
 
-# ---------- User Shift Assignment ----------
+    # ---------- User Shift Assignment ----------
     async def assign_shift_to_employee(self, data: UserShiftCreate, current_user_id: int) -> UserShift:
         try:
             # validate employee
@@ -239,7 +239,155 @@ class ShiftService:
             logger.error(f"Error assigning shift: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error assigning shift")
 
-# ---------- User Shift Update ----------
+    # ---------- Bulk User Shift Assignment ----------
+    async def bulk_assign_shifts_to_employees(
+        self, 
+        data: BulkUserShiftCreate, 
+        current_user_id: int
+    ) -> BulkShiftAssignmentResult:
+        """
+        Assign shifts to multiple employees at once.
+        - Validates all employees and shift type
+        - Deletes any existing shifts with the same effective_date (permanent deletion)
+        - Creates new shift assignments
+        """
+        successful = 0
+        failed = 0
+        results = []
+        
+        try:
+            # Validate shift type first
+            st_res = await self.session.execute(
+                select(ShiftType).where(
+                    ShiftType.id == data.shift_type_id, 
+                    ShiftType.is_active == True
+                )
+            )
+            shift_type = st_res.scalar_one_or_none()
+            if not shift_type:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail=f"Shift type with ID {data.shift_type_id} not found or inactive"
+                )
+            
+            # Validate all employees exist and are active
+            emp_res = await self.session.execute(
+                select(Employee).where(
+                    Employee.id.in_(data.employee_ids),
+                    Employee.is_active == True
+                )
+            )
+            valid_employees = {emp.id: emp for emp in emp_res.scalars().all()}
+            
+            # Check which employees are invalid
+            invalid_employee_ids = set(data.employee_ids) - set(valid_employees.keys())
+            if invalid_employee_ids:
+                for emp_id in invalid_employee_ids:
+                    results.append({
+                        "employee_id": emp_id,
+                        "status": "failed",
+                        "error": "Employee not found or inactive"
+                    })
+                    failed += 1
+            
+            # Process valid employees
+            for employee_id in valid_employees.keys():
+                try:
+                    employee = valid_employees[employee_id]
+                    
+                    # Delete any existing shifts
+                    delete_conditions = [
+                        UserShift.employee_id == employee_id,
+                    ]
+                    
+                    # Build overlap condition
+                    # Case 1: Existing shift that includes the new effective_date
+                    overlap_case1 = (
+                        UserShift.effective_date <= data.effective_date,
+                        or_(
+                            UserShift.end_date >= data.effective_date,
+                            UserShift.end_date.is_(None)
+                        )
+                    )
+                    
+                    # Case 2: Existing shift that starts during the new shift period
+                    if data.end_date:
+                        overlap_case2 = (
+                            UserShift.effective_date >= data.effective_date,
+                            UserShift.effective_date <= data.end_date
+                        )
+                        # Combine both cases
+                        delete_conditions.append(
+                            or_(
+                                *overlap_case1,
+                                *overlap_case2
+                            )
+                        )
+                    else:
+                        # If no end_date for new shift, only check case 1
+                        delete_conditions.extend(overlap_case1)
+                    
+                    await self.session.execute(
+                        delete(UserShift).where(*delete_conditions)
+                    )
+                                        
+                    # Create new shift assignment
+                    new_shift = UserShift(
+                        employee_id=employee_id,
+                        shift_type_id=data.shift_type_id,
+                        effective_date=data.effective_date,
+                        end_date=data.end_date,
+                        deduction_amount=data.deduction_amount or 0,
+                        is_active=True
+                    )
+                    self.session.add(new_shift)
+                    
+                    results.append({
+                        "employee_id": employee_id,
+                        "employee_code": employee.employee_id,
+                        "employee_name": f"{employee.first_name} {employee.last_name}".strip(),
+                        "status": "success",
+                        "shift_type": shift_type.name,
+                        "effective_date": data.effective_date.isoformat()
+                    })
+                    successful += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error assigning shift to employee {employee_id}: {e}")
+                    results.append({
+                        "employee_id": employee_id,
+                        "status": "failed",
+                        "error": str(e)
+                    })
+                    failed += 1
+            
+            # Commit all changes
+            await self.session.commit()
+            
+            logger.info(
+                f"Bulk shift assignment completed by user {current_user_id}: "
+                f"{successful} successful, {failed} failed out of {len(data.employee_ids)} total"
+            )
+            
+            return BulkShiftAssignmentResult(
+                total_requested=len(data.employee_ids),
+                successful=successful,
+                failed=failed,
+                results=results
+            )
+            
+        except HTTPException:
+            await self.session.rollback()
+            raise
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error in bulk shift assignment: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                detail=f"Error in bulk shift assignment: {str(e)}"
+            )
+        
+    # ---------- User Shift Update ----------
     async def update_user_shift(self, user_shift_id: int, data: UserShiftUpdate, current_user_id: int) -> UserShift:
         """Update an existing user shift assignment"""
         try:
@@ -481,4 +629,4 @@ class ShiftService:
             logger.error(f"Error getting employee shift detail: {e}")
             return None
         
-# endregion
+    # endregion

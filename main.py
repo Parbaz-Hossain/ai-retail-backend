@@ -55,32 +55,42 @@ async def health_check():
         }
     }
 
-if __name__ == "__main__":
+# ============================================================================
+# MOVE THESE FUNCTIONS OUTSIDE if __name__ == "__main__" for Windows
+# ============================================================================
+
+def run_https():
+    """Run HTTPS server on port 9105"""
     import uvicorn
-    import threading
+    print("🔒 Starting HTTPS server on port 9105...")
+    uvicorn.run(
+        "main:app",  # Use string import
+        host="0.0.0.0",
+        port=9105,
+        reload=False,
+        ssl_certfile="cert.pem",
+        ssl_keyfile="key.pem"
+    )
+
+def run_http():
+    """Run HTTP server on port 9106"""
+    import uvicorn
+    print("🚀 Starting HTTP server on port 9106...")
+    uvicorn.run(
+        "main:app",  # Use string import
+        host="0.0.0.0",
+        port=9106,
+        reload=False
+    )
+
+# ============================================================================
+
+if __name__ == "__main__":
+    import multiprocessing
     import sys
 
-    def run_https():
-        """Run HTTPS server on port 9105"""
-        print("🔒 Starting HTTPS server on port 9105...")
-        uvicorn.run(
-            "main:app",
-            host="0.0.0.0",
-            port=9105,
-            reload=False,
-            ssl_certfile="cert.pem",
-            ssl_keyfile="key.pem"
-        )
-
-    def run_http():
-        """Run HTTP server on port 9106"""
-        print("🚀 Starting HTTP server on port 9106...")
-        uvicorn.run(
-            "main:app",
-            host="0.0.0.0",
-            port=9106,
-            reload=False
-        )
+    # REQUIRED for Windows multiprocessing
+    multiprocessing.freeze_support()
 
     # Check command line arguments
     if "--https-only" in sys.argv:
@@ -90,12 +100,14 @@ if __name__ == "__main__":
         print("🚀 Starting server in HTTP-only mode...")
         run_http()
     else:
-        # Run both HTTP and HTTPS
         print("🚀 Starting servers in DUAL mode (HTTP + HTTPS)...")
         
-        # Start HTTPS in a separate thread
-        https_thread = threading.Thread(target=run_https, daemon=True)
-        https_thread.start()
+        # Use Process instead of Thread
+        https_process = multiprocessing.Process(target=run_https)
+        http_process = multiprocessing.Process(target=run_http)
         
-        # Run HTTP in main thread
-        run_http()
+        https_process.start()
+        http_process.start()
+        
+        https_process.join()
+        http_process.join()

@@ -49,9 +49,26 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        # Get user permissions from token
+        user_permissions = payload.get("permissions", [])
+        
+        # Check if user has super_admin role for full system access
+        user_roles = await user_service.get_user_roles(user_id)
+        has_super_admin = any(role.name == "super_admin" for role in user_roles)
+        
+        # Grant full system access to super_admin role or is_superuser flag
+        if has_super_admin or user.is_superuser:
+            user_permissions = [{
+                "name": "system:admin",
+                "resource": "system",
+                "action": "admin",
+                "description": "Full system access"
+            }]
+            logger.info(f"Granted full system access to user {user.email} (super_admin role or superuser flag)")
+        
         # Add request info to context
         request.state.current_user = user
-        request.state.user_permissions = payload.get("permissions", [])
+        request.state.user_permissions = user_permissions
         
         return user
         
@@ -62,12 +79,13 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
+        logger.error(f"Authentication error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
+    
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
@@ -102,14 +120,9 @@ async def get_permission_checker_dependency(
     user_permissions = getattr(request.state, "user_permissions", [])
     current_user = getattr(request.state, "current_user", None)
     
-    # Superusers have system:admin permission (full access)
-    # if current_user and current_user.is_superuser:
-    #     user_permissions = [{
-    #         "name": "system:admin",
-    #         "resource": "system",
-    #         "action": "admin",
-    #         "description": "Full system access"
-    #     }]
+    # Store permissions on user object for get_current_superuser to access
+    if current_user:
+        current_user._permissions = user_permissions
     
     return PermissionChecker(user_permissions)
 
