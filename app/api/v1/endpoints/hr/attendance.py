@@ -21,7 +21,7 @@ async def mark_attendance(
 ):
     """Mark employee attendance (check-in/check-out)"""
     service = AttendanceService(session)
-    return await service.mark_attendance(attendance)
+    return await service.mark_attendance(attendance, current_user.id)
 
 @router.get("/", response_model=PaginatedResponse[AttendanceResponse])
 async def get_attendance(

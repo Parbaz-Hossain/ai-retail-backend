@@ -1,7 +1,8 @@
+import decimal
 from app.schemas.common.pagination import PaginatedResponse
 from fastapi import APIRouter, Depends, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List, Optional, Text
 from datetime import date
 
 from app.api.dependencies import get_current_user, require_permission
@@ -144,6 +145,19 @@ async def create_bulk_deductions(
     
     background_tasks.add_task(bulk_deduction_task)
     return {"message": "Bulk deduction creation started in background"}
+
+@router.put("/employee/{deduction_id}/forgive", response_model=EmployeeDeductionResponse)
+async def forgive_employee_deduction(
+    deduction_id: int,
+    forgive_amount: decimal.Decimal,
+    reason: Optional[Text] = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("employee_deduction", "update"))
+):
+    """Forgive a specific amount from an employee deduction"""
+    service = DeductionService(session)
+    return await service.forgive_employee_deduction(deduction_id, forgive_amount, reason, current_user.id)
 
 # Calculate deductions for specific employee and month
 @router.get("/calculate/{employee_id}")
