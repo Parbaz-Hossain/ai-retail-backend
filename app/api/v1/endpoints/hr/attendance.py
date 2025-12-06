@@ -67,4 +67,4 @@ async def process_daily_attendance(
 ):
     """Process daily attendance (AI automation)"""
     service = AttendanceService(session)
-    return await service.process_daily_attendance(process_date)
+    return await service.process_daily_attendance(process_date, current_user.id)

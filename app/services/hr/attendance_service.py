@@ -70,6 +70,7 @@ class AttendanceService:
         self.session = session
         self.ticket_service = TicketService(session)
         self.user_service = UserService(session)
+        self.approval_service = ApprovalService(session)
 
     # region Attendance Helper Methods
     async def _check_holiday(self, attendance_date: date) -> bool:
@@ -181,15 +182,18 @@ class AttendanceService:
                 employee_id=employee_id,
                 ticket_type="LATE",
                 deduction_amount=deduction_amount
-            )            
-            
-            approval_service = ApprovalService(self.session)
+            )                       
             
             # Check if approval system is enabled for HR.TICKET
-            if await approval_service.is_approval_enabled("HR", ApprovalRequestType.TICKET):
+            if await self.approval_service.is_approval_enabled("HR", ApprovalRequestType.TICKET):
+                logger.info(f"Approval required for late ticket for employee {employee_id} on {attendance_date}")
                 # Create approval request
                 request_data = ticket_data.dict()
-                approval_request = await approval_service.create_approval_request(
+                # Convert Decimal to float for JSON serialization
+                if 'deduction_amount' in request_data and isinstance(request_data['deduction_amount'], Decimal):
+                    request_data['deduction_amount'] = float(request_data['deduction_amount'])
+
+                approval_request = await self.approval_service.create_approval_request(
                     request_type=ApprovalRequestType.TICKET,
                     employee_id=employee_id,
                     request_data=request_data,
@@ -218,7 +222,7 @@ class AttendanceService:
             logger.error(f"Error creating late ticket: {e}")
             # Don't raise exception, just log it to not block attendance marking
 
-    async def _create_absent_ticket(self, employee_id: int, attendance_date: date):
+    async def _create_absent_ticket(self, employee_id: int, attendance_date: date, requested_by: int):
         """Create a ticket for absent attendance with one day salary deduction"""
         try:
             # Check if ticket already exists for this date
@@ -250,9 +254,39 @@ class AttendanceService:
                 ticket_type="ABSENT",
                 deduction_amount=one_day_salary
             )
-            
-            await self.ticket_service.create_ticket(ticket_data)
-            logger.info(f"Absent ticket created for employee {employee_id} - Amount: {one_day_salary}")
+
+            # Check if approval system is enabled for HR.TICKET
+            if await self.approval_service.is_approval_enabled("HR", ApprovalRequestType.TICKET):
+                # Create approval request
+                request_data = ticket_data.dict()
+                # Convert Decimal to float for JSON serialization
+                if 'deduction_amount' in request_data and isinstance(request_data['deduction_amount'], Decimal):
+                    request_data['deduction_amount'] = float(request_data['deduction_amount'])
+                    
+                approval_request = await self.approval_service.create_approval_request(
+                    request_type=ApprovalRequestType.TICKET,
+                    employee_id=employee_id,
+                    request_data=request_data,
+                    requested_by=requested_by,
+                    module="HR",
+                    remarks="Absent attendance ticket"
+                )
+                
+                return {
+                    "message": "Absent attendance ticket sent for approval",
+                    "approval_request_id": approval_request.id,
+                    "status": "pending_approval",
+                    "approval_request": approval_request
+                }
+            else:
+                # Direct assignment without approval
+                employee_ticket = await self.ticket_service.create_ticket(ticket_data)                
+                logger.info(f"Absent ticket created for employee {employee_id} - Amount: {one_day_salary}")
+                return {
+                    "message": "Ticket created successfully",
+                    "status": "completed",
+                    "data": employee_ticket
+                }                        
             
         except Exception as e:
             logger.error(f"Error creating absent ticket: {e}")
@@ -599,7 +633,7 @@ class AttendanceService:
             return {}
 
     # ---------- AI Automation (Updated) ----------
-    async def process_daily_attendance(self, process_date: date) -> Dict:
+    async def process_daily_attendance(self, process_date: date, user_id: int) -> Dict:
         try:
             logger.info(f"Processing attendance for {process_date}")
 
@@ -685,7 +719,7 @@ class AttendanceService:
                     
                     # Create absent ticket after marking absent
                     await self.session.flush()  # Flush to ensure attendance is saved before creating ticket
-                    await self._create_absent_ticket(emp.id, process_date)
+                    await self._create_absent_ticket(emp.id, process_date, user_id)
 
             await self.session.commit()
 
