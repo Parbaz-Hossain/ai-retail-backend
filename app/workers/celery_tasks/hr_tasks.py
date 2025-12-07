@@ -44,7 +44,7 @@ def process_daily_attendance():
                 
                 service = AttendanceService(db)
                 yesterday = date.today() - timedelta(days=1)
-                result = await service.process_daily_attendance(yesterday)
+                result = await service.process_daily_attendance(yesterday, user_id=1)  # System user
                 
                 return f"✅ Daily attendance processed: {result}"
             except Exception as e:

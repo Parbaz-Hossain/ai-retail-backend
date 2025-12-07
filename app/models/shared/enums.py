@@ -181,13 +181,14 @@ class PaymentType(Enum):
 
 # region Approval System Enums
 
-class ApprovalRequestType(str, Enum):
+class ApprovalRequestType(str, Enum):    
+    EMPLOYEE="EMPLOYEE"
     SHIFT = "SHIFT"
+    ATTENDANCE="ATTENDANCE"
     SALARY = "SALARY"
     DAYOFF = "DAYOFF"
-    EMPLOYEE="EMPLOYEE"
-    ATTENDANCE="ATTENDANCE"
     EMPLOYEE_DEDUCTION="EMPLOYEE_DEDUCTION"
+    TICKET="TICKET"
 
 class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
