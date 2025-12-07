@@ -215,3 +215,12 @@ class OrderStatus(IntEnum):
     JOINED = 6
     VOID = 7
     DRAFT = 8
+
+class DayOfWeek(str, Enum):
+    MONDAY = "MONDAY"
+    TUESDAY = "TUESDAY"
+    WEDNESDAY = "WEDNESDAY"
+    THURSDAY = "THURSDAY"
+    FRIDAY = "FRIDAY"
+    SATURDAY = "SATURDAY"
+    SUNDAY = "SUNDAY"
