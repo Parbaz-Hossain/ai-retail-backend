@@ -21,7 +21,7 @@ async def mark_attendance(
 ):
     """Mark employee attendance (check-in/check-out)"""
     service = AttendanceService(session)
-    return await service.mark_attendance(attendance)
+    return await service.mark_attendance(attendance, current_user.id)
 
 @router.get("/", response_model=PaginatedResponse[AttendanceResponse])
 async def get_attendance(
@@ -67,4 +67,4 @@ async def process_daily_attendance(
 ):
     """Process daily attendance (AI automation)"""
     service = AttendanceService(session)
-    return await service.process_daily_attendance(process_date)
+    return await service.process_daily_attendance(process_date, current_user.id)

@@ -23,7 +23,6 @@ from app.schemas.approval.approval_settings_schema import (
     ApprovalSettingsCreate, ApprovalSettingsResponse
 )
 from app.services.communication.whatsapp_service import WhatsAppClient
-from app.services.approval.approval_auto_executor import ApprovalAutoExecutor
 from app.utils.date_time_serializer import serialize_dates
 from app.services.auth.user_service import UserService
 
@@ -662,7 +661,8 @@ class ApprovalService:
                 await self._notify_next_pending_member(request_id)
 
             # Auto-execute if fully approved
-            if request.status == ApprovalStatus.APPROVED:
+            if request.status == ApprovalStatus.APPROVED:                
+                from app.services.approval.approval_auto_executor import ApprovalAutoExecutor
                 executor = ApprovalAutoExecutor(self.session)
                 await executor.execute_if_fully_approved(request_id, user_id)
 

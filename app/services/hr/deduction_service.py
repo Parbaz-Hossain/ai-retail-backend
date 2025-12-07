@@ -257,6 +257,33 @@ class DeductionService:
         
         return stats
 
+    async def forgive_employee_deduction(self, deduction_id: int, forgive_amount: Decimal, reason: str, forgiven_by: int) -> EmployeeDeduction:
+        deduction = await self.session.get(EmployeeDeduction, deduction_id)
+        if not deduction:
+            raise HTTPException(status_code=404, detail="Employee deduction not found")
+        
+        if forgive_amount <= 0:
+            raise HTTPException(status_code=400, detail="Forgive amount must be positive")
+        
+        if deduction.forgive_amount is not None and deduction.forgive_amount > 0:
+            raise HTTPException(status_code=400, detail="Only one forgiveness is allowed for a deduction")
+        
+        if forgive_amount > deduction.remaining_amount:
+            raise HTTPException(status_code=400, detail="Forgive amount exceeds remaining deduction amount")
+        
+        deduction.forgive_amount = forgive_amount
+        deduction.remaining_amount -= forgive_amount
+        
+        if deduction.remaining_amount <= 0:
+            deduction.status = DeductionStatus.COMPLETED
+            deduction.remaining_amount = Decimal('0')
+        
+        await self.session.commit()
+        await self.session.refresh(deduction, attribute_names=["deduction_type", "employee", "updated_at"])
+        
+        logger.info(f"Deduction {deduction_id} forgiven by {forgiven_by} for amount {forgive_amount}. Reason: {reason}")
+        return deduction
+
     # ====================================== MAIN CALCULATION METHOD =========================================== #
     async def calculate_monthly_deductions(self, employee_id: int, salary_month: date) -> Tuple[Decimal, List[Dict]]:
         """
