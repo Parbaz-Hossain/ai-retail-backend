@@ -11,7 +11,7 @@ from app.services.hr.shift_service import ShiftService
 from app.services.approval.approval_service import ApprovalService
 from app.models.shared.enums import ApprovalRequestType
 from app.schemas.hr.shift_schema import (
-    BulkShiftAssignmentResult, BulkUserShiftCreate, EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, 
+    BulkShiftAndOffdayAssignment, BulkShiftAndOffdayResult, BulkShiftAssignmentResult, BulkUserShiftCreate, EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, 
     ShiftTypeUpdate, ShiftTypeResponse,
     UserShiftCreate, UserShiftUpdate, UserShiftResponse
 )
@@ -141,6 +141,19 @@ async def bulk_assign_shifts_to_employees(
     """
     shift_service = ShiftService(session)
     return await shift_service.bulk_assign_shifts_to_employees(assignment, current_user.id)
+
+@router.post("/assign/bulk-with-offdays", response_model=BulkShiftAndOffdayResult)
+async def bulk_assign_shifts_and_offdays(
+    assignment: BulkShiftAndOffdayAssignment,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+    _permission = Depends(require_permission("shift", "assign"))
+):
+    """
+    Assign shifts and offdays to multiple employees at once.
+    """
+    shift_service = ShiftService(session)
+    return await shift_service.bulk_assign_shifts_and_offdays(assignment, current_user.id)
 
 @router.put("/assign/{user_shift_id}")
 async def update_user_shift(
