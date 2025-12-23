@@ -209,7 +209,9 @@ class LocationService:
     async def get_branches(self) -> List[Location]:
         try:
             result = await self.session.execute(
-                select(Location).where(
+                select(Location)
+                .options(selectinload(Location.manager))
+                .where(
                     Location.location_type == "BRANCH",
                     Location.is_active == True
                 )
@@ -222,7 +224,9 @@ class LocationService:
     async def get_warehouses(self) -> List[Location]:
         try:
             result = await self.session.execute(
-                select(Location).where(
+                select(Location)
+                .options(selectinload(Location.manager))
+                .where(
                     Location.location_type == "WAREHOUSE",
                     Location.is_active == True
                 )

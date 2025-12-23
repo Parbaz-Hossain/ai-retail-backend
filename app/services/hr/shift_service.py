@@ -1,6 +1,9 @@
+import calendar
 import logging
 from typing import Any, Dict, Optional, List
 from datetime import date, datetime
+from app.models.hr.offday import Offday
+from app.models.shared.enums import DayOfWeek, OffdayType
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, func, or_, select
@@ -10,7 +13,7 @@ from app.models.hr.shift_type import ShiftType
 from app.models.hr.user_shift import UserShift
 from app.models.hr.employee import Employee
 from app.models.organization.location import Location
-from app.schemas.hr.shift_schema import BulkShiftAssignmentResult, BulkUserShiftCreate, EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, UserShiftCreate, UserShiftUpdate
+from app.schemas.hr.shift_schema import BulkShiftAndOffdayAssignment, BulkShiftAndOffdayResult, BulkShiftAssignmentResult, BulkUserShiftCreate, EmployeeAssignmentResult, EmployeeShiftDetail, EmployeeShiftSummary, ShiftTypeCreate, ShiftTypeUpdate, UserShiftCreate, UserShiftUpdate
 from app.utils.validators.validation_utils import is_valid_shift
 from app.services.auth.user_service import UserService
 
@@ -21,6 +24,33 @@ class ShiftService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.user_service = UserService(session)
+
+    # Day of week mapping
+    DAY_MAP = {
+        DayOfWeek.MONDAY: 0,
+        DayOfWeek.TUESDAY: 1,
+        DayOfWeek.WEDNESDAY: 2,
+        DayOfWeek.THURSDAY: 3,
+        DayOfWeek.FRIDAY: 4,
+        DayOfWeek.SATURDAY: 5,
+        DayOfWeek.SUNDAY: 6
+    }
+
+    def _get_all_dates_for_day_of_week(self, year: int, month: int, day_of_week: DayOfWeek) -> List[date]:
+        """Get all dates in a month that fall on a specific day of week"""
+        target_weekday = self.DAY_MAP[day_of_week]
+        dates = []
+        
+        # Get the number of days in the month
+        _, num_days = calendar.monthrange(year, month)
+        
+        # Check each day in the month
+        for day in range(1, num_days + 1):
+            current_date = date(year, month, day)
+            if current_date.weekday() == target_weekday:
+                dates.append(current_date)
+        
+        return dates
 
     # region Shift Type Management 
 
@@ -384,6 +414,192 @@ class ShiftService:
                 detail=f"Error in bulk shift assignment: {str(e)}"
             )
         
+    # ---------- Bulk Shift and Offday Assignment ----------
+    async def bulk_assign_shifts_and_offdays(
+        self,
+        data: BulkShiftAndOffdayAssignment,
+        current_user_id: int
+    ) -> BulkShiftAndOffdayResult:
+        """
+        Assign shifts and offdays to multiple employees at once.
+        - Assigns shift for the entire month (start to end date)
+        - Creates offdays for all occurrences of the specified day in the month
+        - Deletes overlapping existing shifts
+        - Deletes existing offdays for the month before creating new ones
+        """
+        successful = 0
+        failed = 0
+        results = []
+        
+        try:
+            # Determine year and month
+            now = datetime.now()
+            year = data.year if data.year else now.year
+            month = data.month if data.month else now.month
+            
+            # Calculate month start and end dates
+            _, last_day = calendar.monthrange(year, month)
+            effective_date = date(year, month, 1)
+            end_date = date(year, month, last_day)
+            
+            # Collect all unique employee IDs and shift type IDs
+            employee_ids = [emp.employee_id for emp in data.employees]
+            shift_type_ids = list(set([emp.shift_type_id for emp in data.employees]))
+            
+            # Validate all employees exist and are active
+            emp_res = await self.session.execute(
+                select(Employee).where(
+                    Employee.id.in_(employee_ids),
+                    Employee.is_active == True
+                )
+            )
+            valid_employees = {emp.id: emp for emp in emp_res.scalars().all()}
+            
+            # Validate all shift types exist and are active
+            st_res = await self.session.execute(
+                select(ShiftType).where(
+                    ShiftType.id.in_(shift_type_ids),
+                    ShiftType.is_active == True
+                )
+            )
+            valid_shift_types = {st.id: st for st in st_res.scalars().all()}
+            
+            # Process each employee assignment
+            for emp_assignment in data.employees:
+                employee_id = emp_assignment.employee_id
+                shift_type_id = emp_assignment.shift_type_id
+                off_day = emp_assignment.off_day
+                
+                result = EmployeeAssignmentResult(
+                    employee_id=employee_id,
+                    status="failed"
+                )
+                
+                try:
+                    # Validate employee
+                    if employee_id not in valid_employees:
+                        result.error = "Employee not found or inactive"
+                        results.append(result)
+                        failed += 1
+                        continue
+                    
+                    employee = valid_employees[employee_id]
+                    result.employee_code = employee.employee_id
+                    result.employee_name = f"{employee.first_name} {employee.last_name}".strip()
+                    
+                    # Validate shift type
+                    if shift_type_id not in valid_shift_types:
+                        result.error = f"Shift type with ID {shift_type_id} not found or inactive"
+                        results.append(result)
+                        failed += 1
+                        continue
+                    
+                    shift_type = valid_shift_types[shift_type_id]
+                    
+                    # ===== SHIFT ASSIGNMENT =====
+                    # Delete overlapping shifts
+                    existing_shifts_result = await self.session.execute(
+                        select(UserShift).where(UserShift.employee_id == employee_id)
+                    )
+                    existing_shifts = existing_shifts_result.scalars().all()
+                    
+                    for existing_shift in existing_shifts:
+                        existing_start = existing_shift.effective_date
+                        existing_end = existing_shift.end_date
+                        
+                        # Check for overlap with the new month assignment
+                        has_overlap = False
+                        if existing_end is None:
+                            has_overlap = existing_start <= end_date
+                        else:
+                            has_overlap = (existing_start <= end_date) and (effective_date <= existing_end)
+                        
+                        if has_overlap:
+                            await self.session.execute(
+                                delete(UserShift).where(UserShift.id == existing_shift.id)
+                            )
+                    
+                    # Create new shift assignment for the month
+                    new_shift = UserShift(
+                        employee_id=employee_id,
+                        shift_type_id=shift_type_id,
+                        effective_date=effective_date,
+                        end_date=end_date,
+                        deduction_amount=0,
+                        is_active=True
+                    )
+                    self.session.add(new_shift)
+                    result.shift_assigned = True
+                    
+                    # ===== OFFDAY ASSIGNMENT =====
+                    # Delete existing offdays for this employee in this month
+                    await self.session.execute(
+                        delete(Offday).where(
+                            Offday.employee_id == employee_id,
+                            Offday.year == year,
+                            Offday.month == month
+                        )
+                    )
+                    
+                    # Get all dates for the specified day of week in this month
+                    offday_dates = self._get_all_dates_for_day_of_week(year, month, off_day)
+                    
+                    # Create offday records
+                    for offday_date in offday_dates:
+                        offday = Offday(
+                            employee_id=employee_id,
+                            year=year,
+                            month=month,
+                            offday_date=offday_date,
+                            offday_type=OffdayType.WEEKEND,
+                            description=f"Weekly off day - {off_day.value}",
+                            is_active=True
+                        )
+                        self.session.add(offday)
+                    
+                    result.offdays_created = len(offday_dates)
+                    result.status = "success"
+                    results.append(result)
+                    successful += 1
+                    
+                    logger.info(
+                        f"Assigned shift {shift_type.name} and {len(offday_dates)} offdays "
+                        f"to employee {employee.employee_id} for {year}-{month:02d}"
+                    )
+                    
+                except Exception as e:
+                    logger.error(f"Error processing employee {employee_id}: {e}")
+                    result.error = str(e)
+                    results.append(result)
+                    failed += 1
+            
+            # Commit all changes
+            await self.session.commit()
+            
+            logger.info(
+                f"Bulk shift and offday assignment completed by user {current_user_id}: "
+                f"{successful} successful, {failed} failed out of {len(data.employees)} total"
+            )
+            
+            return BulkShiftAndOffdayResult(
+                total_requested=len(data.employees),
+                successful=successful,
+                failed=failed,
+                year=year,
+                month=month,
+                effective_date=effective_date,
+                end_date=end_date,
+                results=results
+            )
+            
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error in bulk shift and offday assignment: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error in bulk shift and offday assignment: {str(e)}"
+            )
+
     # ---------- User Shift Update ----------
     async def update_user_shift(self, user_shift_id: int, data: UserShiftUpdate, current_user_id: int) -> UserShift:
         """Update an existing user shift assignment"""

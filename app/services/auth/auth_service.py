@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -41,14 +41,14 @@ class AuthService:
                 return None
             
             # Check if account is locked
-            if user.locked_until and user.locked_until > datetime.utcnow():
-                await self._log_failed_login(email, "Account locked", ip_address, user_agent)
+            if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+                await self._log_failed_login(email, "Account locked", ip_address, user_agent) 
                 raise HTTPException(
                     status_code=status.HTTP_423_LOCKED,
                     detail="Account is locked due to too many failed attempts"
                 )
             
-            # Verify password
+            # Verify password & handle failed login attempts
             if not verify_password(password, user.hashed_password):
                 await self._handle_failed_login(user, ip_address, user_agent)
                 return None
