@@ -182,6 +182,7 @@ class PaymentType(Enum):
 # region Approval System Enums
 
 class ApprovalRequestType(str, Enum):    
+    # HR
     EMPLOYEE="EMPLOYEE"
     SHIFT = "SHIFT"
     ATTENDANCE="ATTENDANCE"
@@ -189,6 +190,32 @@ class ApprovalRequestType(str, Enum):
     DAYOFF = "DAYOFF"
     EMPLOYEE_DEDUCTION="EMPLOYEE_DEDUCTION"
     TICKET="TICKET"
+
+    # Inventory
+    ITEM = "ITEM"
+    PRODUCT = "PRODUCT"
+    STOCK_LEVEL = "STOCK_LEVEL"
+    CATEGORY = "CATEGORY"
+    ORDER = "ORDER"
+
+    # Stock Operations
+    REORDER_REQUEST = "REORDER_REQUEST"
+    STOCK_TRANSFER = "STOCK_TRANSFER"
+    STOCK_MOVEMENT = "STOCK_MOVEMENT"
+    INVENTORY_COUNT = "INVENTORY_COUNT"
+    INVENTORY_MISMATCH_REASON = "INVENTORY_MISMATCH_REASON"
+    STOCK_TYPE = "STOCK_TYPE"
+
+    # Purchase
+    PURCHASE_ORDER = "PURCHASE_ORDER"
+    SUPPLIER = "SUPPLIER"
+    GOOD_RECEIPT = "GOOD_RECEIPT"
+    PO_PAYMENT = "PO_PAYMENT"
+
+    # Logistics
+    SHIPMENT = "SHIPMENT"
+    DRIVER = "DRIVER"
+    VEHICLE = "VEHICLE"
 
 class ApprovalStatus(str, Enum):
     PENDING = "PENDING"
