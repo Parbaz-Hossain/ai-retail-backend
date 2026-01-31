@@ -129,6 +129,7 @@ class ReorderRequestService:
         reorder_item = ReorderRequestItem(
             reorder_request_id=request_id,
             item_id=item_data.item_id,
+            unit_type=item_data.unit_type,
             current_stock=current_stock,
             requested_quantity=item_data.requested_quantity,
             reason=item_data.reason,

@@ -123,6 +123,7 @@ class TransferService:
             transfer_item = TransferItem(
                 transfer_id=transfer_id,
                 item_id=item_data.item_id,
+                unit_type=item_data.unit_type,
                 requested_quantity=item_data.requested_quantity,
                 batch_number=item_data.batch_number,
                 expiry_date=item_data.expiry_date,

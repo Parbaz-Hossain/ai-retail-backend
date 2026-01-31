@@ -2,12 +2,13 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
-from app.models.shared.enums import ReorderRequestStatus
+from app.models.shared.enums import ReorderRequestStatus, UnitType
 from app.schemas.inventory.item import Item
 from app.schemas.organization.location_schema import LocationResponse
 
 class ReorderRequestItemBase(BaseModel):
     item_id: int
+    unit_type: UnitType
     requested_quantity: Decimal
     reason: Optional[str] = None
 
