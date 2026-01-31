@@ -29,8 +29,8 @@ class ProductItemBase(BaseModel):
             raise ValueError('Quantity must be greater than 0')
         return v
 
-class ProductItemCreate(ProductItemBase):
-    pass
+class ProductItemCreate(ProductItemBase):    
+    unit_type: UnitType
 
 class ProductItemUpdate(BaseModel):
     item_id: Optional[int] = None

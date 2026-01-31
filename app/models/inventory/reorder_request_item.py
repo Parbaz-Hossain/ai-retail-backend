@@ -1,13 +1,15 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, ForeignKey, Enum as SQLEnum, Date, Time, JSON
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
+from app.models.shared.enums import UnitType
 
 class ReorderRequestItem(BaseModel):
     __tablename__ = 'reorder_request_items'
     
     reorder_request_id = Column(Integer, ForeignKey('reorder_requests.id'), nullable=False)
     item_id = Column(Integer, ForeignKey('items.id'), nullable=False)
+    unit_type = Column(SQLEnum(UnitType), nullable=False)
     current_stock = Column(Numeric(10, 2), nullable=False)
     requested_quantity = Column(Numeric(10, 2), nullable=False)
     approved_quantity = Column(Numeric(10, 2))

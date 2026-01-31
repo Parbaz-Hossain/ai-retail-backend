@@ -2,12 +2,14 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
+from app.models.shared.enums import UnitType
 
 class TransferItem(BaseModel):
     __tablename__ = 'transfer_items'
     
     transfer_id = Column(Integer, ForeignKey('transfers.id'), nullable=False)
     item_id = Column(Integer, ForeignKey('items.id'), nullable=False)
+    unit_type = Column(SQLEnum(UnitType), nullable=False)
     requested_quantity = Column(Numeric(10, 2), nullable=False)
     sent_quantity = Column(Numeric(10, 2))
     received_quantity = Column(Numeric(10, 2))
