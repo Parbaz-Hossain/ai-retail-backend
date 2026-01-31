@@ -2,7 +2,7 @@ from pydantic import BaseModel, validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
-from app.models.shared.enums import TransferStatus
+from app.models.shared.enums import TransferStatus, UnitType
 from app.schemas.inventory.item import Item
 from app.schemas.organization.location_schema import LocationResponse
 
@@ -19,7 +19,7 @@ class TransferItemBase(BaseModel):
         return v
 
 class TransferItemCreate(TransferItemBase):
-    pass
+    unit_type: UnitType
 
 class TransferItemInDB(TransferItemBase):
     id: int

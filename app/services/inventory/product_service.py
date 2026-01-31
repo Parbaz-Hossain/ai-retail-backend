@@ -127,6 +127,7 @@ class ProductService:
         product_item = ProductItem(
             product_id=product_id,
             item_id=item_data.item_id,
+            unit_type=item_data.unit_type,
             quantity=item_data.quantity,
             unit_cost=unit_cost,
             notes=item_data.notes,

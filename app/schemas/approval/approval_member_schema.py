@@ -11,7 +11,7 @@ class ApprovalMemberBase(BaseModel):
 class ApprovalMemberCreate(ApprovalMemberBase):
     @validator('module')
     def validate_module(cls, v):
-        allowed_modules = ['HR', 'INVENTORY', 'PURCHASE', 'LOGISTICS']
+        allowed_modules = ['HR', 'INVENTORY', 'STOCK-OPERATION', 'PURCHASE', 'LOGISTICS']
         if v.upper() not in allowed_modules:
             raise ValueError(f'Module must be one of: {", ".join(allowed_modules)}')
         return v.upper()
