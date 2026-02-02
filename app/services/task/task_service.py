@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, func, desc, select, update
@@ -13,6 +14,8 @@ from app.models.auth import User
 from app.models.shared.enums import TaskStatus, TaskPriority, ReferenceType
 from app.schemas.task.task_schema import TaskCreate, TaskUpdate, TaskSummary
 from app.core.exceptions import NotFoundError
+
+logger = logging.getLogger(__name__)
 
 class TaskService:
     def __init__(self, db: AsyncSession):
@@ -53,6 +56,7 @@ class TaskService:
         await self.db.flush()
         
         # Handle assignment
+        # logger.info(f"Creating task {db_task.id} with assignment to {task_data.assigned_to}")
         if task_data.assigned_to:
             await self._assign_task(db_task.id, task_data.assigned_to, created_by)
         elif task_type.auto_assign_enabled:

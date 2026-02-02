@@ -151,6 +151,7 @@ async def add_item_to_supplier(
         item_supplier = await supplier_service.add_item_to_supplier(
             supplier_id=supplier_id,
             item_id=item_data.item_id,
+            unit_type=item_data.unit_type,
             supplier_item_code=item_data.supplier_item_code,
             unit_cost=item_data.unit_cost,
             minimum_order_quantity=item_data.minimum_order_quantity,

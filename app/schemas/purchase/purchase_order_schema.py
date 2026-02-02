@@ -2,11 +2,12 @@ from typing import Optional, List
 from decimal import Decimal
 from pydantic import BaseModel, validator
 from datetime import datetime, date
-from app.models.shared.enums import PurchaseOrderStatus
+from app.models.shared.enums import PurchaseOrderStatus, UnitType
 
 class ItemInfo(BaseModel):
     item_code: str
     name: str
+    unit_type: UnitType
 
     class Config:
         from_attributes = True
@@ -23,7 +24,7 @@ class PurchaseOrderItemBase(BaseModel):
         return v
 
 class PurchaseOrderItemCreate(PurchaseOrderItemBase):
-    pass
+    unit_type: UnitType
 
 class PurchaseOrderItemResponse(PurchaseOrderItemBase):
     id: int

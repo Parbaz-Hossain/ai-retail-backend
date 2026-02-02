@@ -2,7 +2,7 @@ from pydantic import BaseModel, validator
 from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.shared.enums import ShipmentStatus
+from app.models.shared.enums import ShipmentStatus, UnitType
 from app.schemas.logistics.driver_schema import DriverResponse
 from app.schemas.logistics.vehicle_schema import VehicleResponse
 from app.schemas.organization.location_schema import LocationResponse
@@ -18,7 +18,7 @@ class ShipmentItemBase(BaseModel):
     special_handling: Optional[str] = None
 
 class ShipmentItemCreate(ShipmentItemBase):
-    pass
+    unit_type: UnitType
 
 class ItemResponse(BaseModel):
     item_code: Optional[str] = None

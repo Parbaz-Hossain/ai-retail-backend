@@ -116,6 +116,7 @@ class InventoryCountService:
         count_item = InventoryCountItem(
             inventory_count_id=count_id,
             item_id=item_data.item_id,
+            unit_type=item_data.unit_type,
             system_quantity=item_data.system_quantity,
             counted_quantity=item_data.counted_quantity,
             variance_quantity=variance_quantity,

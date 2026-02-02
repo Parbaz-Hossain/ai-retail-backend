@@ -2,7 +2,7 @@ from pydantic import BaseModel, validator
 from typing import Optional
 from datetime import datetime, date
 from decimal import Decimal
-from app.models.shared.enums import StockMovementType
+from app.models.shared.enums import StockMovementType, UnitType
 from app.schemas.inventory.item import Item
 from app.schemas.organization.location_schema import LocationResponse
 
@@ -26,6 +26,7 @@ class StockMovementBase(BaseModel):
 
 class StockMovementCreate(StockMovementBase):
     total_cost: Optional[Decimal] = None
+    unit_type: UnitType
 
 class StockMovementBaseResponse(BaseModel):
     item_id: int

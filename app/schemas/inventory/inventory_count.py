@@ -3,6 +3,8 @@ from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
 
+from app.models.shared.enums import UnitType
+
 class ItemRef(BaseModel):
     id: int
     name: str
@@ -26,7 +28,7 @@ class InventoryCountItemBase(BaseModel):
     remarks: Optional[str] = None
 
 class InventoryCountItemCreate(InventoryCountItemBase):
-    pass
+    unit_type: UnitType
 
 class InventoryCountItemInDB(InventoryCountItemBase):
     id: int
