@@ -655,7 +655,7 @@ class TaskIntegrationService:
             await self.automation_service.create_shipment_delivery_task(
                 shipment_id=shipment.id,
                 driver_id=shipment.driver_id,
-                user_id=user_id or 1
+                user_id=user_id
             )
         
         task_type = await self._get_or_create_task_type(
@@ -679,7 +679,7 @@ class TaskIntegrationService:
             due_date=shipment.expected_delivery_date
         )
         
-        return await self.task_service.create_task(task_data, created_by=user_id or shipment.created_by or 1)
+        return await self.task_service.create_task(task_data, created_by=user_id)
 
     async def create_salary_processing_tasks(self, user_id: int):
         """Create monthly salary processing tasks"""
