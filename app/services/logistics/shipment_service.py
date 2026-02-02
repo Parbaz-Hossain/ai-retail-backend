@@ -87,7 +87,8 @@ class ShipmentService:
 
             # CREATE SHIPMENT TASKS
             task_integration = TaskIntegrationService(self.session)                        
-            # Create monitoring task for logistics manager
+            # Create monitoring task for logistics manager            
+            logger.info(f"Shipment tasks created for user {user_id}")
             await task_integration.create_shipment_tasks(shipment, user_id=user_id)
 
             result = await self.session.execute(

@@ -229,6 +229,7 @@ class SupplierService:
         self,
         supplier_id: int,
         item_id: int,
+        unit_type: str,
         supplier_item_code: Optional[str],
         unit_cost: float,
         minimum_order_quantity: float = 1,
@@ -276,6 +277,7 @@ class SupplierService:
             # Create item-supplier relationship
             item_supplier = ItemSupplier(
                 item_id=item_id,
+                unit_type=unit_type,
                 supplier_id=supplier_id,
                 supplier_item_code=supplier_item_code,
                 unit_cost=unit_cost,
@@ -349,6 +351,7 @@ class SupplierService:
             result = await self.session.execute(
                 select(ItemSupplier)
                 .options(selectinload(ItemSupplier.item))
+                .options(selectinload(ItemSupplier.supplier))
                 .where(
                     and_(
                         ItemSupplier.supplier_id == supplier_id,

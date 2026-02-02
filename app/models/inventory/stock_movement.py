@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
-from app.models.shared.enums import StockMovementType
+from app.models.shared.enums import StockMovementType, UnitType
 
 class StockMovement(BaseModel):
     __tablename__ = 'stock_movements'
@@ -10,6 +10,7 @@ class StockMovement(BaseModel):
     item_id = Column(Integer, ForeignKey('items.id'), nullable=False)
     location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
     movement_type = Column(SQLEnum(StockMovementType), nullable=False)
+    unit_type = Column(SQLEnum(UnitType), nullable=False)
     quantity = Column(Numeric(10, 2), nullable=False)
     unit_cost = Column(Numeric(10, 2))
     total_cost = Column(Numeric(10, 2))

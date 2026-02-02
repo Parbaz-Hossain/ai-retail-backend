@@ -2,12 +2,14 @@ from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, Enum 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
+from app.models.shared.enums import UnitType
 
 class InventoryCountItem(BaseModel):
     __tablename__ = 'inventory_count_items'
     
     inventory_count_id = Column(Integer, ForeignKey('inventory_counts.id'), nullable=False)
     item_id = Column(Integer, ForeignKey('items.id'), nullable=False)
+    unit_type = Column(SQLEnum(UnitType), nullable=False)
     system_quantity = Column(Numeric(10, 2), nullable=False)
     counted_quantity = Column(Numeric(10, 2), nullable=False)
     variance_quantity = Column(Numeric(10, 2), nullable=False)

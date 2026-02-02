@@ -162,7 +162,7 @@ class TaskAutomationService:
                 "shipment_id": shipment_id,
                 "driver_id": driver_id
             },
-            assigned_to=driver_id,
+            # assigned_to=driver_id,
             priority=TaskPriority.HIGH,
             due_date=datetime.utcnow() + timedelta(days=1)
         )

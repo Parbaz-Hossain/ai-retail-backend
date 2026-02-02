@@ -3,10 +3,13 @@ from decimal import Decimal
 from pydantic import BaseModel, validator
 from datetime import datetime
 
+from app.models.shared.enums import UnitType
+
 class ItemSupplierBase(BaseModel):
     item_id: int
     supplier_id: int
     supplier_item_code: Optional[str] = None
+    unit_type: UnitType
     unit_cost: Decimal
     minimum_order_quantity: Decimal = Decimal('1')
     lead_time_days: int = 0
@@ -34,13 +37,26 @@ class ItemSupplierUpdate(BaseModel):
     lead_time_days: Optional[int] = None
     is_preferred: Optional[bool] = None
 
+class ItemInfo(BaseModel):
+    item_code: str
+    name: str
+    unit_type: UnitType
+
+    class Config:
+        from_attributes = True
+
+class SupplierInfo(BaseModel):
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class ItemSupplierResponse(ItemSupplierBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime]
-    item_name: Optional[str] = None
-    item_code: Optional[str] = None
-    supplier_name: Optional[str] = None
+    item: Optional[ItemInfo] = None
+    supplier: Optional[SupplierInfo] = None
 
     class Config:
         from_attributes = True

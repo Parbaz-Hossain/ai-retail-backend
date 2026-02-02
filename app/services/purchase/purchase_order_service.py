@@ -183,6 +183,7 @@ class PurchaseOrderService:
                 po_item = PurchaseOrderItem(
                     purchase_order_id=po_id,
                     item_id=item_data.item_id,
+                    unit_type=item_data.unit_type,
                     quantity=item_data.quantity,
                     unit_cost=item_data.unit_cost,
                     total_cost=total_cost,
