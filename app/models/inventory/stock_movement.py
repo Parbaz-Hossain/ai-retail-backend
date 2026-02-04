@@ -10,7 +10,7 @@ class StockMovement(BaseModel):
     item_id = Column(Integer, ForeignKey('items.id'), nullable=False)
     location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
     movement_type = Column(SQLEnum(StockMovementType), nullable=False)
-    unit_type = Column(SQLEnum(UnitType), nullable=False)
+    unit_type = Column(SQLEnum(UnitType), nullable=True)
     quantity = Column(Numeric(10, 2), nullable=False)
     unit_cost = Column(Numeric(10, 2))
     total_cost = Column(Numeric(10, 2))

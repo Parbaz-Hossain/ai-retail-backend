@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import BaseModel
+from app.models.shared.enums import UnitType
 
 class StockLevel(BaseModel):
     __tablename__ = 'stock_levels'
@@ -11,6 +12,7 @@ class StockLevel(BaseModel):
     current_stock = Column(Numeric(10, 2), nullable=False, default=0)
     reserved_stock = Column(Numeric(10, 2), default=0)
     available_stock = Column(Numeric(10, 2), nullable=False, default=0)
+    unit_type = Column(SQLEnum(UnitType), nullable=True)
     par_level_min = Column(Numeric(10, 2), default=0)
     par_level_max = Column(Numeric(10, 2), default=0)
     
