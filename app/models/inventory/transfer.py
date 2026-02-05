@@ -10,6 +10,7 @@ class Transfer(BaseModel):
     transfer_number = Column(String(50), unique=True, nullable=False)
     from_location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
     to_location_id = Column(Integer, ForeignKey('locations.id'), nullable=False)
+    reorder_request_id = Column(Integer, ForeignKey('reorder_requests.id'))
     transfer_date = Column(Date, nullable=False)
     expected_date = Column(Date)
     status = Column(SQLEnum(TransferStatus), default=TransferStatus.PENDING)
@@ -27,3 +28,4 @@ class Transfer(BaseModel):
     from_location = relationship("Location", foreign_keys=[from_location_id], back_populates="transfers_from")
     to_location = relationship("Location", foreign_keys=[to_location_id], back_populates="transfers_to")
     items = relationship("TransferItem", back_populates="transfer")
+    reorder_request = relationship("ReorderRequest", back_populates="transfers")
