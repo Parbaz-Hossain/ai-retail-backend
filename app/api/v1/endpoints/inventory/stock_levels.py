@@ -34,6 +34,7 @@ async def get_stock_levels(
     location_id: Optional[int] = Query(None),
     item_id: Optional[int] = Query(None),
     low_stock_only: bool = Query(False),
+    search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -45,6 +46,7 @@ async def get_stock_levels(
         location_id=location_id,
         item_id=item_id,
         low_stock_only=low_stock_only,
+        search=search,
         user_id=current_user.id
     )
     return stock_levels

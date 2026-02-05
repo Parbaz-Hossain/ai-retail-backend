@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from app.models.inventory.stock_level import StockLevel
 from app.models.inventory.item import Item
 from app.models.organization.location import Location
@@ -74,16 +74,24 @@ class StockLevelService:
         location_id: Optional[int] = None,
         item_id: Optional[int] = None,
         low_stock_only: bool = False,
+        search: Optional[str] = None,
         user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get stock levels with pagination"""
         try:
-            query = select(StockLevel).options(
-                selectinload(StockLevel.item),
-                selectinload(StockLevel.location)
-            )
-            
             conditions = []
+            
+            # Search: First get matching item IDs
+            if search:
+                search_term = f"%{search}%"
+                item_subquery = select(Item.id).where(
+                    or_(
+                        Item.name.ilike(search_term),
+                        Item.item_code.ilike(search_term)
+                    )
+                )
+                conditions.append(StockLevel.item_id.in_(item_subquery))
+
             if location_id:
                 conditions.append(StockLevel.location_id == location_id)
             if item_id:
@@ -100,20 +108,36 @@ class StockLevelService:
                     if loc_ids:
                         conditions.append(StockLevel.location_id.in_(loc_ids))
                 
+            # Low stock: use subquery
+            if low_stock_only:
+                low_stock_subquery = (
+                    select(Item.id)
+                    .join(StockLevel, StockLevel.item_id == Item.id)
+                    .where(StockLevel.current_stock <= Item.reorder_point)
+                )
+                conditions.append(StockLevel.item_id.in_(low_stock_subquery))
+
+            # Build query
+            query = select(StockLevel).options(
+                selectinload(StockLevel.item),
+                selectinload(StockLevel.location)
+            )
+            
             if conditions:
                 query = query.where(and_(*conditions))
 
-            if low_stock_only:
-                query = query.join(Item).where(StockLevel.current_stock <= Item.reorder_point)
+            # Count
+            count_query = select(func.count(StockLevel.id))
+            if conditions:
+                count_query = count_query.where(and_(*conditions))
             
-            # Get total count
-            count_query = select(func.count()).select_from(query.subquery())
             total_result = await self.db.execute(count_query)
             total = total_result.scalar() or 0
             
-            # Calculate offset and get data
+            # Pagination
             skip = (page_index - 1) * page_size
             query = query.offset(skip).limit(page_size)
+            
             result = await self.db.execute(query)
             stock_levels = result.scalars().all()
             
@@ -124,13 +148,11 @@ class StockLevelService:
                 "data": stock_levels
             }
         except Exception as e:
-            return {
-                "page_index": page_index,
-                "page_size": page_size,
-                "count": 0,
-                "data": []
-            }
-
+            import traceback
+            print(f"ERROR: {e}")
+            print(traceback.format_exc())
+            raise
+        
     async def update_stock_level(self, stock_level_id: int, stock_level_data: StockLevelUpdate, current_user_id: int) -> StockLevel:
         stock_level = await self.get_stock_level_by_id(stock_level_id)
         if not stock_level:

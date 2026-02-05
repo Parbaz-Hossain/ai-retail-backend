@@ -25,3 +25,4 @@ class ReorderRequest(BaseModel):
     location = relationship("Location", foreign_keys=[location_id], back_populates="reorder_requests")
     to_location = relationship("Location", foreign_keys=[to_location_id], back_populates="incoming_reorder_requests")
     items = relationship("ReorderRequestItem", back_populates="reorder_request")
+    transfers = relationship("Transfer", back_populates="reorder_request")

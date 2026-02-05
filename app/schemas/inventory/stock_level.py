@@ -3,6 +3,8 @@ from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 
+from app.models.shared.enums import UnitType
+
 # --- Lightweight refs to avoid circular imports ---
 class ItemRef(BaseModel):
     id: int
@@ -29,7 +31,7 @@ class StockLevelBase(BaseModel):
         return v
 
 class StockLevelCreate(StockLevelBase):
-    pass
+    unit_type: UnitType
 
 class StockLevelUpdate(BaseModel):
     current_stock: Optional[Decimal] = None

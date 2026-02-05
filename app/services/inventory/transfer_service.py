@@ -42,11 +42,12 @@ class TransferService:
             transfer_number=transfer_number,
             from_location_id=transfer_data.from_location_id,
             to_location_id=transfer_data.to_location_id,
+            reorder_request_id=transfer_data.reorder_request_id,
             transfer_date=transfer_data.transfer_date or date.today(),
             expected_date=transfer_data.expected_date,
             requested_by=current_user_id,
             notes=transfer_data.notes,
-            created_by=current_user_id
+            created_by=current_user_id,
         )
         
         self.db.add(transfer)
