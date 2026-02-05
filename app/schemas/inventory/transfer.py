@@ -40,6 +40,7 @@ class TransferItem(TransferItemInDB):
 class TransferBase(BaseModel):
     from_location_id: int
     to_location_id: int
+    reorder_request_id: Optional[int] = None
     transfer_date: Optional[date] = None
     expected_date: Optional[date] = None
     notes: Optional[str] = None
