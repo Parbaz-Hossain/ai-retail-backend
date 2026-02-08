@@ -10,6 +10,7 @@ class ItemRef(BaseModel):
     id: int
     item_code: str
     name: str
+    unit_type: Optional[UnitType] = None
 
 class LocationRef(BaseModel):
     id: int

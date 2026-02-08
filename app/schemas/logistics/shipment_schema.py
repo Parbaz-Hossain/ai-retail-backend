@@ -23,6 +23,7 @@ class ShipmentItemCreate(ShipmentItemBase):
 class ItemResponse(BaseModel):
     item_code: Optional[str] = None
     name: Optional[str] = None
+    unit_type: Optional[UnitType] = None
     description: Optional[str] = None
 
 class ShipmentItemResponse(ShipmentItemBase):
