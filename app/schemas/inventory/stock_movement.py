@@ -56,7 +56,8 @@ class StockMovementInDB(StockMovementBaseResponse):
 class ItemRef(BaseModel):
     id: int
     name: str
-    sku: Optional[str] = None
+    item_code: Optional[str] = None
+    unit_type: Optional[UnitType] = None
 
     class Config:
         from_attributes = True
